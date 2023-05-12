@@ -26,7 +26,7 @@ jobs:
       run: |
           ls -la
           go mod download
-          go build -v ./cmd
+          go build ./cmd
       # run: go build -v ./api-gateway/cmd
 
     - name: Test
