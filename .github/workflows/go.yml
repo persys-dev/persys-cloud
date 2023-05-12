@@ -22,10 +22,9 @@ jobs:
         go-version: 1.19
 
     - name: Build
-      working-directory: ./app
+      working-directory: ./api-gateway
       run: |
           ls -la
-          cp ./api-gateway .
           go mod download
           go build -v ./cmd
       # run: go build -v ./api-gateway/cmd
