@@ -24,6 +24,7 @@ jobs:
     - name: Build
       working-directory: ./app
       run: |
+          ls -la
           cp ./api-gateway .
           go mod download
           go build -v ./cmd
