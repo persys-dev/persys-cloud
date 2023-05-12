@@ -11,7 +11,7 @@ RUN go mod download
 
 COPY . .
 
-# RUN ls -la
+RUN ls -la
 
 RUN cd cmd && go build -o main
 
