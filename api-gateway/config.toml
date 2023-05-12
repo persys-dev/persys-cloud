@@ -1,0 +1,33 @@
+[app]
+httpAddr = ":8551"
+grpcAddr = ":8661"
+
+storage = ""
+
+[app.metadata]
+name = "api-gateway"
+
+[database]
+mongoURI= "mongodb+srv://default:password@localhost:27017/?retryWrites=true&w=majority"
+collections = ["events", "repos", "users"]
+
+[watermill]
+kafkaBroker = "kafka.local:9092"
+
+[github]
+webHookURL = "http://persys.eastus.cloudapp.azure.com/webhook"
+webHookSecret = "SECRET"
+
+[github.auth]
+clientID = "SECRET"
+clientSecret = "SECRET"
+
+[grcp.clients]
+events-magaer = "SECRET"
+
+[log]
+format = "json"
+level = "info"
+
+[telemetry]
+addr = "signoz-otel-collector.persys-dev.svc.cluster.local:4317"
