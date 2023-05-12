@@ -1,10 +1,10 @@
+.idea
 __pycache__
 .old/azure-pipeline/azure-pipelines.yml
 .old
 /clients/cli/target/
 notes.md
 *.bak
-config.toml
 terraform.tfvars
 IAC/helm/persys-devops/.helmignore
 IAC/helm/persys-req/persys-req/.helmignore
