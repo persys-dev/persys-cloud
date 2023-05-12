@@ -6,3 +6,5 @@ notes.md
 *.bak
 config.toml
 terraform.tfvars
+IAC/helm/persys-devops/.helmignore
+IAC/helm/persys-req/persys-req/.helmignore
