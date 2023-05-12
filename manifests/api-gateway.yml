@@ -1,0 +1,22 @@
+apiVersion : apps/v1
+kind: Deployment
+metadata:
+  namespace: persys
+  name: api-gateway
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: persys.azurecr.io/apigateway:11
+          ports:
+            - containerPort: 8551
+      imagePullSecrets:
+        - name: persys-dev-acr

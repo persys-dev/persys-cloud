@@ -1,0 +1,60 @@
+apiVersion : apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: fingreg.azurecr.io/api-gateway
+          ports:
+          - containerPort: 8551
+
+---
+apiVersion : apps/v1
+kind: Deployment
+metadata:
+  name: events-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: events-manager
+  template:
+    metadata:
+      labels:
+        app: events-manager
+    spec:
+      containers:
+        - name: events-manager
+          image: fingreg.azurecr.io/events-manager
+          ports:
+            - containerPort: 8662
+---
+apiVersion : apps/v1
+kind: Deployment
+metadata:
+  name: ci-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ci-service
+  template:
+    metadata:
+      labels:
+        app: ci-service
+    spec:
+      containers:
+        - name: ci-service
+          image: fingreg.azurecr.io/ci-service
+          ports:
+            - containerPort: 8552

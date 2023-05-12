@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package eventsManager;
+
+option go_package = ".";
+
+service EventsService {
+  rpc blobCloneGit(CloneRequest) returns (CloneResponse) {}
+  rpc addCi() returns () {}
+  rpc addCd() returns () {}
+}
+
+message CloneRequest {
+  int64 RepoID = 1;
+  string GitURL = 2;
+  string Name = 3;
+  string Owner = 4;
+  int64  Userid = 5;
+  bool  Private = 6;
+  string  AccessToken = 7;
+  string  WebhookURL = 8;
+  int64 eventID = 9;
+}
+
+message CloneResponse {
+  int64 jobID = 1;
+  string status = 2;
+}

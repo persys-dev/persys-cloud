@@ -1,0 +1,31 @@
+title = "shipper"
+
+[app]
+version="v0"
+language="go"
+name = "shipper"
+description = "a tool to deploy services to k8s cloud or in-house and monitor/control kubernetes"
+github_URL = "github.com/miladhzzz/milx-cloud-init/shipper"
+owner="milad hosseini"
+
+[services]
+port = "8551"
+
+[build]
+build = "yes"
+
+[test]
+test = "go.test"
+
+[deploy]
+deploy = "yes"
+namespace = "cicd"
+replica= "3"
+monitor= "yes"
+
+[dependencis]
+service = "theye"
+database = "mongoDB"
+kafka = "yes"
+gRPC = "yes"
+http= "no"

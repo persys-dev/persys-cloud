@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: persys-api
+  namespace: persys
+spec:
+  replicas: 3
+  containers:
+    - name: persys-api
+      image: fingreg.azurecr.io/apigateway:17
+      imagePullPolicy: IfNotPresent
+      ports:
+        - containerPort: 8555
+  imagePullSecrets:
+    - name: acr-reg

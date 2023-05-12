@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package shipper;
+
+option go_package = ".";
+
+service shipperService {
+  rpc Pods(PodRequest) returns (PodResponse) {}
+}
+
+message PodRequest {
+  string ns = 1;
+}
+
+message PodResponse {
+  int64 status = 1;
+  string error = 2;
+  int64 id = 3;
+}

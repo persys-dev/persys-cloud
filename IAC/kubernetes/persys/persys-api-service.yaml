@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: persys
+  name: persys-api-deployment
+  labels:
+    app: persys-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: persys-api
+  template:
+    metadata:
+      labels:
+        app: persys-api
+    spec:
+      containers:
+        - name: persys-api
+          image: "fingreg.azurecr.io/apigateway:33"
+          ports:
+            - containerPort: 8555
+      imagePullSecrets:
+        - name: acr-reg
+---
+#---
+#apiVersion: v1
+#kind: Pod
+#metadata:
+#  name: persys-api
+#  namespace: persys
+#  labels:
+#    app: persys-api
+#spec:
+#  containers:
+#    - image: "fingreg.azurecr.io/apigateway:30"
+#      name: persys-api-gateway
+#      imagePullPolicy: IfNotPresent
+#      ports:
+#        - containerPort: 8551
+#          protocol: TCP
+#  imagePullSecrets:
+#    - name: acr-reg
+#---
+
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: persys
+  name: persys-api
+spec:
+  selector:
+    app: persys-api
+  ports:
+    - protocol: TCP
+      port: 8551
+      targetPort: 8551
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: persys
+  name: persys-api-global
+  annotations:
+    service.beta.kubernetes.io/azure-dns-label-name: persys
+spec:
+  type: LoadBalancer
+  ports:
+    -
+     port: 80
+     targetPort: 8551
+  selector:
+    app: persys-api
+
+#---
+#
+#apiVersion: networking.k8s.io/v1
+#kind: Ingress
+#metadata:
+#  namespace: persys
+#  name: persys-api
+#  annotations:
+#    kubernetes.io/ingress.class: azure/application-gateway
+#    appgw.ingress.kubernetes.io/backend-path-prefix: "/"
+#spec:
+#  rules:
+#    - http:
+#        paths:
+#          - path: /*
+#            backend:
+#              service:
+#                name: persys-api
+#                port:
+#                  number: 8551
+#            pathType: Prefix
