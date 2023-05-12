@@ -3,9 +3,9 @@ RUN apk add build-base
 
 WORKDIR /app
 
-COPY . .
+COPY /api-gateway .
 
-RUN ls -la
+# RUN ls -la
 
 RUN go mod download
 
