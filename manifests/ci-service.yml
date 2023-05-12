@@ -1,0 +1,19 @@
+apiVersion : apps/v1
+kind: Deployment
+metadata:
+  name: ci-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ci-service
+  template:
+    metadata:
+      labels:
+        app: ci-service
+    spec:
+      containers:
+        - name: ci-service
+          image: fingreg.azurecr.io/ci-service
+          ports:
+            - containerPort: 8552

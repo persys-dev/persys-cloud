@@ -1,0 +1,41 @@
+# k3s uses sqllite, so we cannot monitor etcd in the same way
+defaultRules:
+  rules:
+    etcd: false
+
+kubeEtcd:
+  enabled: false
+
+# matched to service port 'prom-stack-kube-prometheus-kube-controller-manager' -n kube-system
+kubeControllerManager:
+  enabled: true
+  endpoints: ['192.168.13.129']
+  service:
+    enabled: true
+    port: 10252
+    targetPort: 10252
+  serviceMonitor:
+    enabled: true
+    https: false
+
+# matched to service port 'prom-stack-kube-prometheus-kube-scheduler' -n kube-system
+kubeScheduler:
+  enabled: true
+  endpoints: ['192.168.13.129']
+  service:
+    enabled: true
+    port: 10251
+    targetPort: 10251
+  serviceMonitor:
+    enabled: true
+    https: false
+
+# matched to service port 'prom-stack-kube-prometheus-kube-proxy' -n kube-system
+kubeProxy:
+  enabled: true
+  endpoints: ['192.168.13.129']
+  service:
+    enabled: true
+    port: 10249
+    targetPort: 10249
+
