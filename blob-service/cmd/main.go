@@ -1,10 +1,14 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"github.com/gin-gonic/gin"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/miladhzzzz/milx-cloud-init/blob-service/config"
 	"github.com/miladhzzzz/milx-cloud-init/blob-service/internal/git"
@@ -27,6 +31,51 @@ func init() {
 	cnf, _ = config.ReadConfig()
 	server = gin.Default()
 
+}
+
+func zipRepo(repoPath string) (*bytes.Buffer, error) {
+	buf := new(bytes.Buffer)
+	zipWriter := zip.NewWriter(buf)
+
+	err := filepath.Walk(repoPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(repoPath, path)
+		if err != nil {
+			return err
+		}
+
+		zipFile, err := zipWriter.Create(relPath)
+		if err != nil {
+			return err
+		}
+
+		file, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+
+		_, err = io.Copy(zipFile, file)
+		return err
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = zipWriter.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return buf, nil
 }
 
 func main() {
@@ -112,6 +161,21 @@ func startGinServer() {
 			"url":       "http://blob-service:8552/api/v1alpha" + s,
 		})
 
+	})
+
+	router.GET("/download/:username/:repo", func(c *gin.Context) {
+		username := c.Param("username")
+		repo := c.Param("repo")
+		repoPath := filepath.Join("/artifacts/git", username, repo)
+
+		zipBuffer, err := zipRepo(repoPath)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.Header("Content-Disposition", "attachment; filename="+repo+".zip")
+		c.Data(http.StatusOK, "application/zip", zipBuffer.Bytes())
 	})
 
 	log.Fatal(server.Run(cnf.HttpAddr))
