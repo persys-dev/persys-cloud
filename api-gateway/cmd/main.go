@@ -35,10 +35,10 @@ var (
 	AuthRouteController routes.AuthRouteController
 
 	//👇 Create the Github Variables
-	githubService services.GithubService
-	//GithubController      controllers.g
-	GithubCollection *mongo.Collection
-	//GithubRouteController routes.PostRouteController
+	githubService         services.GithubService
+	GithubController      controllers.GithubController
+	GithubCollection      *mongo.Collection
+	GithubRouteController routes.GithubRouteController
 )
 
 func init() {
@@ -68,9 +68,10 @@ func init() {
 	AuthController = controllers.NewAuthController(authService, ctx, githubService, authCollection)
 	AuthRouteController = routes.NewAuthRouteController(AuthController)
 
-	//UserController = controllers.NewUserController(userService)
-	//UserRouteController = routes.NewRouteUserController(UserController)
-	//
+	GithubCollection = mongoclient.Database("api-gateway").Collection("repos")
+	GithubController = controllers.NewGithubController(authService, ctx, githubService, GithubCollection)
+	GithubRouteController = routes.NewGithubRouteController(GithubController)
+
 	//// 👇 Instantiate the Constructors
 	//postCollection = mongoclient.Database("golang_mongodb").Collection("posts")
 	//postService = services.NewPostService(postCollection, ctx)
@@ -116,7 +117,7 @@ func startGinServer() {
 	})
 
 	AuthRouteController.AuthRoute(router)
-	//gRouteController.UserRoute(router, userService)
+	GithubRouteController.GithubRoute(router)
 	// 👇 Post Route
 	//PostRouteController.PostRoute(router)
 	log.Fatal(server.Run(cnf.HttpAddr))
