@@ -2,6 +2,7 @@ package trigger_grpc
 
 import (
 	"context"
+	"github.com/miladhzzzz/milx-cloud-init/api-gateway/config"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/models"
 	em "github.com/miladhzzzz/milx-cloud-init/api-gateway/pkg/grpc-clients/events-manager"
 	pb "github.com/miladhzzzz/milx-cloud-init/api-gateway/pkg/grpc-clients/events-manager/pb"
@@ -10,6 +11,10 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 	"time"
+)
+
+var (
+	cnf, _ = config.ReadConfig()
 )
 
 // EventsManagerClient Replace with your gRPC client and events manager service
@@ -42,7 +47,7 @@ func watchRepoChanges(client *mongo.Client, eventsManagerClient *EventsManagerCl
 	ctx := context.Background()
 
 	// Set up change stream
-	collection := client.Database("your_database_name").Collection("repos")
+	collection := client.Database("api-gateway").Collection("events")
 	matchStage := bson.D{{"$match", bson.D{{"updateDescription.updatedFields.webhook", bson.D{{"$exists", true}}}}}}
 	changeStream, err := collection.Watch(ctx, mongo.Pipeline{matchStage})
 	if err != nil {
@@ -69,7 +74,7 @@ func watchRepoChanges(client *mongo.Client, eventsManagerClient *EventsManagerCl
 
 func StartgRPCtrigger() {
 	// Set up MongoDB connection
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.NewClient(options.Client().ApplyURI(cnf.MongoURI))
 	if err != nil {
 		log.Fatal(err)
 	}
