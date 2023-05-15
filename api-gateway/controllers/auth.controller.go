@@ -9,10 +9,8 @@ import (
 	"github.com/google/go-github/github"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/config"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/models"
-	mongodbHandler "github.com/miladhzzzz/milx-cloud-init/api-gateway/pkg/mongodb"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/services"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/utils"
-	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/oauth2"
 	oauth2gh "golang.org/x/oauth2/github"
@@ -126,83 +124,6 @@ func (ac *AuthController) Auth() gin.HandlerFunc {
 			ctx.JSON(http.StatusOK, status)
 		}
 	}
-}
-
-func connectGithub(ctx *gin.Context) *github.Client {
-	user := ReadUserData(ctx, mySuperSecretPassword)
-	dbc, err := mongodbHandler.Dbc()
-	q := dbc.Database("api-gateway").Collection("users")
-	data := q.FindOne(context.Background(), bson.M{"login": user.Login})
-	var datas *models.UserInput
-
-	if err = data.Decode(&datas); err != nil {
-
-	}
-	tok := datas.GithubToken
-	ts := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: tok},
-	)
-	tc := oauth2.NewClient(ctx, ts)
-	client := github.NewClient(tc)
-	return client
-}
-
-func ReadUserData(ctx *gin.Context, secret string) (userData *models.UserInput) {
-	dbc, err := mongodbHandler.Dbc()
-	data, err := request.ParseFromRequest(ctx.Request, request.OAuth2Extractor, func(token *jwtlib.Token) (interface{}, error) {
-		b := []byte(secret)
-		return b, nil
-	})
-	if err != nil {
-		//ctx.AbortWithStatus(http.StatusBadRequest)
-		return nil
-	}
-	q := dbc.Database("api-gateway").Collection("users")
-	user := data.Claims.(jwtlib.MapClaims)
-	//username := user["Name"].(string)
-	UserID := user["UserID"].(float64)
-	dbres := q.FindOne(context.Background(), bson.M{"userid": UserID})
-
-	err = dbres.Decode(&userData)
-
-	if err != nil {
-		return nil
-	}
-	return
-}
-
-func SetRepoWebhook(ctx *gin.Context, repoName, webhookURL, secret string) {
-	user := ReadUserData(ctx, mySuperSecretPassword)
-
-	name := "web"
-	active := true
-	client := connectGithub(ctx)
-	//config := map[string]interface{}("URL": webhookURL, "content-type": "json", "secret": secret)
-	_, _, err := client.Repositories.CreateHook(context.Background(), user.Login, repoName, &github.Hook{
-		Name:   &name,
-		Events: []string{"push"},
-		Active: &active,
-		Config: map[string]interface{}{"url": webhookURL, "content-type": "json", "insecure-ssl": "0", "secret": secret},
-	})
-	if err != nil {
-		fmt.Println(err)
-		ctx.AbortWithStatus(400)
-	}
-
-}
-
-func CreateFork(ctx *gin.Context, owner, repo string) {
-	client := connectGithub(ctx)
-
-	_, r, err := client.Repositories.CreateFork(context.Background(), owner, repo, &github.RepositoryCreateForkOptions{})
-	if err != nil {
-		ctx.JSON(http.StatusOK, err)
-		return
-	}
-	if r.Status == "202" {
-		ctx.JSON(http.StatusOK, "successfully forked your repo!")
-	}
-
 }
 
 func (ac *AuthController) LoginHandler() gin.HandlerFunc {

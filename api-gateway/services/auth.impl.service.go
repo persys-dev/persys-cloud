@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	jwtlib "github.com/dgrijalva/jwt-go"
+	"github.com/dgrijalva/jwt-go/request"
+	"github.com/gin-gonic/gin"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/models"
 	"time"
 
@@ -17,9 +20,36 @@ type AuthServiceImpl struct {
 	ctx        context.Context
 }
 
-func (uc *AuthServiceImpl) ReadUserData() *models.DBResponse {
-	//TODO implement me
-	panic("implement me")
+func (uc *AuthServiceImpl) ReadUserData(ctx *gin.Context) (*models.DBResponse, error) {
+
+	var result *models.DBResponse
+	data, err := request.ParseFromRequest(ctx.Request, request.OAuth2Extractor, func(token *jwtlib.Token) (interface{}, error) {
+		b := []byte("unicornsAreAwesome")
+		return b, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	user := data.Claims.(jwtlib.MapClaims)
+
+	UserID := user["UserID"].(float64)
+
+	res := uc.collection.FindOne(uc.ctx, bson.M{"userid": UserID})
+
+	if res.Err() == mongo.ErrNoDocuments {
+		return nil, res.Err()
+	}
+
+	err = res.Decode(&result)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+
 }
 
 func (uc *AuthServiceImpl) CliLogin(req *models.CliReq) (*models.DBResponse, error) {
