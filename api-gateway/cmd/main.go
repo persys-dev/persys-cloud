@@ -7,9 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/config"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/controllers"
-	"github.com/miladhzzzz/milx-cloud-init/api-gateway/models"
-	em "github.com/miladhzzzz/milx-cloud-init/api-gateway/pkg/grpc-clients/events-manager"
-	pb "github.com/miladhzzzz/milx-cloud-init/api-gateway/pkg/grpc-clients/events-manager/pb"
+	"github.com/miladhzzzz/milx-cloud-init/api-gateway/internal/trigger-grpc"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/routes"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/services"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -93,6 +91,11 @@ func main() {
 
 	//defer mongoclient.Disconnect(ctx)
 
+	//// 👇 Instantiate event processor
+
+	// starting grpc trigger mechanism that calls events-manager service over gRPC
+	go trigger_grpc.StartgRPCtrigger()
+	// starting gin http server
 	startGinServer()
 	//startGrpcServer(config)
 
@@ -117,26 +120,4 @@ func startGinServer() {
 	// 👇 Post Route
 	//PostRouteController.PostRoute(router)
 	log.Fatal(server.Run(cnf.HttpAddr))
-}
-
-// callEventsManager is the function calling events-manager over grpc with data
-func callEventsManager(data *models.Repos) (*pb.CloneResponse, error) {
-	c := em.InitGmClient()
-
-	res, err := c.Clone(context.TODO(), &pb.CloneRequest{
-		RepoID:      data.RepoID,
-		GitURL:      data.GitURL,
-		Name:        data.Name,
-		Owner:       data.Owner,
-		Userid:      data.UserID,
-		Private:     data.Private,
-		AccessToken: data.AccessToken,
-		WebhookURL:  data.WebhookURL,
-		EventID:     data.EventID,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
 }
