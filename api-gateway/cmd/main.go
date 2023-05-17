@@ -7,9 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/config"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/controllers"
-	"github.com/miladhzzzz/milx-cloud-init/api-gateway/models"
-	em "github.com/miladhzzzz/milx-cloud-init/api-gateway/pkg/grpc-clients/events-manager"
-	pb "github.com/miladhzzzz/milx-cloud-init/api-gateway/pkg/grpc-clients/events-manager/pb"
+	"github.com/miladhzzzz/milx-cloud-init/api-gateway/internal/trigger-grpc"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/routes"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/services"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -18,6 +16,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"log"
 	"net/http"
+	"os"
 )
 
 var (
@@ -37,15 +36,17 @@ var (
 	AuthRouteController routes.AuthRouteController
 
 	//👇 Create the Github Variables
-	githubService services.GithubService
-	//GithubController      controllers.g
-	GithubCollection *mongo.Collection
-	//GithubRouteController routes.PostRouteController
+	githubService         services.GithubService
+	GithubController      controllers.GithubController
+	GithubCollection      *mongo.Collection
+	GithubRouteController routes.GithubRouteController
 )
 
 func init() {
 
 	//cnf, _ = config.ReadConfig()
+	// create a log file
+	logFile, _ := os.Create("api-gateway-http.log")
 
 	ctx = context.TODO()
 
@@ -64,15 +65,16 @@ func init() {
 	fmt.Println("MongoDB successfully connected...")
 
 	// Collections
+	GithubCollection = mongoclient.Database("api-gateway").Collection("repos")
 	authCollection = mongoclient.Database("api-gateway").Collection("users")
 	githubService = services.NewGithubService(GithubCollection, ctx)
 	authService = services.NewAuthService(authCollection, ctx)
 	AuthController = controllers.NewAuthController(authService, ctx, githubService, authCollection)
 	AuthRouteController = routes.NewAuthRouteController(AuthController)
 
-	//UserController = controllers.NewUserController(userService)
-	//UserRouteController = routes.NewRouteUserController(UserController)
-	//
+	GithubController = controllers.NewGithubController(authService, ctx, githubService, GithubCollection)
+	GithubRouteController = routes.NewGithubRouteController(GithubController)
+
 	//// 👇 Instantiate the Constructors
 	//postCollection = mongoclient.Database("golang_mongodb").Collection("posts")
 	//postService = services.NewPostService(postCollection, ctx)
@@ -80,6 +82,7 @@ func init() {
 	//PostRouteController = routes.NewPostControllerRoute(PostController)
 
 	server = gin.Default()
+	server.Use(gin.LoggerWithWriter(logFile))
 
 }
 
@@ -93,6 +96,11 @@ func main() {
 
 	//defer mongoclient.Disconnect(ctx)
 
+	//// 👇 Instantiate event processor
+
+	// starting grpc trigger mechanism that calls events-manager service over gRPC
+	go trigger_grpc.StartgRPCtrigger()
+	// starting gin http server
 	startGinServer()
 	//startGrpcServer(config)
 
@@ -108,35 +116,13 @@ func startGinServer() {
 	server.Use(otelgin.Middleware(serviceName))
 
 	router := server.Group("")
-	router.GET("/healthchecker", func(ctx *gin.Context) {
+	router.GET("/", func(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "value"})
 	})
 
 	AuthRouteController.AuthRoute(router)
-	//gRouteController.UserRoute(router, userService)
+	GithubRouteController.GithubRoute(router)
 	// 👇 Post Route
 	//PostRouteController.PostRoute(router)
 	log.Fatal(server.Run(cnf.HttpAddr))
-}
-
-// callEventsManager is the function calling events-manager over grpc with data
-func callEventsManager(data *models.Repos) (*pb.CloneResponse, error) {
-	c := em.InitGmClient()
-
-	res, err := c.Clone(context.TODO(), &pb.CloneRequest{
-		RepoID:      data.RepoID,
-		GitURL:      data.GitURL,
-		Name:        data.Name,
-		Owner:       data.Owner,
-		Userid:      data.UserID,
-		Private:     data.Private,
-		AccessToken: data.AccessToken,
-		WebhookURL:  data.WebhookURL,
-		EventID:     data.EventID,
-	})
-
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
 }
