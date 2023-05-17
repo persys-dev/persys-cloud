@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{MICROSERVICE}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{MICROSERVICE}}
+  template:
+    metadata:
+      labels:
+        app: {{MICROSERVICE}}
+    spec:
+      containers:
+      - name: {{MICROSERVICE}}
+        image: {{DOCKER_REGISTRY}}/{{MICROSERVICE}}:{{TAG}}
+        ports:
+        - containerPort: 8080
+        env:
+        - name: ENV_VAR1
+          value: "value1"
+        - name: ENV_VAR2
+          value: "value2"
