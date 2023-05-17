@@ -30,6 +30,8 @@ func NewGithubController(authService services.AuthService, ctx context.Context, 
 	return GithubController{authService: authService, githubService: githubService, ctx: ctx, collection: collection}
 }
 
+// TODO: we need to implement all of these func's
+
 func (gc *GithubController) WebhookHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
@@ -99,6 +101,30 @@ func (gc *GithubController) SetWebhook() gin.HandlerFunc {
 
 		c.JSON(200, "your repository webhook was set")
 
+	}
+}
+
+func (gc *GithubController) ListRepos() gin.HandlerFunc {
+	return func(c *gin.Context) {
+
+		data := c.Copy()
+		//fmt.Println(data.Request.Header)
+		user, errp := gc.authService.ReadUserData(data)
+
+		if errp != nil {
+			panic(errp)
+		}
+
+		fmt.Println(user.Name)
+
+		fmt.Printf("context: %v", c.Request.Header)
+
+		result, err := gc.githubService.ListRepos(user)
+
+		if err != nil {
+			c.AbortWithError(500, err)
+		}
+		c.JSON(200, result)
 	}
 }
 

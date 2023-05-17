@@ -23,33 +23,25 @@ type AuthServiceImpl struct {
 func (uc *AuthServiceImpl) ReadUserData(ctx *gin.Context) (*models.DBResponse, error) {
 
 	var result *models.DBResponse
+
 	data, err := request.ParseFromRequest(ctx.Request, request.OAuth2Extractor, func(token *jwtlib.Token) (interface{}, error) {
 		b := []byte("unicornsAreAwesome")
 		return b, nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
-
 	user := data.Claims.(jwtlib.MapClaims)
-
 	UserID := user["UserID"].(float64)
-
-	res := uc.collection.FindOne(uc.ctx, bson.M{"userid": UserID})
-
+	res := uc.collection.FindOne(ctx, bson.M{"userID": UserID})
 	if res.Err() == mongo.ErrNoDocuments {
 		return nil, res.Err()
 	}
-
 	err = res.Decode(&result)
-
 	if err != nil {
 		return nil, err
 	}
-
 	return result, nil
-
 }
 
 func (uc *AuthServiceImpl) CliLogin(req *models.CliReq) (*models.DBResponse, error) {
@@ -82,11 +74,11 @@ func (uc *AuthServiceImpl) SignInUser(user *models.UserInput) (*models.DBRespons
 	check := uc.collection.FindOne(uc.ctx, bson.M{"userID": user.UserID})
 
 	if check.Err() != mongo.ErrNoDocuments {
-		update := uc.collection.FindOneAndUpdate(uc.ctx, bson.M{"userid": user.UserID},
+		update := uc.collection.FindOneAndUpdate(uc.ctx, bson.M{"userID": user.UserID},
 			bson.M{"$set": bson.M{
-				"updatedat":   time.Now().String(),
-				"persystoken": user.PersysToken,
-				"githubtoken": user.GithubToken,
+				"updatedAt":   time.Now().String(),
+				"persysToken": user.PersysToken,
+				"githubToken": user.GithubToken,
 				"state":       user.State,
 			}})
 		fmt.Print(update)

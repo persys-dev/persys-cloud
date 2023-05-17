@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"log"
 	"net/http"
+	"os"
 )
 
 var (
@@ -44,6 +45,8 @@ var (
 func init() {
 
 	//cnf, _ = config.ReadConfig()
+	// create a log file
+	logFile, _ := os.Create("api-gateway-http.log")
 
 	ctx = context.TODO()
 
@@ -62,13 +65,13 @@ func init() {
 	fmt.Println("MongoDB successfully connected...")
 
 	// Collections
+	GithubCollection = mongoclient.Database("api-gateway").Collection("repos")
 	authCollection = mongoclient.Database("api-gateway").Collection("users")
 	githubService = services.NewGithubService(GithubCollection, ctx)
 	authService = services.NewAuthService(authCollection, ctx)
 	AuthController = controllers.NewAuthController(authService, ctx, githubService, authCollection)
 	AuthRouteController = routes.NewAuthRouteController(AuthController)
 
-	GithubCollection = mongoclient.Database("api-gateway").Collection("repos")
 	GithubController = controllers.NewGithubController(authService, ctx, githubService, GithubCollection)
 	GithubRouteController = routes.NewGithubRouteController(GithubController)
 
@@ -79,6 +82,7 @@ func init() {
 	//PostRouteController = routes.NewPostControllerRoute(PostController)
 
 	server = gin.Default()
+	server.Use(gin.LoggerWithWriter(logFile))
 
 }
 
@@ -112,7 +116,7 @@ func startGinServer() {
 	server.Use(otelgin.Middleware(serviceName))
 
 	router := server.Group("")
-	router.GET("/healthchecker", func(ctx *gin.Context) {
+	router.GET("/", func(ctx *gin.Context) {
 		ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "value"})
 	})
 

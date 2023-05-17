@@ -23,7 +23,8 @@ func (rc *GithubRouteController) GithubRoute(rg *gin.RouterGroup) {
 
 	private.Use(rc.authController.Auth())
 
-	private.GET("/set/webhook", rc.githubController.SetWebhook())
-	private.GET("/set/accessToken", rc.githubController.SetAccessToken())
+	private.GET("/list/repos", rc.githubController.ListRepos())
+	private.GET("/set/webhook/:repoName", rc.githubController.SetWebhook())
+	private.GET("/set/accessToken/:accessToken", rc.githubController.SetAccessToken())
 
 }

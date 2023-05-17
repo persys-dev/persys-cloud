@@ -13,7 +13,7 @@ var (
 		"user",
 		// You have to select your own scope from here -> https://developer.github.com/v3/oauth/#scopes
 	}
-	redirectUri = "http://localhost:8551/api/v1alpha/auth"
+	redirectUri = "http://localhost:8551/auth"
 )
 
 type AuthRouteController struct {
