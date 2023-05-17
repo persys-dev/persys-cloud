@@ -76,13 +76,6 @@ func (ac *AuthController) Auth() gin.HandlerFunc {
 				return b, nil
 			})
 
-			//status := checkUser(tkn)
-			//
-			//if status == false {
-			//	//fmt.Println("status is false")
-			//	ctx.AbortWithStatus(401)
-			//	return
-			//}
 			if err != nil {
 				ctx.AbortWithError(401, err)
 				return
@@ -117,7 +110,7 @@ func (ac *AuthController) Auth() gin.HandlerFunc {
 				CreatedAt:   time.Now().String(),
 			}
 
-			ac.githubService.GetRepos(client)
+			ac.githubService.GetRepos(client, &data)
 
 			status, _ := ac.authService.SignInUser(&data)
 
