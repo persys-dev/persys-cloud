@@ -36,7 +36,7 @@ type processedEvent struct {
 }
 
 func Test() {
-	publisher := createPublisher()
+	publisher := CreatePublisher()
 
 	// Subscriber is created with consumer group handler_1
 	subscriber := createSubscriber("handler_1")
@@ -93,7 +93,7 @@ func Test() {
 }
 
 // createPublisher is a helper function that creates a Publisher, in this case - the Kafka Publisher.
-func createPublisher() message.Publisher {
+func CreatePublisher() message.Publisher {
 	kafkaPublisher, err := kafka.NewPublisher(
 		kafka.PublisherConfig{
 			Brokers:   brokers,
@@ -110,7 +110,7 @@ func createPublisher() message.Publisher {
 
 // KafkaProduce  is the function used to actually send events to kafka
 func KafkaProduce(payload []byte) {
-	publisher := createPublisher()
+	publisher := CreatePublisher()
 
 	err := publisher.Publish(consumeTopic, message.NewMessage(
 		watermill.NewUUID(), // internal uuid of the message, useful for debugging
