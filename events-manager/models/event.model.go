@@ -21,6 +21,23 @@ type Event struct {
 
 // TODO: implement other data models like job reports, retry , response
 
-type JobReport struct {
-	// TODO: implement me
+// Report represents the data structure of the event message.
+type Report struct {
+	ServiceName string             `json:"service_name"`
+	JobID       primitive.ObjectID `json:"job_id"`
+	JobAction   string             `json:"job_action"`
+	NextAction  string             `json:"next_action"`
+	Output      json.RawMessage    `json:"output"`
+	Status      string             `json:"status"`
+	FailCount   int                `json:"fail_count"`
+}
+
+// ProcessedEvent represents the data structure of the event proccessed
+type ProcessedEvent struct {
+	ProcessedID primitive.ObjectID `json:"processed_id"`
+	Time        time.Time          `json:"time"`
+}
+
+type RetryEvent struct {
+	// IMPLEMENT ME
 }

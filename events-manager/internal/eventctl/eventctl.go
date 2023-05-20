@@ -9,7 +9,6 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message/router/plugin"
 	"github.com/miladhzzzz/milx-cloud-init/events-manager/models"
 	wmHelper "github.com/miladhzzzz/milx-cloud-init/events-manager/pkg/watermill"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"time"
@@ -23,18 +22,6 @@ var (
 	subscriber     = wmHelper.CreateSubscriber("events-manager-handler")
 	publishTopicCi = "jobs_reports"
 )
-
-// Report represents the data structure of the event message.
-type Report struct {
-	ServiceName string `json:"service_name"`
-	Status      string `json:"status"`
-	FailCount   int    `json:"fail_count"`
-}
-
-type processedEvent struct {
-	ProcessedID primitive.ObjectID `json:"processed_id"`
-	Time        time.Time          `json:"time"`
-}
 
 func KafkaEventProcessor(collection *mongo.Collection) {
 	//defer cancelContext()
@@ -59,7 +46,7 @@ func KafkaEventProcessor(collection *mongo.Collection) {
 				return nil, err
 			}
 			log.Printf("received event %+v", consumedPayload)
-			newPayload, err := json.Marshal(processedEvent{
+			newPayload, err := json.Marshal(models.ProcessedEvent{
 				ProcessedID: consumedPayload.ID,
 				Time:        time.Now(),
 			})
@@ -83,7 +70,7 @@ func KafkaEventProcessor(collection *mongo.Collection) {
 				return nil, err
 			}
 			log.Printf("received event %+v", consumedPayload)
-			newPayload, err := json.Marshal(processedEvent{
+			newPayload, err := json.Marshal(models.ProcessedEvent{
 				ProcessedID: consumedPayload.ID,
 				Time:        time.Now(),
 			})
@@ -96,7 +83,37 @@ func KafkaEventProcessor(collection *mongo.Collection) {
 
 	// Failed Job scheduler adds failed jobs to retry_queue topic to be picked up by services their self
 
-	// TODO : notification and mongodb service
+	router.AddHandler("failed_handler",
+		"jobs_reports",
+		subscriber,
+		"retry_queue",
+		publisher,
+		func(msg *message.Message) ([]*message.Message, error) {
+			consumedPayload := models.Report{}
+			err := json.Unmarshal(msg.Payload, &consumedPayload)
+			if err != nil {
+				return nil, err
+			}
+			log.Printf("received event %+v", consumedPayload)
+
+			if consumedPayload.Status == "Failed" {
+
+				// TODO : add it to mongodb and notify the correct user
+				newPayload, err := json.Marshal(models.ProcessedEvent{
+					ProcessedID: consumedPayload.JobID,
+					Time:        time.Now(),
+				})
+				if err != nil {
+					return nil, err
+				}
+				newMessage := message.NewMessage(watermill.NewUUID(), newPayload)
+				return []*message.Message{newMessage}, nil
+			}
+
+			return nil, nil
+		})
+
+	// Job Scheduler determines if a job is ready for next steps or not
 
 	if err := router.Run(context.Background()); err != nil {
 		panic(err)
