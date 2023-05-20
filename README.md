@@ -29,6 +29,21 @@
 
 Open Source DevOps as a Service platform written in Golang with a rust CLI client called shipper!,
 this project is aimed at making the life of DevOps engineers easy with automation.
+
+# Local Development
+1. First clone the repository:
+```shell
+git clone https://github.com/persys-dev/persys-devops
+```
+2. Then using make file you can do :
+```shell
+make up
+```
+3. As an alternative way you can simply run init.sh which will build and deploy the project to a kind environment:
+```shell
+chmod +x ./init.sh
+./init.sh
+```
 # Getting started!
 **you can use pure http rest requests/ CLI client to interact with our platform.**
 <br>
