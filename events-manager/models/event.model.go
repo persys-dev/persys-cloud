@@ -18,3 +18,9 @@ type Event struct {
 	GithubAccessToken string             `bson:"github_access_token,omitempty"`
 	UserID            string             `bson:"user_id,omitempty"`
 }
+
+// TODO: implement other data models like job reports, retry , response
+
+type JobReport struct {
+	// TODO: implement me
+}

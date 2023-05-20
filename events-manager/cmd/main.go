@@ -6,11 +6,14 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/google/uuid"
 	"github.com/miladhzzzz/milx-cloud-init/events-manager/config"
+	"github.com/miladhzzzz/milx-cloud-init/events-manager/internal/eventctl"
 	"github.com/miladhzzzz/milx-cloud-init/events-manager/models"
 	"github.com/miladhzzzz/milx-cloud-init/events-manager/pkg/opentelemtry"
+	"github.com/miladhzzzz/milx-cloud-init/events-manager/pkg/watermill"
 	pb "github.com/miladhzzzz/milx-cloud-init/events-manager/proto"
 	"github.com/miladhzzzz/milx-cloud-init/events-manager/utils"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -24,15 +27,36 @@ type server struct {
 }
 
 var (
+	cnf, _             = config.ReadConfig()
 	serviceName        = "events-manager"
 	logUrl             = "http://localhost:8080"
 	eventsCollection   *mongo.Collection
 	messagesCollection *mongo.Collection
-	messagesPublisher  *message.Publisher
 )
 
 func init() {
-	//messagesPublisher = watermill.CreatePublisher()
+
+	ctx := context.TODO()
+	// Connect to MongoDB
+	mongoconn := options.Client().ApplyURI(cnf.MongoURI)
+	mongoclient, err := mongo.Connect(ctx, mongoconn)
+
+	if err != nil {
+		// Send logs to audit service
+		utils.SendLogMessage(logUrl, utils.LogMessage{
+			Microservice: serviceName,
+			Level:        "DEBUG",
+			Message:      err.Error(),
+			Timestamp:    time.Time{},
+		})
+
+		panic(err)
+	}
+
+	// initialize mongodb collections
+	eventsCollection = mongoclient.Database("").Collection("")
+	messagesCollection = mongoclient.Database("").Collection("")
+	// this sends logs to audit-service first test
 	_ = utils.SendLogMessage(logUrl, utils.LogMessage{
 		Microservice: "events-manager",
 		Level:        "info",
@@ -63,27 +87,30 @@ func grpcServer() {
 	}
 }
 
-// TODO:
-// helper Funcs in utils
+// helper Functions
 
 // PublishEvent is the method called when we receive a grpc the processing is done here
 func (s *server) PublishEvent(ctx context.Context, grpcMsg *pb.EventMessage) (*emptypb.Empty, error) {
+
 	// Convert the gRPC message to a byte slice.
 	eventData, err := proto.Marshal(grpcMsg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal gRPC message: %v", err)
 	}
+
 	// Get the target service to send the event to based on the message metadata.
 	origin := grpcMsg.OriginService
 	destination := grpcMsg.ServiceName
+
 	// Extract the additional fields from the gRPC message.
 	username := grpcMsg.Username
 	githubRepoURL := grpcMsg.GithubRepoUrl
+	githubAccessToken := grpcMsg.GithubAccessToken
+	userID := grpcMsg.UserId
+
 	// clone user repo using blob-service driver
 	utils.CloneRepo(grpcMsg.GithubRepoUrl, "", grpcMsg.GithubAccessToken)
 
-	githubAccessToken := grpcMsg.GithubAccessToken
-	userID := grpcMsg.UserId
 	// Create a new Event instance and populate it with the extracted fields.
 	e := &models.Event{
 		Origin:            origin,
@@ -96,32 +123,32 @@ func (s *server) PublishEvent(ctx context.Context, grpcMsg *pb.EventMessage) (*e
 		GithubAccessToken: githubAccessToken,
 		UserID:            userID,
 	}
+
 	// Insert the event into MongoDB.
 	result, err := eventsCollection.InsertOne(ctx, e)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert event to database: %v", err)
 	}
 	log.Printf("Inserted event with ID %v", result)
+
 	// Publish the event to the appropriate topic.
 	msg := &message.Message{
 		UUID:     uuid.NewString(),
 		Metadata: message.Metadata{},
 		Payload:  eventData,
 	}
-	// Insert the message into MongoDB.
+
+	// Insert the kafka message into MongoDB.
 	result, err = messagesCollection.InsertOne(ctx, msg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert message to database: %v", err)
 	}
 	log.Printf("Inserted message with UUID %s", msg.UUID)
-	// Publish the message to the appropriate topic.
-	//TODO : implement publish
 
-	//err = messagesPublisher.Publish(ctx, msg, destination)
-	//if err != nil {
-	//	return nil, fmt.Errorf("failed to publish message to topic: %v", err)
-	//}
+	// Publish the message to the appropriate topic.
+	watermill.KafkaProduce(eventData, destination)
 	log.Printf("Published message to topic %v", destination)
+
 	return nil, nil
 }
 
@@ -135,6 +162,11 @@ func main() {
 		GRPC STUFF
 	*/
 	go grpcServer()
+
+	/*
+	   KAFKA EVENT CONTROLLER
+	*/
+	go eventctl.KafkaEventProcessor(eventsCollection)
 
 	<-context.Background().Done()
 }
