@@ -1,6 +1,16 @@
 version: '3.9'
 
 services:
+
+  api-gateway:
+    build: ../../api-gateway
+
+  events-manager:
+      build: ../../events-manager
+
+  ci-server:
+      build: ../../ci-service
+
 # required backbone services for persys ci-cd
   node_exporter:
     container_name: node_exporter_container
