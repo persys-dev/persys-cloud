@@ -11,7 +11,7 @@ import (
 
 func main() {
 
-	cc, err := grpc.Dial("localhost:5006", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.Dial("localhost:8662", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("we are fucked: %v", err)
 	}
@@ -23,11 +23,11 @@ func main() {
 		}
 	}(cc)
 
-	c := proto.NewGithubServiceClient(cc)
-	res, err := c.Clone(context.TODO(), &proto.CloneRequest{})
+	c := proto.NewEventServiceClient(cc)
+	res, err := c.PublishEvent(context.TODO(), &proto.EventMessage{})
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Printf("server response %v", res.JobID)
+	fmt.Printf("server response %v", res)
 }
