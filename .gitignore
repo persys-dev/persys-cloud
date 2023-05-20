@@ -7,5 +7,5 @@ __pycache__
 notes.md
 *.bak
 terraform.tfvars
-IAC/helm/persys-devops/.helmignore
-IAC/helm/persys-req/persys-req/.helmignore
+IaC/helm/persys-devops/.helmignore
+IaC/helm/persys-req/persys-req/.helmignore
