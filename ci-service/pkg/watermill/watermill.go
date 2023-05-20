@@ -2,7 +2,9 @@ package watermill
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
+	"github.com/oklog/ulid"
 	"log"
 	"time"
 
@@ -149,6 +151,10 @@ func simulateEvents(publisher message.Publisher) {
 
 		time.Sleep(time.Second)
 	}
+}
+
+func NewULID() string {
+	return ulid.MustNew(ulid.Now(), rand.Reader).String()
 }
 
 // KafkaProduce  is the function used to actually send events to kafka
