@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	brokers      = []string{"kafka-1675614303.default.svc.cluster.local:9092"}
+	brokers      = []string{"localhost:29092"}
 	consumeTopic = "events"
 	publishTopic = "events-processed"
 

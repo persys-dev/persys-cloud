@@ -13,6 +13,7 @@ import (
 	"github.com/miladhzzzz/milx-cloud-init/ci-service/pkg/watermill"
 	"github.com/miladhzzzz/milx-cloud-init/ci-service/utils"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"log"
 	"path/filepath"
 )
 
@@ -20,7 +21,7 @@ var (
 	serviceName  = "ci-service"
 	consumeTopic = "ci-service"
 	publisher    = watermill.CreatePublisher()
-	subscriber   = watermill.CreateSubscriber("ci_handler")
+	subscriber   = watermill.CreateSubscriber("ci_service")
 	publishTopic = "ci-service-reports"
 )
 
@@ -37,7 +38,7 @@ func KafkaEventProcessor() {
 	router.AddMiddleware(middleware.Recoverer)
 
 	router.AddHandler(
-		"ci_handler",
+		"ci_service",
 		consumeTopic,
 		subscriber,
 		publishTopic,
@@ -50,14 +51,15 @@ func KafkaEventProcessor() {
 				//
 				// You can change the default behaviour by using middlewares, like Retry or PoisonQueue.
 				// You can also implement your own middleware.
-				return nil, err
+				log.Print(erp)
+				return nil, erp
 			}
 			fmt.Printf("consumed message: %v", consumedPayload)
 
 			filePath, err := utils.DownloadRepo("", "")
 
 			if err != nil {
-
+				return nil, err
 			}
 
 			files, err := manifest.ScanDocker(filePath)
@@ -73,13 +75,13 @@ func KafkaEventProcessor() {
 
 				// TODO : we need to tag and push image
 				err = docker.ImageBuild(path, "persys:latest")
-
+				data := json.RawMessage(err.Error())
 				newPayload, err := json.Marshal(models.Report{
 					ServiceName: serviceName,
 					JobID:       primitive.ObjectID{},
 					JobAction:   "Docker-Build",
 					NextAction:  "CD",
-					Output:      json.RawMessage(err.Error()),
+					Output:      &data,
 					Status:      "Success",
 					FailCount:   0,
 				})

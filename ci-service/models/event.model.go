@@ -11,7 +11,7 @@ type Event struct {
 	Origin            string             `bson:"origin,omitempty"`
 	Destination       string             `bson:"destination,omitempty"`
 	EventType         string             `bson:"event_type,omitempty"`
-	Payload           json.RawMessage    `bson:"payload,omitempty"`
+	Payload           *json.RawMessage   `bson:"payload,omitempty"`
 	CreatedAt         time.Time          `bson:"created_at,omitempty"`
 	Username          string             `bson:"username,omitempty"`
 	GithubRepoURL     string             `bson:"github_repo_url,omitempty"`
@@ -27,7 +27,7 @@ type Report struct {
 	JobID       primitive.ObjectID `json:"job_id"`
 	JobAction   string             `json:"job_action"`
 	NextAction  string             `json:"next_action"`
-	Output      json.RawMessage    `json:"output"`
+	Output      *json.RawMessage   `json:"output"`
 	Status      string             `json:"status"`
 	FailCount   int                `json:"fail_count"`
 }

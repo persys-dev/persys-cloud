@@ -9,5 +9,5 @@ import "github.com/miladhzzzz/milx-cloud-init/ci-service/internal/eventctl"
 // TODO refactor the nonsense names of pkgs
 
 func main() {
-	go eventctl.KafkaEventProcessor()
+	eventctl.KafkaEventProcessor()
 }
