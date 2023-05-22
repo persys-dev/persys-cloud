@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 	"github.com/miladhzzzz/milx-cloud-init/events-manager/pkg/watermill"
 	pb "github.com/miladhzzzz/milx-cloud-init/events-manager/proto"
 	"github.com/miladhzzzz/milx-cloud-init/events-manager/utils"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"google.golang.org/grpc"
@@ -54,8 +56,9 @@ func init() {
 	}
 
 	// initialize mongodb collections
-	eventsCollection = mongoclient.Database("").Collection("")
-	messagesCollection = mongoclient.Database("").Collection("")
+	eventsCollection = mongoclient.Database("events-manager").Collection("events")
+	messagesCollection = mongoclient.Database("events-manager").Collection("messages")
+
 	// this sends logs to audit-service first test
 	_ = utils.SendLogMessage(logUrl, utils.LogMessage{
 		Microservice: "events-manager",
@@ -100,7 +103,7 @@ func (s *server) PublishEvent(ctx context.Context, grpcMsg *pb.EventMessage) (*e
 
 	// Get the target service to send the event to based on the message metadata.
 	origin := grpcMsg.OriginService
-	destination := grpcMsg.ServiceName
+	destination := grpcMsg.Origin
 
 	// Extract the additional fields from the gRPC message.
 	username := grpcMsg.Username
@@ -111,12 +114,15 @@ func (s *server) PublishEvent(ctx context.Context, grpcMsg *pb.EventMessage) (*e
 	// clone user repo using blob-service driver
 	utils.CloneRepo(grpcMsg.GithubRepoUrl, "", grpcMsg.GithubAccessToken)
 
+	pays := json.RawMessage(eventData)
+
 	// Create a new Event instance and populate it with the extracted fields.
 	e := &models.Event{
+		ID:                primitive.ObjectID{},
 		Origin:            origin,
 		Destination:       destination,
 		EventType:         grpcMsg.EventType,
-		Payload:           eventData,
+		Payload:           &pays,
 		CreatedAt:         time.Now(),
 		Username:          username,
 		GithubRepoURL:     githubRepoURL,
@@ -146,10 +152,10 @@ func (s *server) PublishEvent(ctx context.Context, grpcMsg *pb.EventMessage) (*e
 	log.Printf("Inserted message with UUID %s", msg.UUID)
 
 	// Publish the message to the appropriate topic.
-	watermill.KafkaProduce(eventData, destination)
+	watermill.KafkaProduce(e, destination)
 	log.Printf("Published message to topic %v", destination)
 
-	return nil, nil
+	return &emptypb.Empty{}, nil
 }
 
 func main() {

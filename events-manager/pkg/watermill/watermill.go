@@ -9,6 +9,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/ThreeDotsLabs/watermill/message/router/plugin"
 	"github.com/miladhzzzz/milx-cloud-init/events-manager/config"
+	"github.com/miladhzzzz/milx-cloud-init/events-manager/models"
 	"log"
 	"time"
 )
@@ -28,12 +29,8 @@ var (
 	contextCancel context.CancelFunc
 )
 
-type event struct {
-	ID int `json:"id"`
-}
-
 type processedEvent struct {
-	ProcessedID int       `json:"processed_id"`
+	ProcessedID string    `json:"processed_id"`
 	Time        time.Time `json:"time"`
 }
 
@@ -52,14 +49,14 @@ func Test() {
 		publishTopic,
 		publisher,
 		func(msg *message.Message) ([]*message.Message, error) {
-			consumedPayload := event{}
+			consumedPayload := models.Event{}
 			err := json.Unmarshal(msg.Payload, &consumedPayload)
 			if err != nil {
 				return nil, err
 			}
 			log.Printf("received event %+v", consumedPayload)
 			newPayload, err := json.Marshal(processedEvent{
-				ProcessedID: consumedPayload.ID,
+				ProcessedID: consumedPayload.ID.String(),
 				Time:        time.Now(),
 			})
 			if err != nil {
@@ -89,10 +86,16 @@ func CreatePublisher() message.Publisher {
 	return kafkaPublisher
 }
 
-func KafkaProduce(payload []byte, destination string) {
+func KafkaProduce(payload *models.Event, destination string) {
+	pay, erc := json.Marshal(payload)
+
+	if erc != nil {
+		log.Println(erc)
+		return
+	}
 	err := publisher.Publish(destination, message.NewMessage(
 		watermill.NewUUID(),
-		payload,
+		pay,
 	))
 	if err != nil {
 		panic(err)
@@ -121,8 +124,8 @@ func simulateEvents() {
 		case <-context.Background().Done():
 			return
 		default:
-			e := event{
-				ID: i,
+			e := models.Event{
+				Destination: "",
 			}
 			payload, err := json.Marshal(e)
 			if err != nil {
