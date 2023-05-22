@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	webhookURL    = ""
-	webhookSecret = "538eeeb2-285f-4b4a-8f38-a189fa1c3801"
+	webhookURL    = cnf.WebHookURL
+	webhookSecret = cnf.WebHookSecret
 )
 
 type GithubController struct {
@@ -97,7 +97,13 @@ func (gc *GithubController) SetWebhook() gin.HandlerFunc {
 		if err != nil {
 			fmt.Println(err)
 			c.AbortWithStatus(400)
+			return
 		}
+
+		gc.collection.FindOneAndUpdate(gc.ctx, bson.M{"name": repoName},
+			bson.M{"$set": bson.M{
+				"webhookURL": webhookURL,
+			}})
 
 		c.JSON(200, "your repository webhook was set")
 

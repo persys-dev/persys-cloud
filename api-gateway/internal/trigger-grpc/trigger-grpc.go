@@ -22,34 +22,36 @@ type EventsManagerClient struct{}
 
 func (c *EventsManagerClient) SendRepoData(repoData *models.Repos) {
 
-	con := em.InitGmClient()
+	con := em.InitEventClient()
 
-	res, err := con.Clone(context.TODO(), &pb.CloneRequest{
-		RepoID:      repoData.RepoID,
-		GitURL:      repoData.GitURL,
-		Name:        repoData.Name,
-		Owner:       repoData.Owner,
-		Userid:      repoData.UserID,
-		Private:     repoData.Private,
-		AccessToken: repoData.AccessToken,
-		WebhookURL:  repoData.WebhookURL,
-		EventID:     repoData.EventID,
+	res, err := con.PublishEvent(context.TODO(), &pb.EventMessage{
+		Id:                "1",
+		ServiceName:       "api-gateway",
+		OriginService:     "api-gateway",
+		EventType:         "pipeline_add",
+		Payload:           []byte("nil"),
+		Origin:            "ci-service",
+		Username:          repoData.Name,
+		GithubRepoUrl:     repoData.GitURL,
+		GithubAccessToken: repoData.AccessToken,
+		UserId:            string(repoData.UserID),
 	})
 
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("events-manager: %v ", err)
+		return
 	}
 
-	log.Printf("sent: %v", res)
+	log.Printf("sent: %v", res.String())
 }
 
 func watchRepoChanges(client *mongo.Client, eventsManagerClient *EventsManagerClient) {
 	ctx := context.Background()
 
 	// Set up change stream
-	collection := client.Database("api-gateway").Collection("events")
-	matchStage := bson.D{{"$match", bson.D{{"updateDescription.updatedFields.webhook", bson.D{{"$exists", true}}}}}}
-	changeStream, err := collection.Watch(ctx, mongo.Pipeline{matchStage})
+	collection := client.Database("api-gateway").Collection("repos")
+	matchStage := bson.D{{"$match", bson.D{{"updateDescription.updatedFields.webhookURL", bson.D{{"$exists", true}}}}}}
+	changeStream, err := collection.Watch(ctx, mongo.Pipeline{matchStage}, options.ChangeStream().SetFullDocument(options.UpdateLookup))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -63,11 +65,29 @@ func watchRepoChanges(client *mongo.Client, eventsManagerClient *EventsManagerCl
 			continue
 		}
 
+		doc := changeEvent["fullDocument"].(bson.M)
+		//fmt.Print(doc)
+		name := doc["name"]
+		githubRepo := doc["gitURL"]
+		githubToken := doc["accessToken"]
+
 		updatedFields := changeEvent["updateDescription"].(bson.M)["updatedFields"].(bson.M)
-		webhook := updatedFields["webhook"].(string)
-		// TODO : change this
+		webhook := updatedFields["webhookURL"].(string)
+
 		if webhook != "" {
-			eventsManagerClient.SendRepoData(&models.Repos{})
+			log.Println("sent event to events-manager using grpc")
+			eventsManagerClient.SendRepoData(&models.Repos{
+				RepoID:      0,
+				GitURL:      githubRepo.(string),
+				Name:        name.(string),
+				Owner:       "",
+				UserID:      0,
+				Private:     false,
+				AccessToken: githubToken.(string),
+				WebhookURL:  "",
+				EventID:     0,
+				CreatedAt:   "",
+			})
 		}
 	}
 }
