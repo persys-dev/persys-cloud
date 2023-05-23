@@ -100,6 +100,7 @@ func main() {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		message.Timestamp = time.Now()
 		// dump the log message to file
 		log.Printf("services-log: %v", message)
 

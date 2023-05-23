@@ -3,7 +3,7 @@ RUN apk add build-base
 
 WORKDIR /app
 
-COPY /audit-service .
+COPY . .
 
 # RUN ls -la
 
@@ -21,6 +21,6 @@ COPY --from=build /app/cmd/main .
 
 RUN chmod +x ./main
 
-EXPOSE 8551
+EXPOSE 8080
 
 CMD [ "./main" ]
