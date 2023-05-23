@@ -112,7 +112,9 @@ func (s *server) PublishEvent(ctx context.Context, grpcMsg *pb.EventMessage) (*e
 	userID := grpcMsg.UserId
 
 	// clone user repo using blob-service driver
-	utils.CloneRepo(grpcMsg.GithubRepoUrl, "", grpcMsg.GithubAccessToken)
+	cloneData, _ := utils.CloneRepo(grpcMsg.GithubRepoUrl, "", grpcMsg.GithubAccessToken)
+
+	log.Printf("commit data: %v", cloneData)
 
 	pays := json.RawMessage(eventData)
 
