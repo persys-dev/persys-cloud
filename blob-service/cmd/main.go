@@ -150,8 +150,8 @@ func startGinServer() {
 		commit, s, err := git.Gits(url, pv, token)
 
 		if err != nil {
-			c.AbortWithError(http.StatusInternalServerError, err)
-			log.Printf("couldnt clone err: %v", err)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			//log.Printf("couldnt clone err: %v", err)
 			return
 		}
 		//fmt.Print(s)
@@ -160,7 +160,8 @@ func startGinServer() {
 			"directory": s,
 			"hash":      commit.Hash.String(),
 			"owner":     commit.Author,
-			"url":       "http://blob-service:8552/api/v1alpha" + s,
+			"url":       "http://localhost:8552/api/v1alpha" + s,
+			"zip":       "http://localhost:8552/api/v1alpha/download" + "/" + git.ExtractUsernameRepo(url),
 		})
 
 	})

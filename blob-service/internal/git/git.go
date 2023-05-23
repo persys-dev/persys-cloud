@@ -4,32 +4,36 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	myhttp "github.com/go-git/go-git/v5/plumbing/transport/http"
+	"log"
 	urlHelper "net/url"
 	"os"
 	"strings"
 )
 
-func url2Dir(url string) (route string) {
-
-	//defer errorhandler.ErrHandler()
-
+func ExtractUsernameRepo(url string) (usernameRepo string) {
 	mix, err := urlHelper.Parse(url)
 	if err != nil {
-
+		return ""
 	}
-	//CheckIfError(err)
-
 	path := mix.Path
-
-	route = path[:strings.IndexByte(path, '.')]
-
-	return route
+	path = strings.TrimSuffix(path, ".git") // remove .git extension
+	path = strings.TrimSuffix(path, "/")    // remove trailing slash
+	parts := strings.Split(path, "/")
+	if len(parts) < 3 {
+		return ""
+	}
+	usernameRepo = parts[1] + "/" + parts[2]
+	return usernameRepo
 }
 
 func Gits(url string, private bool, token string) (*object.Commit, string, error) {
 	var action string
 
-	directory := "/artifacts/git" + url2Dir(url)
+	log.Println(url)
+
+	directory := "/artifacts/git" + "/" + ExtractUsernameRepo(url)
+
+	log.Print(directory)
 
 	fs, _ := os.Stat(directory)
 
@@ -57,7 +61,14 @@ func Gits(url string, private bool, token string) (*object.Commit, string, error
 			RecurseSubmodules: git.DefaultSubmoduleRecursionDepth,
 		})
 
+		if err != nil {
+			return nil, "", err
+		}
+
 		ref, err := r.Head()
+		if err != nil {
+			return nil, "", err
+		}
 		commit, err := r.CommitObject(ref.Hash())
 
 		if err != nil {
