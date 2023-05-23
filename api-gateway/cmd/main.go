@@ -10,6 +10,7 @@ import (
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/internal/trigger-grpc"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/routes"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/services"
+	"github.com/miladhzzzz/milx-cloud-init/api-gateway/utils"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -17,10 +18,12 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 var (
 	cnf, _                = config.ReadConfig()
+	auditUrl              = "http://localhost:8080"
 	serviceName           = "persys-api-gateway"
 	mySuperSecretPassword = "unicornsAreAwesome"
 	webhookUrl            = cnf.WebHookURL    // Demo deployment on azure
@@ -43,7 +46,13 @@ var (
 )
 
 func init() {
-
+	// initializing audit service
+	utils.SendLogMessage(auditUrl, utils.LogMessage{
+		Microservice: "api-gateway",
+		Level:        "Info",
+		Message:      "api gateway init",
+		Timestamp:    time.Time{},
+	})
 	//cnf, _ = config.ReadConfig()
 	// create a log file
 	logFile, _ := os.Create("api-gateway-http.log")
