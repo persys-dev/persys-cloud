@@ -10,6 +10,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
@@ -23,8 +24,8 @@ type LogMessage struct {
 	Timestamp    time.Time `json:"timestamp"`
 }
 
-func sendToElasticsearch(client *elasticsearch.Client, index string, message LogMessage) error {
-	body, err := json.Marshal(message)
+func sendToElasticsearch(client *elasticsearch.Client, index string, file *os.File) error {
+	body, err := json.Marshal(file)
 	if err != nil {
 		return err
 	}
@@ -54,7 +55,30 @@ func sendToElasticsearch(client *elasticsearch.Client, index string, message Log
 	return nil
 }
 
+func elasticsearchAvailable() bool {
+	// Check if Elasticsearch is reachable by pinging it
+	resp, err := http.Get("http://localhost:9200")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	// Return true if response status is 200 OK, else false
+	return resp.StatusCode == http.StatusOK
+}
+
 func main() {
+
+	logFile, err := os.Create("services.log")
+	if err != nil {
+		log.Fatalf("failed to create log file: %v", err)
+	}
+	defer logFile.Close()
+
+	// Use the log file for all logging
+	gin.DefaultWriter = logFile
+	gin.DefaultErrorWriter = logFile
+
 	// Initialize Elasticsearch client
 	cfg := elasticsearch.Config{
 		Addresses: []string{"http://localhost:9200"},
@@ -76,9 +100,17 @@ func main() {
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+		// dump the log message to file
+		log.Printf("services-log: %v", message)
 
-		// Send log message to Elasticsearch
-		err = sendToElasticsearch(client, "audit-service", message)
+		// if elasticsearch isn't available just return a 200 we dumped the message to file
+		if elasticsearchAvailable() != true {
+			c.JSON(http.StatusOK, gin.H{"message": "dumped to local file for now"})
+			return
+		}
+
+		// Send log file to Elasticsearch
+		err = sendToElasticsearch(client, "audit-service", logFile)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
