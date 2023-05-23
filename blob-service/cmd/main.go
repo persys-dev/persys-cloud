@@ -150,7 +150,9 @@ func startGinServer() {
 		commit, s, err := git.Gits(url, pv, token)
 
 		if err != nil {
-			log.Fatalf("couldnt clone err: %v", err)
+			c.AbortWithError(http.StatusInternalServerError, err)
+			log.Printf("couldnt clone err: %v", err)
+			return
 		}
 		//fmt.Print(s)
 
