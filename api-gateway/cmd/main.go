@@ -51,7 +51,7 @@ func init() {
 		Microservice: "api-gateway",
 		Level:        "Info",
 		Message:      "api gateway init",
-		Timestamp:    time.Time{},
+		Timestamp:    time.Now(),
 	})
 	//cnf, _ = config.ReadConfig()
 	// create a log file
@@ -64,10 +64,12 @@ func init() {
 	mongoclient, err := mongo.Connect(ctx, mongoconn)
 
 	if err != nil {
+		utils.LogError(err.Error())
 		panic(err)
 	}
 
 	if err := mongoclient.Ping(ctx, readpref.Primary()); err != nil {
+		utils.LogError(err.Error())
 		panic(err)
 	}
 
