@@ -6,11 +6,14 @@ import (
 	"github.com/gin-gonic/gin"
 	webhook "github.com/go-playground/webhooks/v6/github"
 	"github.com/google/go-github/github"
+	trig "github.com/miladhzzzz/milx-cloud-init/api-gateway/internal/trigger-grpc"
+	"github.com/miladhzzzz/milx-cloud-init/api-gateway/models"
 	"github.com/miladhzzzz/milx-cloud-init/api-gateway/services"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/oauth2"
 	"log"
+	"time"
 )
 
 var (
@@ -61,6 +64,22 @@ func (gc *GithubController) WebhookHandler() gin.HandlerFunc {
 				"eventID": eventID,
 				"webhook": event,
 			}
+
+			// TRIGGERING GRPC
+			client := trig.EventsManagerClient{}
+
+			client.SendRepoData(&models.Repos{
+				RepoID:      0,
+				GitURL:      event.Repository.GitURL,
+				Name:        event.Repository.Name,
+				Owner:       event.Repository.Owner.Login,
+				UserID:      0,
+				Private:     event.Repository.Private,
+				AccessToken: "",
+				WebhookURL:  "",
+				EventID:     0,
+				CreatedAt:   time.Now().String(),
+			})
 
 			fmt.Println(events)
 
