@@ -18,11 +18,11 @@
 * **this is the system design that i came up with, a high level mind map to look at.**
 * feel free to open an ISSUE mentioning any problems or ideas you might have!
 
-  ![](milx-cloud.drawio.png)
+  ![](docs/architecture/milx-cloud.drawio.png)
 
 * **an over simplified request flow**
 
-  ![](arch-flow.drawio.png)
+  ![](docs/architecture/arch-flow.drawio.png)
 
 Open Source DevOps as a Service platform written in Golang with a rust CLI client called shipper!,
 this project is aimed at making the life of DevOps engineers easy with automation.
@@ -180,4 +180,4 @@ so, thank you
 
 [CNCF](https://github.com/miladhzzzz/persys-cicd) <3
 
-![](cncf-ambassador.png)
+![](docs/architecture/cncf-ambassador.png)
