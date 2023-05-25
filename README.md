@@ -1,8 +1,5 @@
 # persys-devops
-**DevOps as a service platform!**
-<br>
-**i am working on a public version that soon will be released here! read [Updates](#Updates)**
-<br>
+### DevOps as a service platform!
 **!!THIS PROJECT IS UNDER ACTIVE DEVELOPMENT DO NOT USE IN PRODUCTION!!**
 <!-- TOC -->
 * **[Architecture](#Architecture)**
