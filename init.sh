@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the list of microservices in the monorepo
-MICROSERVICES=("api-gateway" "events-manager" "blob-service" "ci-service" "cd-service" "cloud-mgmt")
+MICROSERVICES=("api-gateway" "events-manager" "blob-service" "audit-service" "ci-service" "cd-service" "cloud-mgmt")
 
 # Loop through each microservice and generate the Kubernetes YAML files
 for MICROSERVICE in "${MICROSERVICES[@]}"
