@@ -28,24 +28,24 @@ Open Source DevOps as a Service platform written in Golang with a rust CLI clien
 this project is aimed at making the life of DevOps engineers easy with automation.
 
 # Local Development
-1. First clone the repository:
+* First clone the repository:
 ```shell
 git clone https://github.com/persys-dev/persys-devops
 ```
 ### Docker-Compose:
-2. Then using make file you can do :
+* Then using make file you can do :
 ```shell
 make up
 ```
 **this initializes the project on a local docker environment using docker-compose**
 ### Kind:
-3. As an alternative way you can use make which will build and deploy the project to a kind environment:
+* As an alternative way you can use make which will build and deploy the project to a kind environment:
 ```shell
 make kind
 ```
 **this will build every docker file locally tag it and generate kubernetes deployment files and deploying them.**
 ### ShellScript:
-4. if you don't have make just run the following commands to use the initialization script.
+* if you don't have make just run the following commands to use the initialization script.
 ````shell
 chmod +x /.init.sh
 /.init.sh
