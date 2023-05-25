@@ -35,15 +35,26 @@ this project is aimed at making the life of DevOps engineers easy with automatio
 ```shell
 git clone https://github.com/persys-dev/persys-devops
 ```
+### Docker-Compose:
 2. Then using make file you can do :
 ```shell
 make up
 ```
-3. As an alternative way you can simply run init.sh which will build and deploy the project to a kind environment:
+**this initializes the project on a local docker environment using docker-compose**
+### Kind:
+3. As an alternative way you can use make which will build and deploy the project to a kind environment:
 ```shell
-chmod +x ./init.sh
-./init.sh
+make kind
 ```
+**this will build every docker file locally tag it and generate kubernetes deployment files and deploying them.**
+### ShellScript:
+4. if you don't have make just run the following commands to use the initialization script.
+````shell
+chmod +x /.init.sh
+/.init.sh
+````
+**PLEASE MAKE SURE YOU HAVE : Docker , Kubectl , Kind to run the project in you desired environment.**
+
 # Getting started!
 **you can use pure http rest requests/ CLI client to interact with our platform.**
 <br>
