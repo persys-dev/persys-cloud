@@ -1,7 +1,17 @@
 # persys-devops
+
 ### DevOps as a service platform!
-**!!THIS PROJECT IS UNDER ACTIVE DEVELOPMENT DO NOT USE IN PRODUCTION!!**
+
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/arvancloud/cdn-go)
+
+Open Source DevOps as a Service platform written in Golang with a rust CLI client called shipper!,
+this project is aimed at making the life of DevOps engineers easy with automation.
+
+
+> **Note**: This project is under active development and may have problems and shortcomings.
+> 
 <!-- TOC -->
+### Content
 * **[Architecture](#Architecture)**
 * **[Updates](#Updates)**
 * **[Contributions](#Contributions)**
@@ -24,8 +34,6 @@
 
   ![](docs/architecture/arch-flow.drawio.png)
 
-Open Source DevOps as a Service platform written in Golang with a rust CLI client called shipper!,
-this project is aimed at making the life of DevOps engineers easy with automation.
 
 # Local Development
 * First clone the repository:
