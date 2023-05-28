@@ -1,0 +1,107 @@
+---
+- name: Setup vSphere provider and deploy Kubernetes cluster using Cluster API
+  hosts: localhost
+  gather_facts: no
+
+  vars:
+    vcenter_hostname: "vcenter.example.com"
+    vcenter_username: "administrator@vsphere.local"
+    vcenter_password: "password"
+    datacenter_name: "Datacenter"
+    cluster_name: "Cluster"
+    datastore_name: "Datastore"
+    network_name: "VM Network"
+    kubernetes_version: "v1.22.0"
+
+  tasks:
+    - name: Create datacenter
+      community.vmware.vmware_datacenter:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter_name: "{{ datacenter_name }}"
+      register: dc
+
+    - name: Create cluster
+      community.vmware.vmware_cluster:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter_name: "{{ datacenter_name }}"
+        cluster_name: "{{ cluster_name }}"
+      register: cl
+
+    - name: Create datastore
+      community.vmware.vmware_datastore:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter_name: "{{ datacenter_name }}"
+        datastore_name: "{{ datastore_name }}"
+        datastore_type: "VMFS"
+        state: present
+      register: ds
+
+    - name: Create network
+      community.vmware.vmware_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter_name: "{{ datacenter_name }}"
+        network_name: "{{ network_name }}"
+        vlan_id: 0
+        state: present
+      register: net
+
+    - name: Setup vSphere provider for Cluster API
+      include_role:
+        name: scottd018.ansible_cluster_api_provider_vsphere_setup
+      vars:
+        vsphere_server: "{{ vcenter_hostname }}"
+        vsphere_datacenter: "{{ datacenter_name }}"
+        vsphere_datastore: "{{ datastore_name }}"
+        vsphere_network: "{{ network_name }}"
+        vsphere_resource_pool: "*/Resources"
+
+    - name: Deploy Kubernetes cluster using Cluster API
+      community.kubernetes.kubectl:
+        kubeconfig: "/etc/kubernetes/admin.conf"
+        context: "admin@cluster.local"
+        namespace: "default"
+        command: "apply"
+        src: "https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/releases/download/v0.7.0/infrastructure-components.yaml"
+      register: k8s
+
+    - name: Wait for Kubernetes cluster to be ready
+      community.kubernetes.kubectl:
+        kubeconfig: "/etc/kubernetes/admin.conf"
+        context: "admin@cluster.local"
+        namespace: "default"
+        command: "wait"
+        args:
+          - "--for=condition=Ready"
+          - "machines.cluster.k8s.io"
+          - "--all"
+      register: k8s_wait
+
+    - name: Install Kubernetes control plane components
+      community.kubernetes.kubectl:
+        kubeconfig: "/etc/kubernetes/admin.conf"
+        context: "admin@cluster.local"
+        namespace: "kube-system"
+        command: "apply"
+        src: "https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/releases/download/v0.7.0/control-plane-components.yaml"
+      register: k8s_control_plane
+
+    - name: Install Kubernetes worker components
+      community.kubernetes.kubectl:
+        kubeconfig: "/etc/kubernetes/admin.conf"
+        context: "admin@cluster.local"
+        namespace: "kube-system"
+        command: "apply"
+        src: "https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/releases/download/v0.7.0/bootstrap-components.yaml"
+      register: k8s_worker
