@@ -1,4 +1,4 @@
-package main
+package persys
 
 import (
 	"context"
@@ -41,19 +41,18 @@ func getKubeConfig() *kubernetes.Clientset {
 
 	if err != nil {
 		log.Fatalf("Error creating Kubernetes client: %v\n", err)
-
 	}
 
 	return clientSet
 }
 
-func main() {
+func CreateCluster() error {
 	clientset := getKubeConfig()
 
 	// Register the CAPV types with the Kubernetes scheme
 	if err := capvv1beta1.AddToScheme(scheme.Scheme); err != nil {
 		fmt.Printf("Error adding CAPV to scheme: %v\n", err)
-		return
+		return err
 	}
 	// Create a new CAPV VSphereCluster object
 	vsphereCluster := &capvv1beta1.VSphereCluster{
@@ -83,10 +82,14 @@ func main() {
 	err := createOrUpdateCluster(context.Background(), clientset, vsphereCluster, cluster)
 	if err != nil {
 		fmt.Printf("Error creating or updating cluster: %v\n", err)
-		return
+		return err
 	}
+
 	fmt.Printf("Cluster created or updated: %s\n", cluster.Name)
+
+	return nil
 }
+
 func createOrUpdateCluster(ctx context.Context, clientset *kubernetes.Clientset, vsphereCluster *capvv1beta1.VSphereCluster, cluster *capi.Cluster) error {
 	client := clientset.RESTClient()
 	// Encode the VSphereCluster and Cluster objects using the runtime encoder

@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/persys-dev/persys-devops/cloud-mgmt/config"
 	"github.com/persys-dev/persys-devops/cloud-mgmt/gapi"
+	"github.com/persys-dev/persys-devops/cloud-mgmt/internal/cloud-provider/persys"
 	pb "github.com/persys-dev/persys-devops/cloud-mgmt/proto"
 	"github.com/persys-dev/persys-devops/cloud-mgmt/services"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -37,17 +37,23 @@ func init() {
 	mongoclient, err := mongo.Connect(ctx, mongoconn)
 
 	if err != nil {
-		panic(err)
+		log.Fatalf("error: %v", err)
 	}
 
 	if err := mongoclient.Ping(ctx, readpref.Primary()); err != nil {
-		panic(err)
+		log.Fatalf("error: %v", err)
 	}
 
-	fmt.Println("MongoDB successfully connected...")
+	log.Println("MongoDB successfully connected...")
 
 	// Collections
 	cloudCollection = mongoclient.Database("cloud-mgmt").Collection("environment")
+
+	// Cluster creation test method ----- >> THIS WILL BE MOVED SOON!!!!
+	err = persys.CreateCluster()
+	if err != nil {
+		log.Printf("could not make a persys cluster for user because : %v", err)
+	}
 
 	//cloudService = services.NewAuthService(authCollection, ctx)
 }
@@ -62,6 +68,7 @@ func startGrpcServer(config config.Config) {
 
 	pb.RegisterCloudMgmtServiceServer(grpcServer, cloudServer)
 
+	// gRPC reflection registration for evans
 	reflection.Register(grpcServer)
 
 	listener, err := net.Listen("tcp", "config.GrpcServerAddress")
