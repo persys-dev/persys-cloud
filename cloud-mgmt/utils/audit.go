@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 )
+
+var auditURL = "http://localhost:8080"
 
 type LogMessage struct {
 	Microservice string    `json:"microservice"`
@@ -32,4 +35,32 @@ func SendLogMessage(url string, message LogMessage) error {
 	}
 
 	return nil
+}
+
+func AuditLog(message string) {
+
+	payload := &LogMessage{
+		Microservice: "cloud-mgmt",
+		Level:        "Debug",
+		Message:      message,
+		Timestamp:    time.Time{},
+	}
+
+	data, err := json.Marshal(payload)
+
+	if err != nil {
+		log.Fatalf("error marshaling json: %v", err)
+	}
+
+	resp, err := http.Post(auditURL+"/log", "application/json", bytes.NewBuffer(data))
+
+	if err != nil {
+		fmt.Printf("error sending log: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("error sending log: %v", err)
+	}
+
 }

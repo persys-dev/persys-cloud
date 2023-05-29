@@ -7,6 +7,7 @@ import (
 	"github.com/persys-dev/persys-devops/cloud-mgmt/internal/cloud-provider/persys"
 	pb "github.com/persys-dev/persys-devops/cloud-mgmt/proto"
 	"github.com/persys-dev/persys-devops/cloud-mgmt/services"
+	"github.com/persys-dev/persys-devops/cloud-mgmt/utils"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -27,6 +28,7 @@ var (
 func init() {
 	config, err := config.ReadConfig()
 	if err != nil {
+		utils.AuditLog(err.Error())
 		log.Fatal("Could not load environment variables", err)
 	}
 
@@ -37,10 +39,12 @@ func init() {
 	mongoclient, err := mongo.Connect(ctx, mongoconn)
 
 	if err != nil {
+		utils.AuditLog(err.Error())
 		log.Fatalf("error: %v", err)
 	}
 
 	if err := mongoclient.Ping(ctx, readpref.Primary()); err != nil {
+		utils.AuditLog(err.Error())
 		log.Fatalf("error: %v", err)
 	}
 
@@ -61,6 +65,7 @@ func init() {
 func startGrpcServer(config config.Config) {
 	cloudServer, err := gapi.NewGrpcCloudServer(config, cloudService)
 	if err != nil {
+		utils.AuditLog(err.Error())
 		log.Fatal("cannot create grpc authServer: ", err)
 	}
 
@@ -73,12 +78,14 @@ func startGrpcServer(config config.Config) {
 
 	listener, err := net.Listen("tcp", "config.GrpcServerAddress")
 	if err != nil {
+		utils.AuditLog(err.Error())
 		log.Fatal("cannot create grpc server: ", err)
 	}
 
 	log.Printf("start gRPC server on %s", listener.Addr().String())
 	err = grpcServer.Serve(listener)
 	if err != nil {
+		utils.AuditLog(err.Error())
 		log.Fatal("cannot create grpc server: ", err)
 	}
 }
