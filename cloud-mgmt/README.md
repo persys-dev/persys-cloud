@@ -3,7 +3,7 @@
 #### this service handles kubernetes clusters for clients using automation and is the heart of the project.
 
 ### Providers
-we currently have the following cloud providers:
+we currently support the following cloud providers:
 * Amazon Web Services
 * Microsoft Azure
 * Google Cloud platform
