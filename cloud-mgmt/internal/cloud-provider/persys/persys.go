@@ -3,17 +3,52 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/persys-dev/persys-devops/cloud-mgmt/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"log"
 	capvv1beta1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
 	capi "sigs.k8s.io/cluster-api/api/v1beta1"
 )
 
+var (
+	kubeConfig *rest.Config
+)
+
+func getKubeConfig() *kubernetes.Clientset {
+	var err error
+
+	err = utils.DownloadFile("persys", "kube-config.yaml")
+
+	if err != nil {
+		log.Fatalf("kube config didnt download")
+	}
+
+	config, err := clientcmd.BuildConfigFromFlags("", "/kube-config.yaml")
+
+	config, err = rest.InClusterConfig()
+
+	if err != nil {
+		log.Fatalf("Error creating Kubernetes config: %v\n", err)
+	}
+
+	clientSet, err := kubernetes.NewForConfig(config)
+
+	if err != nil {
+		log.Fatalf("Error creating Kubernetes client: %v\n", err)
+
+	}
+
+	return clientSet
+}
+
 func main() {
-	// Set up the Kubernetes API client (see previous step)
+	clientset := getKubeConfig()
 
 	// Register the CAPV types with the Kubernetes scheme
 	if err := capvv1beta1.AddToScheme(scheme.Scheme); err != nil {

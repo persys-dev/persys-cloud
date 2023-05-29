@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -11,6 +12,7 @@ import (
 )
 
 const (
+	artifacts     = "http://localhost:8552/api/v1alpha/artifacts"
 	baseURL       = "http://localhost:8552/api/v1alpha/"
 	baseUploadURL = "http://localhost:8552/api/v1alpha/upload/"
 )
@@ -25,6 +27,27 @@ type Req struct {
 var (
 	client = &http.Client{}
 )
+
+func DownloadFile(user string, filename string) error {
+	url := artifacts + "/" + user + "/" + filename
+	resp, err := http.Get(url)
+	if err != nil {
+		return fmt.Errorf("error: %v", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+
+	if err != nil {
+		return fmt.Errorf("error reading response body: %v", err)
+	}
+
+	err = ioutil.WriteFile("kube-config.yaml", data, 0644)
+	if err != nil {
+		return fmt.Errorf("error writing file: %v", err)
+	}
+	return nil
+}
 
 // UploadFile uploads a file to the specified destination.
 func UploadFile(user string, file io.Reader, filename string) (string, error) {
