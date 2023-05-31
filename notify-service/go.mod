@@ -1,3 +1,3 @@
-module github.com/persys-dev/persys-devops/notify-service
+module github.com/persys-dev/persys-cloud/notify-service
 
 go 1.20
