@@ -2,7 +2,7 @@ package services
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/miladhzzzz/milx-cloud-init/api-gateway/models"
+	"github.com/persys-dev/persys-cloud/api-gateway/models"
 )
 
 type AuthService interface {

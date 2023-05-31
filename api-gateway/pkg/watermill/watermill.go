@@ -11,7 +11,7 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/ThreeDotsLabs/watermill/message/router/plugin"
-	"github.com/miladhzzzz/milx-cloud-init/api-gateway/config"
+	"github.com/persys-dev/persys-cloud/api-gateway/config"
 )
 
 var (

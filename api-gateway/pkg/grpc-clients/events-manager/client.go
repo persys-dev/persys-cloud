@@ -1,7 +1,7 @@
 package githubManagerClient
 
 import (
-	em "github.com/miladhzzzz/milx-cloud-init/api-gateway/pkg/grpc-clients/events-manager/pb"
+	em "github.com/persys-dev/persys-cloud/api-gateway/pkg/grpc-clients/events-manager/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"log"

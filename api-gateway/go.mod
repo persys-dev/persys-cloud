@@ -1,4 +1,4 @@
-module github.com/miladhzzzz/milx-cloud-init/api-gateway
+module github.com/persys-dev/persys-cloud/api-gateway
 
 go 1.19
 

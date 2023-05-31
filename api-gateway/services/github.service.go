@@ -2,7 +2,7 @@ package services
 
 import (
 	"github.com/google/go-github/github"
-	"github.com/miladhzzzz/milx-cloud-init/api-gateway/models"
+	"github.com/persys-dev/persys-cloud/api-gateway/models"
 	"go.mongodb.org/mongo-driver/bson"
 )
 

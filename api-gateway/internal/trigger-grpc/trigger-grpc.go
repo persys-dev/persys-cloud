@@ -2,10 +2,10 @@ package trigger_grpc
 
 import (
 	"context"
-	"github.com/miladhzzzz/milx-cloud-init/api-gateway/config"
-	"github.com/miladhzzzz/milx-cloud-init/api-gateway/models"
-	em "github.com/miladhzzzz/milx-cloud-init/api-gateway/pkg/grpc-clients/events-manager"
-	pb "github.com/miladhzzzz/milx-cloud-init/api-gateway/pkg/grpc-clients/events-manager/pb"
+	"github.com/persys-dev/persys-cloud/api-gateway/config"
+	"github.com/persys-dev/persys-cloud/api-gateway/models"
+	em "github.com/persys-dev/persys-cloud/api-gateway/pkg/grpc-clients/events-manager"
+	pb "github.com/persys-dev/persys-cloud/api-gateway/pkg/grpc-clients/events-manager/pb"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"

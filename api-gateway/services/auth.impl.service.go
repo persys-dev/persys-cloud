@@ -7,7 +7,7 @@ import (
 	jwtlib "github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
 	"github.com/gin-gonic/gin"
-	"github.com/miladhzzzz/milx-cloud-init/api-gateway/models"
+	"github.com/persys-dev/persys-cloud/api-gateway/models"
 	"time"
 
 	//"github.com/wpcodevo/golang-mongodb/utils"
