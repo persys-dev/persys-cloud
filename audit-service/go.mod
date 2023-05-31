@@ -1,4 +1,4 @@
-module github.com/persys-dev/persys-devops/audit-service
+module github.com/persys-dev/persys-cloud/audit-service
 
 go 1.20
 
