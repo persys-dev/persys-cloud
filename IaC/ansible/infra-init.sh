@@ -1,0 +1,9 @@
+export DATACENTER_NAME=my-datacenter
+export CLUSTER_NAME=my-cluster
+export VCENTER_HOSTNAME=my-vcenter-hostname
+export VCENTER_USERNAME=my-vcenter-username
+export VCENTER_PASSWORD=my-vcenter-password
+export DATASTORE_NAME=my-datastore-name
+export NETWORK_NAME=my-network-name
+export CLUSTER_API_VSPHERE_VERSION=0.7.3
+ansible-playbook setup-vsphere-infra.yml

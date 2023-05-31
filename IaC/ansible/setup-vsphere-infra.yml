@@ -1,0 +1,117 @@
+---
+- name: Fetch Kubernetes nodes
+  hosts: localhost
+  tasks:
+    - name: Get Kubernetes nodes
+      kubectl_info:
+        kind: Node
+      register: k8s_nodes
+
+    - name: Add Kubernetes nodes to in-memory inventory
+      add_host:
+        name: "{{ item.metadata.name }}"
+        groups: kubernetes_nodes
+      loop: "{{ k8s_nodes.resources }}"
+
+- name: Setup vSphere provider and deploy Kubernetes cluster
+  hosts: localhost
+  vars:
+    datacenter_name: "{{ lookup('env', 'DATACENTER_NAME') }}"
+    cluster_name: "{{ lookup('env', 'CLUSTER_NAME') }}"
+  tasks:
+    - name: Create datacenter
+      community.vmware.vmware_datacenter:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        name: "{{ datacenter_name }}"
+
+    - name: Create cluster
+      community.vmware.vmware_cluster:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter_name: "{{ datacenter_name }}"
+        name: "{{ cluster_name }}"
+
+    - name: Create datastore
+      community.vmware.vmware_datastore:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter_name: "{{ datacenter_name }}"
+        name: "{{ datastore_name }}"
+        type: vmfs
+
+    - name: Create network
+      community.vmware.vmware_network:
+        hostname: "{{ vcenter_hostname }}"
+        username: "{{ vcenter_username }}"
+        password: "{{ vcenter_password }}"
+        validate_certs: no
+        datacenter_name: "{{ datacenter_name }}"
+        name: "{{ network_name }}"
+        vlan_id: 0
+
+    - name: Setup vSphere provider for Cluster API
+      include_role:
+        name: scottd018.ansible_cluster_api_provider_vsphere_setup
+      vars:
+        vcenter_server: "{{ vcenter_hostname }}"
+        vcenter_username: "{{ vcenter_username }}"
+        vcenter_password: "{{ vcenter_password }}"
+        datacenter: "{{ datacenter_name }}"
+        datastore: "{{ datastore_name }}"
+        network: "{{ network_name }}"
+        resource_pool: "{{ cluster_name }}"
+
+    - name: Deploy Kubernetes cluster using Cluster API
+      community.kubernetes.kubectl:
+        src: "https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/releases/download/v{{ cluster_api_vsphere_version }}/infrastructure-components.yaml"
+        state: present
+
+    - name: Wait for Kubernetes cluster to be ready
+      community.kubernetes.kubectl:
+        wait_for:
+          type: "condition"
+          condition: "Ready"
+          kind: "Machine"
+          namespace: "capi-system"
+        timeout: "300s"
+
+    - name: Install Kubernetes control plane components
+      community.kubernetes.kubectl:
+        src: "https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/releases/download/v{{ cluster_api_vsphere_version }}/control-plane-components.yaml"
+        state: present
+
+    - name: Install Kubernetes worker components
+      community.kubernetes.kubectl:
+        src: "https://github.com/kubernetes-sigs/cluster-api-provider-vsphere/releases/download/v{{ cluster_api_vsphere_version }}/bootstrap-components.yaml"
+        state: present
+
+- name: Install and configure Kubernetes VMware autoscaler
+  hosts: kubernetes_nodes
+  become: true
+  vars:
+    autoscaler_version: "1.21.0"
+    autoscaler_namespace: "kube-system"
+    autoscaler_min_nodes: 1
+    autoscaler_max_nodes: 10
+  tasks:
+    - name: Install Kubernetes VMware autoscaler
+      kubectl:
+        name: autoscaler
+        namespace: "{{ autoscaler_namespace }}"
+        src: "https://github.com/kubernetes/autoscaler/releases/download/cluster-autoscaler-{{ autoscaler_version }}/cluster-autoscaler-{{ autoscaler_version }}.yaml"
+        state: present
+      register: autoscaler_install_result
+
+    - name: Configure Kubernetes VMware autoscaler
+      kubectl:
+        namespace: "{{ autoscaler_namespace }}"
+        command: "autoscale"
+        args: ["deployment.apps/kubernetes-autoscaler", "--min={{ autoscaler_min_nodes }}", "--max={{ autoscaler_max_nodes }}"]
+      when: autoscaler_install_result.changed
