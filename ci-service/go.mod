@@ -1,4 +1,4 @@
-module github.com/miladhzzzz/milx-cloud-init/ci-service
+module github.com/persys-dev/persys-cloud/ci-service
 
 go 1.19
 

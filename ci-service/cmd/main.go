@@ -1,6 +1,6 @@
 package main
 
-import "github.com/miladhzzzz/milx-cloud-init/ci-service/internal/eventctl"
+import "github.com/persys-dev/persys-cloud/ci-service/internal/eventctl"
 
 // TODO after build is done we should add the processed data in a different topic
 // TODO move to internal/event-processor
