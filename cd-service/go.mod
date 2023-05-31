@@ -1,4 +1,4 @@
-module github.com/miladhzzzz/milx-cloud-init/cd-service
+module github.com/persys-dev/persys-cloud/cd-service
 
 go 1.18
 
