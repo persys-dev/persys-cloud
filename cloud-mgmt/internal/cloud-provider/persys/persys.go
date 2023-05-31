@@ -3,7 +3,7 @@ package persys
 import (
 	"context"
 	"fmt"
-	"github.com/persys-dev/persys-devops/cloud-mgmt/utils"
+	"github.com/persys-dev/persys-cloud/cloud-mgmt/utils"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

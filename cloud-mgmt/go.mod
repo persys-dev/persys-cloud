@@ -1,4 +1,4 @@
-module github.com/persys-dev/persys-devops/cloud-mgmt
+module github.com/persys-dev/persys-cloud/cloud-mgmt
 
 go 1.19
 

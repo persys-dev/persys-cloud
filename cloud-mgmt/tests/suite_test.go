@@ -2,10 +2,10 @@ package tests
 
 import (
 	"context"
-	"github.com/persys-dev/persys-devops/cloud-mgmt/config"
-	"github.com/persys-dev/persys-devops/cloud-mgmt/internal/cloud-provider/persys"
-	pb "github.com/persys-dev/persys-devops/cloud-mgmt/proto"
-	"github.com/persys-dev/persys-devops/cloud-mgmt/services"
+	"github.com/persys-dev/persys-cloud/cloud-mgmt/config"
+	"github.com/persys-dev/persys-cloud/cloud-mgmt/internal/cloud-provider/persys"
+	pb "github.com/persys-dev/persys-cloud/cloud-mgmt/proto"
+	"github.com/persys-dev/persys-cloud/cloud-mgmt/services"
 	"github.com/stretchr/testify/suite"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
