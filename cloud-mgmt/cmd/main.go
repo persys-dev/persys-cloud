@@ -2,70 +2,95 @@ package main
 
 import (
 	"context"
-	"github.com/miladhzzzz/milx-cloud-init/cloud-mgmt/pkg/mongodb"
-	proto "github.com/miladhzzzz/milx-cloud-init/cloud-mgmt/proto"
-	"go.mongodb.org/mongo-driver/bson"
+	"github.com/persys-dev/persys-devops/cloud-mgmt/config"
+	"github.com/persys-dev/persys-devops/cloud-mgmt/gapi"
+	"github.com/persys-dev/persys-devops/cloud-mgmt/internal/cloud-provider/persys"
+	pb "github.com/persys-dev/persys-devops/cloud-mgmt/proto"
+	"github.com/persys-dev/persys-devops/cloud-mgmt/services"
+	"github.com/persys-dev/persys-devops/cloud-mgmt/utils"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 	"log"
 	"net"
 )
 
-type server struct {
-	proto.CloudMgmtServiceServer
-}
+var (
+	ctx         context.Context
+	mongoclient *mongo.Client
 
-func (*server) services(ctx context.Context, req *proto.ServicesRequest) (*proto.ServicesResponse, error) {
-	dbc, err := mongodbHandler.Dbc()
-	q := dbc.Database("cloud-mgmt").Collection("environments")
+	cloudCollection *mongo.Collection
+	cloudService    services.CloudService
+)
+
+func init() {
+	config, err := config.ReadConfig()
+	if err != nil {
+		utils.AuditLog(err.Error())
+		log.Fatal("Could not load environment variables", err)
+	}
+
+	ctx = context.TODO()
+
+	// Connect to MongoDB
+	mongoconn := options.Client().ApplyURI(config.MongoURI)
+	mongoclient, err := mongo.Connect(ctx, mongoconn)
 
 	if err != nil {
-
-	}
-	userID := req.UserID
-
-	find := q.FindOne(context.Background(), bson.M{"userID": userID})
-
-	if find.Err() == mongo.ErrNoDocuments {
-		// initiate creating cloud environment
+		utils.AuditLog(err.Error())
+		log.Fatalf("error: %v", err)
 	}
 
-	var resp *bson.M
-	if err := find.Decode(&resp); err != nil {
-		// error handle
+	if err := mongoclient.Ping(ctx, readpref.Primary()); err != nil {
+		utils.AuditLog(err.Error())
+		log.Fatalf("error: %v", err)
 	}
 
-	//fmt.Println(userID)
+	log.Println("MongoDB successfully connected...")
 
-	response := &proto.ServicesResponse{
-		UserID: req.UserID,
-		Persys: "",
-		Aws:    "",
-		Azure:  "",
-		Gcp:    "",
-		State:  "",
+	// Collections
+	cloudCollection = mongoclient.Database("cloud-mgmt").Collection("environment")
+
+	// Cluster creation test method ----- >> THIS WILL BE MOVED SOON!!!!
+	err = persys.CreateCluster()
+	if err != nil {
+		log.Printf("could not make a persys cluster for user because : %v", err)
 	}
 
-	return response, nil
-
+	//cloudService = services.NewAuthService(authCollection, ctx)
 }
 
-func gRPC() {
-	lis, err := net.Listen("tcp", "0.0.0.0:5008")
-
+func startGrpcServer(config config.Config) {
+	cloudServer, err := gapi.NewGrpcCloudServer(config, cloudService)
 	if err != nil {
-		log.Fatalf("failed to listed: %v", err)
+		utils.AuditLog(err.Error())
+		log.Fatal("cannot create grpc authServer: ", err)
 	}
 
-	s := grpc.NewServer()
-	log.Printf("gRPC server listening on : %v", "5008")
-	proto.RegisterCloudMgmtServiceServer(s, &server{})
+	grpcServer := grpc.NewServer()
 
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to server: %v", err)
+	pb.RegisterCloudMgmtServiceServer(grpcServer, cloudServer)
+
+	// gRPC reflection registration for evans
+	reflection.Register(grpcServer)
+
+	listener, err := net.Listen("tcp", "config.GrpcServerAddress")
+	if err != nil {
+		utils.AuditLog(err.Error())
+		log.Fatal("cannot create grpc server: ", err)
+	}
+
+	log.Printf("start gRPC server on %s", listener.Addr().String())
+	err = grpcServer.Serve(listener)
+	if err != nil {
+		utils.AuditLog(err.Error())
+		log.Fatal("cannot create grpc server: ", err)
 	}
 }
 
 func main() {
-	gRPC()
+	cnf, _ := config.ReadConfig()
+	startGrpcServer(*cnf)
 }

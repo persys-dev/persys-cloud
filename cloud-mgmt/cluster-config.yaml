@@ -1,0 +1,13 @@
+# vSphere configuration file
+global:
+  server: "https://my-vcenter-server.example.com"
+  thumbprint: "01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67"
+  username: "my-vcenter-username"
+  password: "my-vcenter-password"
+workspace:
+  datacenter: "my-datacenter"
+  datastore: "my-datastore"
+  resourcePool: "my-resource-pool"
+  folder: "my-folder"
+  network: "my-network"
+
