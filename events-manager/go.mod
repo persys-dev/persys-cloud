@@ -1,4 +1,4 @@
-module github.com/miladhzzzz/milx-cloud-init/events-manager
+module github.com/persys-dev/persys-cloud/events-manager
 
 go 1.17
 

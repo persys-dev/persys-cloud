@@ -8,8 +8,8 @@ import (
 	"github.com/ThreeDotsLabs/watermill/message"
 	"github.com/ThreeDotsLabs/watermill/message/router/middleware"
 	"github.com/ThreeDotsLabs/watermill/message/router/plugin"
-	"github.com/miladhzzzz/milx-cloud-init/events-manager/config"
-	"github.com/miladhzzzz/milx-cloud-init/events-manager/models"
+	"github.com/persys-dev/persys-cloud/events-manager/config"
+	"github.com/persys-dev/persys-cloud/events-manager/models"
 	"log"
 	"time"
 )

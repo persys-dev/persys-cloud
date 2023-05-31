@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	proto "github.com/miladhzzzz/milx-cloud-init/events-manager/proto"
+	proto "github.com/persys-dev/persys-cloud/events-manager/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"log"
