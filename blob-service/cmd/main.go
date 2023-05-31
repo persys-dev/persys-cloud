@@ -10,8 +10,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/miladhzzzz/milx-cloud-init/blob-service/config"
-	"github.com/miladhzzzz/milx-cloud-init/blob-service/internal/git"
+	"github.com/persys-dev/persys-cloud/blob-service/config"
+	"github.com/persys-dev/persys-cloud/blob-service/internal/git"
 )
 
 type req struct {

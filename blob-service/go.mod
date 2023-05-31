@@ -1,4 +1,4 @@
-module github.com/miladhzzzz/milx-cloud-init/blob-service
+module github.com/persys-dev/persys-cloud/blob-service
 
 go 1.19
 
