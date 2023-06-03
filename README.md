@@ -1,28 +1,84 @@
-# persys-devops
+# Persys Cloud
 
-### DevOps as a service platform!
+### introduction
 
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/arvancloud/cdn-go)
 
-Open Source DevOps as a Service platform written in Golang with a rust CLI client called shipper!,
-this project is aimed at making the life of DevOps engineers easy with automation.
+Persys Cloud is an open source platform that makes it easy to build and deploy cloud native applications. Whether you're a seasoned developer or just getting started with coding, Persys Cloud provides a user-friendly interface and powerful automation capabilities to help you get up and running quickly. In this document, we'll cover the features and benefits of Persys Cloud, as well as its use cases.
 
 
 > **Note**: This project is under active development and may have problems and shortcomings.
 > 
 <!-- TOC -->
-### Content
-* **[Architecture](#Architecture)**
-* **[Updates](#Updates)**
-* **[Contributions](#Contributions)**
-* **[Open Source]()**
-* **[Goals!](#Goals!)**
-* **[Project RoadMap]()**
-* **[Community](#community)**
-* **[Services Description]()**
-* **[Documentation](#Documentation)**
-* **[CNCF](#Cloud Native Computing Foundation)**
+* [Persys Cloud](#persys-cloud)
+    * [introduction](#introduction)
+    * [Content](#content)
+* [Overview](#overview)
+* [Architecture](#architecture)
+* [Local Development](#local-development)
+    * [Docker-Compose:](#docker-compose-)
+    * [Kind:](#kind-)
+    * [ShellScript:](#shellscript-)
+* [Getting started!](#getting-started-)
+* [Contributions](#contributions)
+* [Open Source Tech We Use](#open-source-tech-we-use)
+* [Project Road Map](#project-road-map)
+* [Services Description](#services-description)
+* [Documentation](#documentation)
+* [Community:](#community-)
+* [Conclusion:](#conclusion-)
+* [Cloud Native Computing Foundation](#cloud-native-computing-foundation)
 <!-- TOC -->
+
+# Overview
+**Features and Capabilities**
+- User-friendly interface for managing applications and infrastructure.
+
+- Powerful automation capabilities for scaling applications up or down as needed.
+
+- Highly scalable and flexible, designed to work with a wide range of cloud providers.
+
+- Open source and community-driven development, allowing users to contribute new features and improvements.
+
+- Customizable to meet the unique needs of your organization.
+
+- Supports a wide range of containerized workloads, including microservices, web applications, and more.
+
+- Provides powerful monitoring and management capabilities, including logs, metrics, and health checks for your applications,
+
+- Easy to use, with step-by-step instructions for performing specific tasks and best practices for Kubernetes application deployment and management.
+
+- CI/CD pipeline management capabilities, allowing you to easily set up and manage your entire pipeline.
+
+- Integration with other cloud service providers, making it easy to build and manage complex cloud native applications that span multiple cloud environments and services.
+
+- Fabric Service to create a service mesh and manage multiple clusters across multiple cloud environments.
+
+- GPU-accelerated Kubernetes clusters for AI and MLOps workloads.
+
+- Automates many of the tasks typically performed by SRE engineers
+- Provides DevOps/SRE as a service
+
+**Benefits**
+
+- Simplifies the process of building and deploying cloud native applications.
+
+- Provides a powerful, flexible, and easy-to-use platform that can be customized to meet the unique needs of your organization.
+
+- Reduces the workload of SRE engineers by automating many of the tasks typically performed by them.
+
+- Streamlines operations and improves overall efficiency.
+
+- Open source and community-driven development ensures that the platform is constantly evolving and improving.
+
+**Use Cases**
+
+- Building and deploying cloud native applications.
+- Managing multiple clusters across multiple cloud environments.
+- Running complex machine learning and deep learning workloads.
+- Automating the job of an SRE engineer.
+- Streamlining operations and improving overall efficiency.
+
 
 # Architecture
 * **this is the system design that i came up with, a high level mind map to look at.**
@@ -81,18 +137,6 @@ chmod +x /.init.sh
   <br>
   **refer to [getting-started.md](https://github.com/miladhzzzz/persys-cicd/docs/getting-started.md) for a better understanding of how this software works!**
 
-# Updates
-* **[8/12/2022] this whole thing is written by me so there's a lot to work on, i'll really appreciate any help!**
-* **[10/3/2022] getting my hands on the hardware and infrastructures needed for developing this project has costs please consider donating to us!**
-* **[12/24/2022] I'm actively trying to build a community so please at lease give us a star or contribute to our cause!**
-* **[12/30/2022] currently the project has hard coded personal / sensitive data in it i'll release the first working version soon to our open source repository which is : https://github.com/miladhzzzz/persys-cicd**
-* **[1/12/2023]  achieved first working version on my local environment cleanup is coming along good!**
-* **[1/12/2023]  refactoring code to meet a modern microservice architecture boilerplate**
-* **[1/12/2023]  changed the architecture! also working on a linear design that will be available soon!**
-* **[1/25/2023]  im working on a working version for Azure to deploy the whole project and get a demo.**
-* **[5/8/2023]   ok so theres a little bit of change involved in the architecture and some services were deleted we actually made the decision to not use a frontend at all! and rely completely on our cli client.**
-* **[5/8/2023]   check the service description for seeing changes to the services!.**
-* **[5/8/2023]   theye and js frontend directories are deprecated and will deleted soon.**
 # Contributions
 **we are looking for contributors in fields of expertise listed below:**
 <br>
@@ -113,7 +157,7 @@ chmod +x /.init.sh
 * [Git]()
 * [Rust (Programming Language)]()
 * [Terraform]()
-* [Kubernetes]()
+* [Kubernetes](https://github.com/kubernetes/kubernetes)
 * [Go (Programming Language)]()
 * [OpenTelemtry](https://github.com/opentelemtry)
 * [Watermill](https://github.com/watermill)
@@ -122,18 +166,6 @@ chmod +x /.init.sh
 * [Kafdrop](https://github.com/obsidiandynamics/kafdrop)
 * [Ceph](https://github.com/ceph)
 * [Github](https://github.com)
-
-# Goals!
-**This project really started because of my own pain to setup a cluster and a CI/CD pipeline for one of my projects.
-to give you a little bit of context i needed a platform that provided me with kubernetes and let me configure multiple clusters locally or in my vsphere environment if that makes sense!
-in summary the goal of this project is** :
-* giving you a nice cli tool to configure a live cluster either on-prem or on any cloud provider and very easy pipeline configuration.
-* deployment to multi-clusters and actual cloud provider config management .
-
-
-and of course what i have in mind is a platform like https://dev.azure.com but actually having kubernetes as a service in our platform is going to make everything easy!
-<br>
-but our shipper-cli (CLI-Client) actually makes it way easier than using a web based frontend!
 
 # Project Road Map
 * Q1 2023 : Clean UP the code repository for and rebase to public repository.
@@ -146,18 +178,7 @@ but our shipper-cli (CLI-Client) actually makes it way easier than using a web b
 * Q4 2023 : World Dominance :D.
 
 # Services Description
-* [api-gateway](https://github.com/miladhzzzz/persys-cicd) : a pretty basic api gateway that talks to the whole system (CLI-client send http rest calls and we generate gRPC calls to aggregation and use kafka to check on jobs)
-* [ci-service](https://github.com/miladhzzzz/persys-cicd) : obviously does ci server stuff build your code test it and push it to a private and/or multiple repositories.
-* [clients/cli(shipper-cli)](https://github.com/miladhzzzz/persys-cicd) : a cli interactive shell written in rust that communicates with api-gateway called shipper!.
-* [DEPRECATED][clients/frontend-react](https://github.com/miladhzzzz/persys-cicd) : this is the frontend or dashboard of the project based on javascript frameworks using websockets for real-time data {DEPRECATED} !! WILL BE DELETED SOON.
-* [events-manager](https://github.com/miladhzzzz/persys-cicd) : events manager is responsible for aggregating events throughout the whole system with kafka and has controller that check on jobs.
-* [cd-service](https://github.com/miladhzzzz/persys-cicd) : shipper deploys your code to different types of environments (Cloud, On-Prem , etc...) getting your environment from cloud-mgmt.
-* [DEPRECATED][theye](https://github.com/miladhzzzz/persys-cicd) : theye will keep an on "EYE" on system state and try to get desired state of the whole system talking to cloud-mgmt and ci-service , shipper {DEPRECATED} !! WILL BE DELETED SOON.
-* [cloud-mgmt](https://github.com/miladhzzzz/persys-cicd) : this is a datacenter-cloud inter-connect fabric that will be responsible for kubernetes-as-a-service on persys-cloud or your cloud-provider.
-* [blob-service](https://github.com/miladhzzzz/persys-cicd) : a very simple stateless in-cluster blob storage {Golang, Gin}.
-* [audit-service](https://github.com/miladhzzzz/persys-cicd) : an audit log ledger something like WAL records in database systems / collects all the logs for ELK from every service.
-* [auth-service](https://github.com/miladhzzzz/persys-cicd) : auth service is a authorization / authentication service.
-
+**Each Service have an README.md in the root of the service refer to those for seeing what each component does and who are the owners.**
 # Documentation
 **the documentation will be located at https://github.com/miladhzzzz/persys-devops/docs**
 * [getting-started.md](https://github.com/miladhzzzz/persys-cicd/docs/getting-started.md)
@@ -166,18 +187,14 @@ but our shipper-cli (CLI-Client) actually makes it way easier than using a web b
 * [architecture.md](https://github.com/miladhzzzz/persys-cicd/architecture.md)
 * [contributions.md](https://github.com/miladhzzzz/persys-cicd/contributions.md)
 
-# Community
-**Our primary goal in this project as we discussed before is to build a community of iranian highly skilled
-specialists to help each other and junior developers in a way that we can write great software that is maintained by
-community contributions.**
-<br>
-and of course integrating our community with the world of Open Source!
-<br>
-we can find a lot of great software that is written by millions of Open Source contributors accross the globe in https://github.com/readme
-<br>
-you can join "your" community and start contributing in various projects! please visit our slack or discord (will be updated soon) to ask around and have a dialogue with others!
-<br>
+# Community:
+Persys Cloud is an open source and community-driven development platform, which means that users can contribute new features and improvements to the platform directly through GitHub. If you want a specific service or feature in Persys Cloud, you can open up a pull request against our repository, and we will review the PR. Alternatively, if you encounter any issues or have questions about the platform, you can open an issue, and we will respond to each one. By contributing to Persys Cloud, you can help to shape the future of the platform and ensure that it continues to meet the evolving needs of the cloud native community. We welcome all contributions and feedback from our users, and we are committed to providing a high-quality and user-friendly platform for building and deploying cloud native applications.
 https://join.slack.com/t/persys-cicd/shared_invite/zt-1lje1wst0-E0TjKMIXGe1FGLex1uQoxg
+
+# Conclusion:
+
+Persys Cloud is a powerful and flexible platform that simplifies the process of building and deploying cloud native applications. Its user-friendly interface, automation capabilities, and highly scalable and flexible design make it a popular choice for organizations of all sizes. With its open source and community-driven development, Persys Cloud is constantly evolving and improving, ensuring that it remains a cutting-edge solution for cloud native development.
+
 
 
 # Cloud Native Computing Foundation
