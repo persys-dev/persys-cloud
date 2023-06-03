@@ -17,20 +17,20 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
       * [Benefits](#benefits)
       * [Some Of Our Services](#some-of-our-services)
       * [Use Cases](#use-cases)
-* [Architecture](#architecture)
-* [Local Development](#local-development)
+  * [Architecture](#architecture)
+  * [Local Development](#local-development)
     * [Docker-Compose:](#docker-compose-)
     * [Kind:](#kind-)
     * [ShellScript:](#shellscript-)
-* [Getting started!](#getting-started-)
-* [Contributions](#contributions)
-* [Open Source Tech We Use](#open-source-tech-we-use)
-* [Project Road Map](#project-road-map)
-* [Services Description](#services-description)
-* [Documentation](#documentation)
-* [Community:](#community-)
-* [Conclusion:](#conclusion-)
-* [Cloud Native Computing Foundation](#cloud-native-computing-foundation)
+  * [Getting started!](#getting-started-)
+  * [Contributions](#contributions)
+  * [Open Source Tech We Use](#open-source-tech-we-use)
+  * [Project Road Map](#project-road-map)
+  * [Services Description](#services-description)
+  * [Documentation](#documentation)
+  * [Community:](#community-)
+  * [Conclusion:](#conclusion-)
+  * [Cloud Native Computing Foundation](#cloud-native-computing-foundation)
 <!-- TOC -->
 
 ### Overview
@@ -92,7 +92,7 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
 - Streamlining operations and improving overall efficiency.
 
 
-# Architecture
+## Architecture
 * **this is the system design that i came up with, a high level mind map to look at.**
 * feel free to open an ISSUE mentioning any problems or ideas you might have!
 
@@ -103,7 +103,7 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
   ![](docs/architecture/arch-flow.drawio.png)
 
 
-# Local Development
+## Local Development
 * First clone the repository:
 ```shell
 git clone https://github.com/persys-dev/persys-devops
@@ -128,7 +128,7 @@ chmod +x /.init.sh
 ````
 **PLEASE MAKE SURE YOU HAVE : Docker , Kubectl , Kind to run the project in you desired environment.**
 
-# Getting started!
+## Getting started!
 **you can use pure http rest requests/ CLI client to interact with our platform.**
 <br>
 <br>
@@ -149,7 +149,7 @@ chmod +x /.init.sh
   <br>
   **refer to [getting-started.md](https://github.com/miladhzzzz/persys-cicd/docs/getting-started.md) for a better understanding of how this software works!**
 
-# Contributions
+## Contributions
 **we are looking for contributors in fields of expertise listed below:**
 <br>
 * DevOps Engineers
@@ -161,8 +161,8 @@ chmod +x /.init.sh
 * Project managers
 
 **please refer to community section and consider joining us**
-[Community](#community)
-# Open Source Tech We Use
+[Community](#Comunity)
+## Open Source Tech We Use
 * [Backstage](https://github.com/backstage/backstage)
 * [apache kafka](https://github.com/obsidiandynamics/kafdrop)
 * [gRPC](https://github.com/grpc)
@@ -179,7 +179,7 @@ chmod +x /.init.sh
 * [Ceph](https://github.com/ceph)
 * [Github](https://github.com)
 
-# Project Road Map
+## Project Road Map
 * Q1 2023 : Clean UP the code repository for and rebase to public repository.
 * Q1 2023 : Build our Community to help develop, manage , market our product.
 * Q1 2023 : Test First Working version!
@@ -189,9 +189,9 @@ chmod +x /.init.sh
 * Q4 2023 : Release the software for on premise use (hosting it yourself).
 * Q4 2023 : World Dominance :D.
 
-# Services Description
+## Services Description
 **Each Service have an README.md in the root of the service refer to those for seeing what each component does and who are the owners.**
-# Documentation
+## Documentation
 **the documentation will be located at https://github.com/miladhzzzz/persys-devops/docs**
 * [getting-started.md](https://github.com/miladhzzzz/persys-cicd/docs/getting-started.md)
 * [how-it-works.md](https://github.com/miladhzzzz/persys-cicd/docs/how-it-works.md)
@@ -199,17 +199,17 @@ chmod +x /.init.sh
 * [architecture.md](https://github.com/miladhzzzz/persys-cicd/architecture.md)
 * [contributions.md](https://github.com/miladhzzzz/persys-cicd/contributions.md)
 
-# Community:
+## Community:
 Persys Cloud is an open source and community-driven development platform, which means that users can contribute new features and improvements to the platform directly through GitHub. If you want a specific service or feature in Persys Cloud, you can open up a pull request against our repository, and we will review the PR. Alternatively, if you encounter any issues or have questions about the platform, you can open an issue, and we will respond to each one. By contributing to Persys Cloud, you can help to shape the future of the platform and ensure that it continues to meet the evolving needs of the cloud native community. We welcome all contributions and feedback from our users, and we are committed to providing a high-quality and user-friendly platform for building and deploying cloud native applications.
 https://join.slack.com/t/persys-cicd/shared_invite/zt-1lje1wst0-E0TjKMIXGe1FGLex1uQoxg
 
-# Conclusion:
+## Conclusion:
 
 Persys Cloud is a powerful and flexible platform that simplifies the process of building and deploying cloud native applications. Its user-friendly interface, automation capabilities, and highly scalable and flexible design make it a popular choice for organizations of all sizes. With its open source and community-driven development, Persys Cloud is constantly evolving and improving, ensuring that it remains a cutting-edge solution for cloud native development.
 
 
 
-# Cloud Native Computing Foundation
+## Cloud Native Computing Foundation
 <br>
 this project is currently in the sandbox waiting list of Cloud Native Computing Foundation, and as we mentioned above we are using and supporting a lot of CNCF technologies
 <br>
