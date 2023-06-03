@@ -5,4 +5,4 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
-[unreleased]: https://gith
+* events manager is going to use etcd instead of mongoDB so we need to change api gateway accordingly
