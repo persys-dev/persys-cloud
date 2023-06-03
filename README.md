@@ -12,8 +12,11 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
 <!-- TOC -->
 * [Persys Cloud](#persys-cloud)
     * [introduction](#introduction)
-    * [Content](#content)
-* [Overview](#overview)
+    * [Overview](#overview)
+      * [Features and Capabilities](#features-and-capabilities)
+      * [Benefits](#benefits)
+      * [Some Of Our Services](#some-of-our-services)
+      * [Use Cases](#use-cases)
 * [Architecture](#architecture)
 * [Local Development](#local-development)
     * [Docker-Compose:](#docker-compose-)
@@ -30,8 +33,8 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
 * [Cloud Native Computing Foundation](#cloud-native-computing-foundation)
 <!-- TOC -->
 
-# Overview
-**Features and Capabilities**
+### Overview
+#### Features and Capabilities
 - User-friendly interface for managing applications and infrastructure.
 
 - Powerful automation capabilities for scaling applications up or down as needed.
@@ -59,7 +62,7 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
 - Automates many of the tasks typically performed by SRE engineers
 - Provides DevOps/SRE as a service
 
-**Benefits**
+#### Benefits
 
 - Simplifies the process of building and deploying cloud native applications.
 
@@ -71,7 +74,7 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
 
 - Open source and community-driven development ensures that the platform is constantly evolving and improving.
 
-**Some Of Our Services**
+#### Some Of Our Services
 1. Managed Kubernetes as a service across multiple clouds.
 2. DevOps/SRE as a Service: Persys Cloud provides DevOps/SRE as a service, including automation capabilities, powerful monitoring and management, and CI/CD pipeline management.
 3. Fabric Service: Persys Cloud uses Fabric Service to create a service mesh and manage multiple clusters across multiple cloud environments.
@@ -80,7 +83,7 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
 6. MongoDB, Kafka , Postgres, Signoz, Backstage, ETCD, ...etc as a service.
 
 
-**Use Cases**
+#### Use Cases
 
 - Building and deploying cloud native applications.
 - Managing multiple clusters across multiple cloud environments.
