@@ -71,6 +71,15 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
 
 - Open source and community-driven development ensures that the platform is constantly evolving and improving.
 
+**Some Of Our Services**
+1. Managed Kubernetes as a service across multiple clouds.
+2. DevOps/SRE as a Service: Persys Cloud provides DevOps/SRE as a service, including automation capabilities, powerful monitoring and management, and CI/CD pipeline management.
+3. Fabric Service: Persys Cloud uses Fabric Service to create a service mesh and manage multiple clusters across multiple cloud environments.
+4. GPU-accelerated Kubernetes Clusters: Persys Cloud will soon provide GPU-accelerated Kubernetes clusters for AI and MLOps workloads.
+5. Object Storage Integration: Persys Cloud will soon integrate with S3 buckets, Azure files, and other cloud provider object storages as a sidecar to your workloads.
+6. MongoDB, Kafka , Postgres, Signoz, Backstage, ETCD, ...etc as a service.
+
+
 **Use Cases**
 
 - Building and deploying cloud native applications.
