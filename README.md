@@ -36,42 +36,26 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
 ### Overview
 #### Features and Capabilities
 - User-friendly interface for managing applications and infrastructure.
-
 - Powerful automation capabilities for scaling applications up or down as needed.
-
 - Highly scalable and flexible, designed to work with a wide range of cloud providers.
-
 - Open source and community-driven development, allowing users to contribute new features and improvements.
-
 - Customizable to meet the unique needs of your organization.
-
 - Supports a wide range of containerized workloads, including microservices, web applications, and more.
-
 - Provides powerful monitoring and management capabilities, including logs, metrics, and health checks for your applications,
-
 - Easy to use, with step-by-step instructions for performing specific tasks and best practices for Kubernetes application deployment and management.
-
 - CI/CD pipeline management capabilities, allowing you to easily set up and manage your entire pipeline.
-
 - Integration with other cloud service providers, making it easy to build and manage complex cloud native applications that span multiple cloud environments and services.
-
 - Fabric Service to create a service mesh and manage multiple clusters across multiple cloud environments.
-
 - GPU-accelerated Kubernetes clusters for AI and MLOps workloads.
-
 - Automates many of the tasks typically performed by SRE engineers
 - Provides DevOps/SRE as a service
 
 #### Benefits
 
 - Simplifies the process of building and deploying cloud native applications.
-
 - Provides a powerful, flexible, and easy-to-use platform that can be customized to meet the unique needs of your organization.
-
 - Reduces the workload of SRE engineers by automating many of the tasks typically performed by them.
-
 - Streamlines operations and improves overall efficiency.
-
 - Open source and community-driven development ensures that the platform is constantly evolving and improving.
 
 #### Some Of Our Services
