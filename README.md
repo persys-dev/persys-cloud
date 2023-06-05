@@ -19,17 +19,17 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
       * [Use Cases](#use-cases)
   * [Architecture](#architecture)
   * [Local Development](#local-development)
-    * [Docker-Compose:](#docker-compose-)
-    * [Kind:](#kind-)
-    * [ShellScript:](#shellscript-)
-  * [Getting started!](#getting-started-)
+    * [Docker-Compose:](#docker-compose)
+    * [Kind:](#kind)
+    * [ShellScript:](#shellscript)
+  * [Getting started!](#getting-started)
   * [Contributions](#contributions)
   * [Open Source Tech We Use](#open-source-tech-we-use)
   * [Project Road Map](#project-road-map)
   * [Services Description](#services-description)
   * [Documentation](#documentation)
-  * [Community:](#community-)
-  * [Conclusion:](#conclusion-)
+  * [Community:](#community)
+  * [Conclusion:](#conclusion)
   * [Cloud Native Computing Foundation](#cloud-native-computing-foundation)
 <!-- TOC -->
 
@@ -145,7 +145,7 @@ chmod +x /.init.sh
 * Project managers
 
 **please refer to community section and consider joining us**
-[Community](#Comunity)
+[Community](#community)
 ## Open Source Tech We Use
 * [Backstage](https://github.com/backstage/backstage)
 * [apache kafka](https://github.com/obsidiandynamics/kafdrop)
