@@ -22,16 +22,12 @@ import (
 )
 
 var (
-	cnf, _                = config.ReadConfig()
-	auditUrl              = "http://localhost:8080"
-	serviceName           = "persys-api-gateway"
-	mySuperSecretPassword = "unicornsAreAwesome"
-	webhookUrl            = cnf.WebHookURL    // Demo deployment on azure
-	webhookSecret         = cnf.WebHookSecret // SECURITY ISSUE *** CHANGE THIS!
+	cnf, _      = config.ReadConfig()
+	auditUrl    = "http://localhost:8080"
+	serviceName = "persys-api-gateway"
 
-	server      *gin.Engine
-	ctx         context.Context
-	mongoclient *mongo.Client
+	server *gin.Engine
+	ctx    context.Context
 
 	authCollection      *mongo.Collection
 	authService         services.AuthService
@@ -47,12 +43,15 @@ var (
 
 func init() {
 	// initializing audit service
-	utils.SendLogMessage(auditUrl, utils.LogMessage{
+	err := utils.SendLogMessage(auditUrl, utils.LogMessage{
 		Microservice: "api-gateway",
 		Level:        "Info",
 		Message:      "api gateway init",
 		Timestamp:    time.Now(),
 	})
+	if err != nil {
+		return
+	}
 	//cnf, _ = config.ReadConfig()
 	// create a log file
 	logFile, _ := os.Create("api-gateway-http.log")
