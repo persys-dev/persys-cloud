@@ -5,7 +5,7 @@ import (
 )
 
 type Config struct {
-	HttpAddr    string      `json:"httpAddr"`
+	EtcdAddr    []string    `json:"etcdAddr"`
 	GrpcAddr    string      `json:"grpcAddr"`
 	MongoURI    string      `json:"mongoURI"`
 	Collections interface{} `json:"collections"`
@@ -24,7 +24,7 @@ func ReadConfig() (*Config, error) {
 	}
 
 	m := &Config{
-		HttpAddr:    viper.GetString("app.httpAddr"),
+		EtcdAddr:    viper.GetStringSlice("etcd.uri"),
 		GrpcAddr:    viper.GetString("app.grpcAddr"),
 		MongoURI:    viper.GetString("database.mongoURI"),
 		Collections: viper.Get("database.collections"),

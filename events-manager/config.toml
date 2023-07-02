@@ -1,0 +1,24 @@
+[app]
+grpcAddr = "0.0.0.0:8662"
+
+storage = "ETCD"
+
+[app.metadata]
+name = "events-manager"
+
+[database]
+mongoURI= "mongodb://@mongodb-1674926846.default.svc.cluster.local:27017/?retryWrites=true&w=majority"
+collections = ["jobs"]
+
+[etcd]
+uri="http://localhost:2379
+
+[watermill]
+kafkaBroker = "kafka-1674927034.default.svc.cluster.local:9092"
+
+[log]
+format = "json"
+level = "info"
+
+[telemetry]
+addr = "signoz-otel-collector.persys-dev.svc.cluster.local:4317"
