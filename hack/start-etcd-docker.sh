@@ -24,14 +24,14 @@ else
         echo "Invalid argument. Please specify a valid number of nodes."
         exit 1
     fi
-    if [ $1 -lt 1 ]
+    if [ "$1" -lt 1 ]
     then
         echo "Invalid argument. Please specify a number greater than or equal to 1."
         exit 1
     fi
     nodes=""
     echo "Starting $1-node etcd cluster..."
-    for i in $(seq 1 $1)
+    for i in $(seq 1 "$1")
     do
         name="node$i"
         peer_port=$((2380 + $i - 1))
@@ -39,17 +39,17 @@ else
         node=",$name=http://localhost:$peer_port"
         nodes="$nodes$node"
         docker run -d \
-          --name etcd-$name \
+          --name etcd-"$name" \
           -p $client_port:$client_port \
           -p $peer_port:$peer_port \
           quay.io/coreos/etcd:v3.5.0 \
           etcd \
-          --name $name \
+          --name "$name" \
           --advertise-client-urls http://localhost:$client_port \
           --listen-client-urls http://0.0.0.0:$client_port \
           --initial-advertise-peer-urls http://localhost:$peer_port \
           --listen-peer-urls http://0.0.0.0:$peer_port \
-          --initial-cluster node1=http://localhost:2380$nodes \
+          --initial-cluster node1=http://localhost:2380"$nodes" \
           --initial-cluster-token my-etcd-token \
           --initial-cluster-state new
     done
