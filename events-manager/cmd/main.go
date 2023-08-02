@@ -9,6 +9,7 @@ import (
 	"github.com/persys-dev/persys-cloud/events-manager/config"
 	"github.com/persys-dev/persys-cloud/events-manager/internal/eventctl"
 	"github.com/persys-dev/persys-cloud/events-manager/models"
+	"github.com/persys-dev/persys-cloud/events-manager/pkg/etcd"
 	"github.com/persys-dev/persys-cloud/events-manager/pkg/opentelemtry"
 	"github.com/persys-dev/persys-cloud/events-manager/pkg/watermill"
 	pb "github.com/persys-dev/persys-cloud/events-manager/proto"
@@ -38,7 +39,22 @@ var (
 
 func init() {
 
+	// initialize ETCD Driver
+	etcd, err := etcd.NewEtcdDriver(cnf.EtcdAddr, time.Duration(10*10000))
+
+	if err != nil {
+		log.Fatalf("can not connect to ETCD")
+	}
+
 	ctx := context.TODO()
+
+	// TESTING ETCD
+	err = etcd.Put(ctx, "Milad", "hey")
+
+	if err != nil {
+		log.Fatalf(err.Error())
+	}
+
 	// Connect to MongoDB
 	mongoconn := options.Client().ApplyURI(cnf.MongoURI)
 	mongoclient, err := mongo.Connect(ctx, mongoconn)
