@@ -9,3 +9,4 @@ notes.md
 terraform.tfvars
 IaC/helm/persys-devops/.helmignore
 IaC/helm/persys-req/persys-req/.helmignore
+**/bin/
