@@ -8,7 +8,7 @@ storage = ""
 name = "api-gateway"
 
 [database]
-mongoURI= "mongodb+srv://default:password@localhost:27017/?retryWrites=true&w=majority"
+mongoURI= "mongodb+srv://default:password@localhost/?retryWrites=true&w=majority"
 collections = ["events", "repos", "users"]
 
 [watermill]

@@ -53,8 +53,7 @@ func init() {
 		return
 	}
 	//cnf, _ = config.ReadConfig()
-	// create a log file
-	logFile, _ := os.Create("api-gateway-http.log")
+	// create a log fil
 
 	ctx = context.TODO()
 
@@ -64,12 +63,12 @@ func init() {
 
 	if err != nil {
 		utils.LogError(err.Error())
-		panic(err)
+		//panic(err)
 	}
 
 	if err := mongoclient.Ping(ctx, readpref.Primary()); err != nil {
 		utils.LogError(err.Error())
-		panic(err)
+		//panic(err)
 	}
 
 	fmt.Println("MongoDB successfully connected...")
@@ -91,9 +90,6 @@ func init() {
 	//PostController = controllers.NewPostController(postService)
 	//PostRouteController = routes.NewPostControllerRoute(PostController)
 
-	server = gin.Default()
-	server.Use(gin.LoggerWithWriter(logFile))
-
 }
 
 func main() {
@@ -110,7 +106,11 @@ func main() {
 
 	// starting grpc trigger mechanism that calls events-manager service over gRPC
 	go trigger_grpc.StartgRPCtrigger()
+
 	// starting gin http server
+	logFile, _ := os.Create("api-gateway-http.log")
+	server = gin.Default()
+	server.Use(gin.LoggerWithWriter(logFile))
 	startGinServer()
 	//startGrpcServer(config)
 
