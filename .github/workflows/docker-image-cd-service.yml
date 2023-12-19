@@ -1,0 +1,17 @@
+name: Docker Image CI
+
+on:
+  push:
+    paths:
+      - 'cd-service/**'
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build the Docker image
+      run: docker build . --file cd-service/Dockerfile --tag cd-service:$(date +%s)
