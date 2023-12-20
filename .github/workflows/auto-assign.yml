@@ -11,9 +11,13 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+    - name: 'Debug Information'
+      run: |
+        echo "GitHub Token: ${{ secrets.GITHUB_TOKEN }}"
+        curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/user
     - name: 'Auto-assign issue'
       uses: pozil/auto-assign-issue@v1
       with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          assignees: miladhzzzz
-          numOfAssignee: 1
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        assignees: miladhzzzz
+        numOfAssignee: 1
