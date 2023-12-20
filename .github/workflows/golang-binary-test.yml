@@ -1,0 +1,76 @@
+name: Monorepo CI/CD
+
+on:
+  push:
+    paths-ignore:
+      - 'services/excluded/**/*'
+    paths:
+      - 'persys-cloud/**'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Build and Deploy
+      run: |
+        # Determine the changed directory
+        CHANGED_DIR=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^persys-cloud/' | sed -E 's|^services/([^/]+).*|\1|' | uniq)
+
+        # Check if the changed directory is not in the excluded list
+        if [[ ! "$CHANGED_DIR" =~ ^(excluded|another_excluded_directory)$ ]]; then
+          case $CHANGED_DIR in
+            "api-gateway")
+              cd services/api-gateway
+              go mod download
+              cd cmd && go build -o main
+              ;;
+
+
+            "audit-service")
+              cd services/audit-service
+              go mod download
+              cd cmd && go build -o main
+              ;;
+
+            "blob-service")
+              cd services/blob-service
+              go mod download
+              cd cmd && go build -o main
+              ;;
+
+              ci-service")
+              cd services/ci-service
+              go mod download
+              cd cmd && go build -o main
+              ;;
+
+              cd-service")
+              cd services/cd-service
+              go mod download
+              cd cmd && go build -o main
+              ;;
+
+              fabric-service")
+              cd services/fabric-service
+              go mod download
+              cd cmd && go build -o main
+              ;;
+
+              monitoring-service")
+              cd services/monitoring-service
+              go mod download
+              cd cmd && go build -o main
+              ;;
+
+              notify-service")
+              cd services/notify-service
+              go mod download
+              cd cmd && go build -o main
+              ;;
+            # Add more cases for other services as needed
+          esac
+        fi
