@@ -10,9 +10,8 @@ on:
       - 'persys-cloud/docs/**/*'
       - 'persys-cloud/clinets/**/*'
       - 'persys-cloud/build/**/*'
-      - 'persys-cloud/*'  
-    paths:
-      - 'persys-cloud/**/*'
+      - 'persys-cloud/*'
+      - '**.md'  
 
 jobs:
   build-and-deploy:
