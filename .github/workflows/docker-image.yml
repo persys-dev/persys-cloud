@@ -1,0 +1,85 @@
+name: docker image CI       
+
+on:
+  push:
+    paths-ignore:
+      - 'persys-cloud/vendor/**/*'
+      - 'persys-cloud/staging/**/*'
+      - 'persys-cloud/IaC/**/*'
+      - 'persys-cloud/hack/**/*'
+      - 'persys-cloud/docs/**/*'
+      - 'persys-cloud/clinets/**/*'
+      - 'persys-cloud/build/**/*'
+      - 'persys-cloud/*'
+      - '**.md'  
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Build and Deploy
+      run: |
+        # Determine the changed directory
+
+        CHANGED_DIR=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^persys-cloud/' | sed -E 's|^persys-cloud/([^/]+).*|\1|' | uniq)
+
+        
+        
+
+        case $CHANGED_DIR in
+
+          "api-gateway")
+          cd persys-cloud/api-gateway
+          run: docker build . --file api-gateway/Dockerfile --tag api-gateway:$(date +%s)
+            ;;
+          "audit-service")
+            cd persys-cloud/audit-service
+            run: docker build . --file audit-service/Dockerfile --tag audit-service:$(date +%s)
+            ;;
+          "blob-service")
+            cd persys-cloud/blob-service
+            run: docker build . --file blob-service/Dockerfile --tag blob-service:$(date +%s)
+            ;;
+          "cd-service")
+            cd persys-cloud/cd-service
+            run: docker build . --file cd-service/Dockerfile --tag cd-service:$(date +%s)
+            ;;
+          "ci-service")
+            cd persys-cloud/ci-service
+            run: docker build . --file ci/Dockerfile --tag ci-service:$(date +%s)
+            ;;  
+          "cloud-dns")
+            cd persys-cloud/cloud-dns
+            run: docker build . --file cloud-dns/Dockerfile --tag cloud-dns:$(date +%s)
+            ;;
+          "cloud-mgmt")
+            cd persys-cloud/cloud-mgmt
+            run: docker build . --file cloud-mgmt/Dockerfile --tag cloud-mgmt:$(date +%s)
+            ;;
+          "cluster-provider")
+            cd persys-cloud/cluster-provider
+            run: docker build . --file cluster-provider/Dockerfile --tag cluster-provider:$(date +%s)
+            ;;
+          "events-manager")
+            cd persys-cloud/events-manager
+            run: docker build . --file events-manager/Dockerfile --tag events-manager:$(date +%s)
+            ;;
+          "fabric-service")
+            cd persys-cloud/fabric-service
+            run: docker build . --file fabric-service/Dockerfile --tag fabric-service:$(date +%s)
+            ;;      
+          "monitoring-service")
+            cd persys-cloud/monitoring-service
+            run: docker build . --file monitoring-service/Dockerfile --tag monitoring-service:$(date +%s)
+            ;;
+          "notify-service")
+            cd persys-cloud/notify-service
+            run: docker build . --file notify-service/Dockerfile --tag notify-service:$(date +%s)
+            ;;
+
+        esac
+        
