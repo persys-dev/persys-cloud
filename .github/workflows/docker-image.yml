@@ -26,6 +26,7 @@ jobs:
         # Determine the changed directory
         CHANGED_DIR=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^persys-cloud/' | sed -E 's|^persys-cloud/([^/]+).*|\1|' | uniq)
 
+
         case $CHANGED_DIR in
           "api-gateway")
             cd persys-cloud/api-gateway
