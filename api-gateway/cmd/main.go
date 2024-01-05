@@ -58,7 +58,7 @@ func init() {
 	ctx = context.TODO()
 
 	// Connect to MongoDB
-	mongoconn := options.Client().ApplyURI(cnf.MongoURI)
+	mongoconn := options.Client().ApplyURI(cnf.MongoURI)``
 	mongoclient, err := mongo.Connect(ctx, mongoconn)
 
 	if err != nil {

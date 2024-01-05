@@ -4,9 +4,7 @@ on:
   push:
     paths-ignore:
       - 'services/excluded/**/*'
-    paths:
-      - 'persys-cloud/**'
-
+    
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -24,50 +22,50 @@ jobs:
         if [[ ! "$CHANGED_DIR" =~ ^(excluded|another_excluded_directory)$ ]]; then
           case $CHANGED_DIR in
             "api-gateway")
-              cd services/api-gateway
+              cd PERSYS-CLOUD/api-gateway
               go mod download
               cd cmd && go build -o main
               ;;
 
 
             "audit-service")
-              cd services/audit-service
+              cd PERSYS-CLOUD//audit-service
               go mod download
               cd cmd && go build -o main
               ;;
 
             "blob-service")
-              cd services/blob-service
+              cd PERSYS-CLOUD/blob-service
               go mod download
               cd cmd && go build -o main
               ;;
 
               ci-service")
-              cd services/ci-service
+              cd PERSYS-CLOUD/ci-service
               go mod download
               cd cmd && go build -o main
               ;;
 
               cd-service")
-              cd services/cd-service
+              cd PERSYS-CLOUD/cd-service
               go mod download
               cd cmd && go build -o main
               ;;
 
               fabric-service")
-              cd services/fabric-service
+              cd PERSYS-CLOUD/fabric-service
               go mod download
               cd cmd && go build -o main
               ;;
 
               monitoring-service")
-              cd services/monitoring-service
+              cd PERSYS-CLOUD/monitoring-service
               go mod download
               cd cmd && go build -o main
               ;;
 
               notify-service")
-              cd services/notify-service
+              cd PERSYS-CLOUD/notify-service
               go mod download
               cd cmd && go build -o main
               ;;
