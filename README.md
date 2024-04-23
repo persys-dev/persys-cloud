@@ -184,17 +184,6 @@ chmod +x /.init.sh
 * [Ceph](https://github.com/ceph)
 * [Github](https://github.com)
 
-## Project Road Map
-
-* Q1 2023 : Clean UP the code repository for and rebase to public repository.
-* Q1 2023 : Build our Community to help develop, manage , market our product.
-* Q1 2023 : Test First Working version!
-* Q2 2023 : Submit project to CNCF sandbox projects and integrate our community with the world!
-* Q2 2023 : Hopefully we can get our hands on Infrastructure needed to launch our Hosted version of our software.
-* Q3 2023 : Grow our Community and hire people to help!
-* Q4 2023 : Release the software for on premise use (hosting it yourself).
-* Q4 2023 : World Dominance :D.
-
 ## Services Description
 
 **Each Service have an README.md in the root of the service refer to those for seeing what each component does and who are the owners.**
