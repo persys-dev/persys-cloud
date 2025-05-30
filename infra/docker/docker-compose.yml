@@ -1,0 +1,42 @@
+services:
+
+  api-gateway:
+    build: ../../api-gateway
+
+  persys-prow:
+    build: ../../prow
+
+  cloud-mgmt:
+      build: ../../cloud-mgmt
+
+# required backbone services for persys
+  node_exporter:
+    container_name: node_exporter_container
+    restart: always
+    image: prom/node-exporter
+    ports:
+      - '9101:9100'
+    networks:
+      - milx-cloud-net
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb_container
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+      MONGODB_DATABASE: products
+    ports:
+      - 27017:27017
+    volumes:
+      - mongodb_data_container:/data/db
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.0
+    command: etcd --advertise-client-urls http://etcd:2379 --listen-client-urls http://0.0.0.0:2379
+    ports:
+      - "2379:2379"
+
+volumes:
+  mongodb_data_container:
