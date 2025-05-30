@@ -1,0 +1,133 @@
+services:
+
+  api-gateway:
+    build: ../../api-gateway
+
+  events-manager:
+      build: ../../events-manager
+
+  ci-server:
+      build: ../../ci-service
+
+# required backbone services for persys ci-cd
+  node_exporter:
+    container_name: node_exporter_container
+    restart: always
+    image: prom/node-exporter
+    ports:
+      - '9101:9100'
+    networks:
+      - milx-cloud-net
+  zookeeper:
+    image: zookeeper:3.4.9
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - 22181:21813
+    networks:
+      - milx-cloud-net
+
+  kafka:
+    image: confluentinc/cp-kafka:5.3.0
+    depends_on:
+      - zookeeper
+    ports:
+      - 29092:29092
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - milx-cloud-net
+
+#  redis:
+#    image: redis:6-alpine
+#    restart: always
+#    container_name: user_redis
+#    ports:
+#      - "6379:6379"
+#    networks:
+#      - milx-cloud-net
+
+  # grafana:
+  #   container_name: grafana_container
+  #   restart: always
+  #   image: grafana/grafana
+  #   ports:
+  #     - '3000:3000'
+  #   networks:
+  #     - milx-kube-net
+
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb_container
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+      MONGODB_DATABASE: products
+    ports:
+      - 27017:27017
+    volumes:
+      - mongodb_data_container:/data/db
+    networks:
+      - milx-cloud-net
+
+#  backstage:
+#    image: roadiehq/community-backstage-image:latest
+#    restart: always
+#    ports:
+#      - "7000:7000"
+#    environment:
+#      GITHUB_TOKEN : ""
+#    networks:
+#      - milx-cloud-net
+
+
+  kafdrop:
+      container_name: kafdrop
+      restart: always
+      image: obsidiandynamics/kafdrop
+      ports:
+      - "9000:9000"
+      environment:
+        KAFKA_BROKERCONNECT: "kafka:9092"
+      depends_on:
+        - kafka
+      networks:
+        - milx-cloud-net
+
+  #   api-milx-server:
+  #     image: 'milx-kube-init:stable'
+  #     ports:
+  #       - "8000:8000"
+  #     deploy:
+  #       mode: replicated
+  #       replicas: 1
+  #     volumes:
+  #       -  /home/kali/.azure:/azure #change this
+  #       - .:/app
+  #       - ./terraform:/infra
+  #       - /home/kali/.ssh/:/ssh_keys #change this
+  #     entrypoint: ["/bin/sh","-c"]
+  #     restart: always
+  #
+  #     command:
+  #       - |
+  #         cp -R /ssh_keys /app/kube-py/.ssh
+  #         cp -R /azure ~/.azure
+  #         cd /app/kube-py/
+  #         pip install -r requirements.txt
+  #         hug -f milx-kube-server.py
+  #     networks:
+  #       - milx-kube-net
+
+volumes:
+  mongodb_data_container:
+networks:
+  milx-cloud-net:
+    driver: bridge

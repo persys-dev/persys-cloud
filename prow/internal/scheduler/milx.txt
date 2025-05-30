@@ -1,0 +1,53 @@
+// SendCommandToNode sends a signed request to the node's agent API
+func (s *Scheduler) SendCommandToNode(node models.Node, endpoint string, payload interface{}) (string, error) {
+    if node.IPAddress == "" || node.AgentPort == 0 {
+        return "", fmt.Errorf("node IPAddress and AgentPort are required")
+    }
+
+    url := fmt.Sprintf("http://%s:%d%s", node.IPAddress, node.AgentPort, endpoint)
+    var req *http.Request
+    var err error
+    var signatureB64 string
+
+    if payload != nil {
+        // Handle POST request
+        payloadBytes, err := json.Marshal(payload)
+        if err != nil {
+            return "", fmt.Errorf("failed to marshal payload: %v", err)
+        }
+        log.Printf("Sending POST command to %s with payload: %s", url, string(payloadBytes))
+
+        // Sign payload
+        hash := sha256.Sum256(payloadBytes)
+        signature, err := rsa.SignPKCS1v15(rand.Reader, s.privateKey, crypto.SHA256, hash[:])
+        if err != nil {
+            return "", fmt.Errorf("failed to sign payload: %v", err)
+        }
+        signatureB64 = base64.StdEncoding.EncodeToString(signature)
+        log.Printf("Signature for node %s: %s...", node.NodeID, signatureB64[:50])
+
+        // Create POST request
+        req, err = http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
+        if err != nil {
+            return "", fmt.Errorf("failed to create POST request: %v", err)
+        }
+        req.Header.Set("Content-Type", "application/json")
+    } else {
+        // Handle GET request
+        log.Printf("Sending GET command to %s", url)
+
+        // Sign an empty payload or URL for GET request
+        hash := sha256.Sum256([]byte(url)) // Sign the URL for GET requests
+        signature, err := rsa.SignPKCS1v15(rand.Reader, s.privateKey, crypto.SHA256, hash[:])
+        if err != nil {
+            return "", fmt.Errorf("failed to sign URL for GET request: %v", err)
+        }
+        signatureB64 = base64.StdEncoding.EncodeToString(signature)
+        log.Printf("Signature for node %s: %s...", node.NodeID, signatureB64[:50])
+
+        // Create GET request
+        req, err = http.NewRequest("GET", url, nil)
+        if err != nil {
+            return "", fmt.Errorf("failed to create GET request: %v", err)
+        }
+    }
