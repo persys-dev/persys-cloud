@@ -12,7 +12,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o scheduler ./cmd/scheduler
+RUN CGO_ENABLED=0 GOOS=linux go build -o prow ./cmd/scheduler
 
 # Stage 2: Create the final image
 FROM alpine:latest
@@ -21,10 +21,10 @@ FROM alpine:latest
 WORKDIR /root/
 
 # Copy the binary from the builder stage
-COPY --from=builder /app/scheduler .
+COPY --from=builder /app/prow .
 
 # Expose the port the scheduler listens on
 EXPOSE 8084
 
 # Command to run the scheduler
-CMD ["./scheduler"]
+CMD ["./prow"]

@@ -5,7 +5,7 @@ services:
     ports:
       - "2379:2379"
 
-  scheduler:
+  persys-prow:
     build:
       context: .
       dockerfile: Dockerfile
