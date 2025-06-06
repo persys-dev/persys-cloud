@@ -1,0 +1,14 @@
+{
+    "CN": "persys-cfssl",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "O": "Persys Cloud",
+            "C": "US"
+        }
+    ],
+    "hosts": ["persys-cfssl", "persys.io", "127.0.0.1", "localhost"]
+}
