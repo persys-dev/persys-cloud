@@ -2,12 +2,111 @@ services:
 
   api-gateway:
     build: ../../api-gateway
+    volumes:
+      - certs:/etc/api-gateway/certs
+    depends_on:
+      - persys-cfssl
+      - coredns
+      - jaeger
+    environment:
+      - ETCD_ENDPOINTS=etcd:2379
+      - OTEL_EXPORTER_JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - OTEL_SERVICE_NAME=api-gateway
+    networks:
+      - milx-cloud-net
 
   persys-prow:
     build: ../../prow
+    volumes:
+      - certs:/etc/prow/certs
+    depends_on:
+      - persys-cfssl
+      - coredns
+      - jaeger
+    environment:
+      - ETCD_ENDPOINTS=etcd:2379
+      - OTEL_EXPORTER_JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - OTEL_SERVICE_NAME=prow-scheduler
+    networks:
+      - milx-cloud-net
 
   cloud-mgmt:
-      build: ../../cloud-mgmt
+    build: ../../cloud-mgmt
+    networks:
+      - milx-cloud-net
+
+# CFSSL service with PostgreSQL
+  persys-cfssl:
+    build: ../../persys-cfssl
+    volumes:
+      - certs:/app/certs
+    environment:
+      - CFSSL_DB_DRIVER=postgres
+      - CFSSL_DB_CONNECTION=postgres://cfssl:cfssl@postgres:5432/cfssl?sslmode=disable
+    depends_on:
+      - postgres
+    networks:
+      - milx-cloud-net
+
+# PostgreSQL for CFSSL
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=cfssl
+      - POSTGRES_PASSWORD=cfssl
+      - POSTGRES_DB=cfssl
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - milx-cloud-net
+
+# CoreDNS with SkyDNS
+  coredns:
+    image: coredns/coredns:latest
+    volumes:
+      - ./coredns/Corefile:/etc/coredns/Corefile:ro
+    ports:
+      - "53:53"
+      - "53:53/udp"
+    depends_on:
+      - etcd
+    networks:
+      - milx-cloud-net
+
+# Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    networks:
+      - milx-cloud-net
+
+# Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14250:14250"
+      - "14268:14268"
+      - "14269:14269"
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      - milx-cloud-net
 
 # required backbone services for persys
   node_exporter:
@@ -31,12 +130,23 @@ services:
       - 27017:27017
     volumes:
       - mongodb_data_container:/data/db
+    networks:
+      - milx-cloud-net
 
   etcd:
     image: quay.io/coreos/etcd:v3.5.0
     command: etcd --advertise-client-urls http://etcd:2379 --listen-client-urls http://0.0.0.0:2379
     ports:
       - "2379:2379"
+    networks:
+      - milx-cloud-net
 
 volumes:
   mongodb_data_container:
+  postgres_data:
+  certs:
+  prometheus_data:
+
+networks:
+  milx-cloud-net:
+    driver: bridge
