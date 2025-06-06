@@ -47,7 +47,7 @@ name: 'Terraform'
 on:
   push:
     paths:
-      - 'IaC/**'
+      - 'infra/**'
 
 permissions:
   contents: read
@@ -61,7 +61,7 @@ jobs:
     # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
     defaults:
       run:
-        working-directory: ./IaC/terraform
+        working-directory: ./infra/terraform
         shell: bash
 
     steps:

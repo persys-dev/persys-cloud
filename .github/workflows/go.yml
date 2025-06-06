@@ -19,15 +19,22 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19
+        go-version: 1.24
 
-    - name: Build
+    - name: Build API Gateway
       working-directory: ./api-gateway
       run: |
-          ls -la
           go mod download
           cd cmd && go build -o main
-      # run: go build -v ./api-gateway/cmd
 
-    # - name: Test
-    #   run: go test -v ./api-gateway/cmd
+    - name: Build Prow
+      working-directory: ./prow
+      run: |
+          go mod download
+          cd cmd && go build -o main
+
+    - name: Build Cloud Mgmt
+      working-directory: ./cloud-mgmt
+      run: |
+          go mod download
+          cd cmd && go build -o main
