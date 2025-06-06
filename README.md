@@ -2,8 +2,6 @@
 
 ## introduction
 
-![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/arvancloud/cdn-go)
-
 Persys Cloud is an open source platform that makes it easy to build and deploy cloud native applications. Whether you're a seasoned developer or just getting started with coding, Persys Cloud provides a user-friendly interface and powerful automation capabilities to help you get up and running quickly. In this document, we'll cover the features and benefits of Persys Cloud, as well as its use cases.
 
 > **Note**: This project is under active development and may have problems and shortcomings.
@@ -47,9 +45,6 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
 * Easy to use, with step-by-step instructions for performing specific tasks and best practices for Kubernetes application deployment and management.
 * CI/CD pipeline management capabilities, allowing you to easily set up and manage your entire pipeline.
 * Integration with other cloud service providers, making it easy to build and manage complex cloud native applications that span multiple cloud environments and services.
-* Fabric Service to create a service mesh and manage multiple clusters across multiple cloud environments.
-* GPU-accelerated Kubernetes clusters for AI and MLOps workloads.
-* Automates many of the tasks typically performed by SRE engineers
 * Provides DevOps/SRE as a service
 
 #### Benefits
@@ -64,17 +59,14 @@ Persys Cloud is an open source platform that makes it easy to build and deploy c
 
 1. Managed Kubernetes as a service across multiple clouds.
 2. DevOps/SRE as a Service: Persys Cloud provides DevOps/SRE as a service, including automation capabilities, powerful monitoring and management, and CI/CD pipeline management.
-3. Fabric Service: Persys Cloud uses Fabric Service to create a service mesh and manage multiple clusters across multiple cloud environments.
-4. GPU-accelerated Kubernetes Clusters: Persys Cloud will soon provide GPU-accelerated Kubernetes clusters for AI and MLOps workloads.
-5. Object Storage Integration: Persys Cloud will soon integrate with S3 buckets, Azure files, and other cloud provider object storages as a sidecar to your workloads.
-6. MongoDB, Kafka , Postgres, Signoz, Backstage, ETCD, ...etc as a service.
+
+3. PAAS (Platform As a Service)
 
 #### Use Cases
 
 * Building and deploying cloud native applications.
 * Managing multiple clusters across multiple cloud environments.
 * Running complex machine learning and deep learning workloads.
-* Automating the job of an SRE engineer.
 * Streamlining operations and improving overall efficiency.
 
 ## Architecture
@@ -152,37 +144,8 @@ chmod +x /.init.sh
 
 ## Contributions
 
-**we are looking for contributors in fields of expertise listed below:**
-<br>
-
-* DevOps Engineers
-* Golang developers
-* Rust developers
-* Cloud network engineers
-* Datacenter Architectures and designers
-* Software test specialist
-* Project managers
-
 **please refer to community section and consider joining us**
 [Community](#community)
-
-## Open Source Tech We Use
-
-* [Backstage](https://github.com/backstage/backstage)
-* [apache kafka](https://github.com/obsidiandynamics/kafdrop)
-* [gRPC](https://github.com/grpc)
-* [Git]()
-* [Rust (Programming Language)]()
-* [Terraform]()
-* [Kubernetes](https://github.com/kubernetes/kubernetes)
-* [Go (Programming Language)]()
-* [OpenTelemtry](https://github.com/opentelemtry)
-* [Watermill](https://github.com/watermill)
-* [Mongodb](https://github.com/mongodb)
-* [Signoz](https://github.com/signoz)
-* [Kafdrop](https://github.com/obsidiandynamics/kafdrop)
-* [Ceph](https://github.com/ceph)
-* [Github](https://github.com)
 
 ## Services Description
 
@@ -190,30 +153,19 @@ chmod +x /.init.sh
 
 ## Documentation
 
-**the documentation will be located at <https://github.com/miladhzzzz/persys-devops/docs>**
+**the documentation will be located at <https://github.com/persys-dev/persys-cloud/docs>**
 
-* [getting-started.md](https://github.com/miladhzzzz/persys-cicd/docs/getting-started.md)
-* [how-it-works.md](https://github.com/miladhzzzz/persys-cicd/docs/how-it-works.md)
-* [install.md](https://github.com/miladhzzzz/persys-cicd/install.md)
-* [architecture.md](https://github.com/miladhzzzz/persys-cicd/architecture.md)
-* [contributions.md](https://github.com/miladhzzzz/persys-cicd/contributions.md)
+* [getting-started.md](https://github.com/persys-dev/persys-cloud/docs/getting-started.md)
+* [how-it-works.md](https://github.com/persys-dev/persys-cloud/docs/how-it-works.md)
+* [install.md](https://github.com/persys-dev/persys-cloud/docs/install.md)
+* [architecture.md](https://github.com/persys-dev/persys-cloud/docs/architecture.md)
+* [contributions.md](https://github.com/persys-dev/persys-cloud/docs/contributions.md)
 
 ## Community
 
-Persys Cloud is an open source and community-driven development platform, which means that users can contribute new features and improvements to the platform directly through GitHub. If you want a specific service or feature in Persys Cloud, you can open up a pull request against our repository, and we will review the PR. Alternatively, if you encounter any issues or have questions about the platform, you can open an issue, and we will respond to each one. By contributing to Persys Cloud, you can help to shape the future of the platform and ensure that it continues to meet the evolving needs of the cloud native community. We welcome all contributions and feedback from our users, and we are committed to providing a high-quality and user-friendly platform for building and deploying cloud native applications.
+Persys Cloud is an open source and community-driven developer platform, which means that users can contribute new features and improvements to the platform directly through GitHub. If you want a specific service or feature in Persys Cloud, you can open up a pull request against our repository, and we will review the PR. Alternatively, if you encounter any issues or have questions about the platform, you can open an issue, and we will respond to each one. By contributing to Persys Cloud, you can help to shape the future of the platform and ensure that it continues to meet the evolving needs of the cloud native community. We welcome all contributions and feedback from our users, and we are committed to providing a high-quality and user-friendly platform for building and deploying cloud native applications.
 <https://join.slack.com/t/persys-cicd/shared_invite/zt-1lje1wst0-E0TjKMIXGe1FGLex1uQoxg>
 
 ## Conclusion
 
 Persys Cloud is a powerful and flexible platform that simplifies the process of building and deploying cloud native applications. Its user-friendly interface, automation capabilities, and highly scalable and flexible design make it a popular choice for organizations of all sizes. With its open source and community-driven development, Persys Cloud is constantly evolving and improving, ensuring that it remains a cutting-edge solution for cloud native development.
-
-## Cloud Native Computing Foundation
-
-<br>
-this project is currently in the sandbox waiting list of Cloud Native Computing Foundation, and as we mentioned above we are using and supporting a lot of CNCF technologies
-<br>
-so, thank you
-
-[CNCF](https://github.com/miladhzzzz/persys-cicd) <3
-
-![](docs/architecture/cncf-ambassador.png)
