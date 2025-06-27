@@ -5,11 +5,11 @@ global:
 scrape_configs:
   - job_name: 'api-gateway'
     static_configs:
-      - targets: ['api-gateway:8080']
+      - targets: ['api-gateway:8085']
 
   - job_name: 'prow-scheduler'
     static_configs:
-      - targets: ['persys-prow:8084']
+      - targets: ['persys-prow:8085']
 
   - job_name: 'node-exporter'
     static_configs:

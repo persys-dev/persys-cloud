@@ -4,61 +4,47 @@ services:
     build: ../../api-gateway
     volumes:
       - certs:/etc/api-gateway/certs
+    ports:
+      - 8551:8551
     depends_on:
       - persys-cfssl
       - coredns
       - jaeger
     environment:
-      - ETCD_ENDPOINTS=etcd:2379
-      - OTEL_EXPORTER_JAEGER_ENDPOINT=http://jaeger:14268/api/traces
-      - OTEL_SERVICE_NAME=api-gateway
-    networks:
-      - milx-cloud-net
+      - OTEL_EXPORTER_JAEGER_ENDPOINT=jaegar:4318
 
   persys-prow:
     build: ../../prow
     volumes:
       - certs:/etc/prow/certs
+    ports:
+      - 8084:8084
     depends_on:
       - persys-cfssl
       - coredns
       - jaeger
     environment:
       - ETCD_ENDPOINTS=etcd:2379
-      - OTEL_EXPORTER_JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - OTEL_EXPORTER_JAEGER_ENDPOINT=jaegar:4318
       - OTEL_SERVICE_NAME=prow-scheduler
-    networks:
-      - milx-cloud-net
+      - CA_FILE=/etc/prow/certs/ca.pem
+      - CFSSL_API_URL=https://persys-cfssl:8888
+      - CERT_COMMON_NAME=prow-scheduler
+      - CERT_ORGANIZATION=persys
 
-  cloud-mgmt:
-    build: ../../cloud-mgmt
-    networks:
-      - milx-cloud-net
+
+  # cloud-mgmt:
+  #   build: ../../cloud-mgmt
+  #   networks:
+  #     - milx-cloud-net
 
 # CFSSL service with PostgreSQL
   persys-cfssl:
     build: ../../persys-cfssl
     volumes:
       - certs:/app/certs
-    environment:
-      - CFSSL_DB_DRIVER=postgres
-      - CFSSL_DB_CONNECTION=postgres://cfssl:cfssl@postgres:5432/cfssl?sslmode=disable
-    depends_on:
-      - postgres
-    networks:
-      - milx-cloud-net
-
-# PostgreSQL for CFSSL
-  postgres:
-    image: postgres:14
-    environment:
-      - POSTGRES_USER=cfssl
-      - POSTGRES_PASSWORD=cfssl
-      - POSTGRES_DB=cfssl
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - milx-cloud-net
+    ports:
+      - 8888:8888
 
 # CoreDNS with SkyDNS
   coredns:
@@ -70,8 +56,6 @@ services:
       - "53:53/udp"
     depends_on:
       - etcd
-    networks:
-      - milx-cloud-net
 
 # Prometheus for metrics
   prometheus:
@@ -88,6 +72,24 @@ services:
       - "9090:9090"
     networks:
       - milx-cloud-net
+
+# Grafana for metrics visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana_container
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    networks:
+      - milx-cloud-net
+    depends_on:
+      - prometheus
 
 # Jaeger for distributed tracing
   jaeger:
@@ -114,7 +116,7 @@ services:
     restart: always
     image: prom/node-exporter
     ports:
-      - '9101:9100'
+      - '9100:9100'
     networks:
       - milx-cloud-net
 
@@ -125,7 +127,7 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: admin
-      MONGODB_DATABASE: products
+      MONGODB_DATABASE: api-gateway
     ports:
       - 27017:27017
     volumes:
@@ -146,7 +148,9 @@ volumes:
   postgres_data:
   certs:
   prometheus_data:
+  grafana_data:
 
 networks:
   milx-cloud-net:
     driver: bridge
+
