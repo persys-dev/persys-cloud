@@ -1,7 +1,7 @@
 # Persys Cloud
 
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/persys-dev/persys-cloud)](go.mod)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/persys-dev/persys-cloud/api-gateway)](go.mod)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/persys-dev/persys-cloud/actions)
 
 > **Note**: This project is under active development and may have issues and limitations. We welcome contributions and feedback!
