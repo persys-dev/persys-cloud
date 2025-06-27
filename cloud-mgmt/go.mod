@@ -1,6 +1,6 @@
 module github.com/persys-dev/persys-cloud/cloud-mgmt
 
-go 1.19
+go 1.24
 
 require (
 	github.com/ThreeDotsLabs/watermill v1.1.1
