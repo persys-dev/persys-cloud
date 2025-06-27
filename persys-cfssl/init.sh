@@ -1,13 +1,15 @@
 #!/bin/bash
 
 # Check if certificates exist in the mounted volume
-if [ ! -f /app/certs/ca.pem ] || [ ! -f /app/certs/ca-key.pem ] || [ ! -f /app/certs/cfssl.pem ] || [ ! -f /app/certs/cfssl-key.pem ]; then
+if [ ! -f /app/certs/ca.pem ] || [ ! -f /app/certs/ca-key.pem ]; then
     echo "Generating new certificates..."
-    # Generate CA and server certificates
-    cfssl gencert -initca ca-csr.json | cfssljson -bare ca && \
-    cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=default cfssl-csr.json | cfssljson -bare cfssl && \
-    mv ca.pem ca-key.pem cfssl.pem cfssl-key.pem /app/certs/
-    echo "Certificates generated successfully"
+    
+    # Generate CA certificate
+    cfssl gencert -initca ca-csr.json | cfssljson -bare /app/certs/ca
+    
+    # Generate CFSSL server certificate
+    cfssl gencert -ca=/app/certs/ca.pem -ca-key=/app/certs/ca-key.pem \
+        -config=ca-config.json -profile=server cfssl-csr.json | cfssljson -bare /app/certs/cfssl
 else
     echo "Using existing certificates"
 fi
@@ -20,4 +22,5 @@ exec cfssl serve \
     -ca-key=/app/certs/ca-key.pem \
     -config=ca-config.json \
     -tls-cert=/app/certs/cfssl.pem \
-    -tls-key=/app/certs/cfssl-key.pem 
+    -tls-key=/app/certs/cfssl-key.pem \
+    # -db-config=db-config.json
