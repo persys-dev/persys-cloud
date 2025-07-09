@@ -60,7 +60,7 @@ services:
       - persys-cfssl
 
   # --- Prow Scheduler ---
-  prow-scheduler:
+  persys-prow:
     build:
       context: ../../prow
       dockerfile: Dockerfile
@@ -87,9 +87,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - certs:/etc/persys-agent/certs
+    environment:
+      - CENTRAL_URL="http://persys-prow:8084"
     depends_on:
       - prow-scheduler
-    command: ["./persys-agent"]
 
   # --- Test Client ---
   test-client:
