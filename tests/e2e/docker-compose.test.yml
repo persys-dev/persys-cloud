@@ -113,8 +113,8 @@ services:
       context: .
       dockerfile: Dockerfile.test-client
     environment:
-      - API_GATEWAY_URL=https://api-gateway:8551
-      - PROW_SCHEDULER_URL=https://persys-prow:8085
+      - API_GATEWAY_URL=https://api-gateway:8085
+      - PROW_SCHEDULER_URL=https://persys-prow:8084
       - PERSYS_AGENT_URL=http://persys-agent:8080
     networks:
       - persys-cloud-test
