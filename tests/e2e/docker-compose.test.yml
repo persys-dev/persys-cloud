@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  # Test infrastructure
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.0
+    command: ["etcd", "--advertise-client-urls=http://0.0.0.0:2379", "--listen-client-urls=http://0.0.0.0:2379"]
+    ports:
+      - "2379:2379"
+    environment:
+      - ETCDCTL_API=3
+
+  coredns:
+    image: coredns/coredns:1.11.1
+    command: ["-conf", "/etc/coredns/Corefile"]
+    ports:
+      - "53:53/udp"
+    volumes:
+      - ./test-configs/coredns:/etc/coredns
+    depends_on:
+      - etcd
+
+  # Persys Cloud components
+  api-gateway:
+    build:
+      context: ../../api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8551:8551"
+      - "8085:8085"
+    environment:
+      - COREDNS_ADDR=coredns:53
+      - ETCD_ENDPOINTS=etcd:2379
+    volumes:
+      - ./test-configs/api-gateway:/etc/api-gateway/certs
+    depends_on:
+      - coredns
+      - etcd
+    command: ["./bin/api-gateway"]
+
+  prow-scheduler:
+    build:
+      context: ../../prow
+      dockerfile: Dockerfile
+    ports:
+      - "8085:8085"
+    environment:
+      - ETCD_ENDPOINTS=etcd:2379
+      - DOMAIN=test.local
+      - AGENT_SECRET=test-secret
+    volumes:
+      - ./test-configs/prow:/etc/prow/certs
+    depends_on:
+      - etcd
+    command: ["./bin/prow-scheduler"]
+
+  persys-agent:
+    build:
+      context: ../../persys-agent
+      dockerfile: Dockerfile.ubuntu
+    ports:
+      - "8080:8080"
+    environment:
+      - AGENT_SECRET=test-secret
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./test-configs/persys-agent:/etc/persys-agent/certs
+    depends_on:
+      - prow-scheduler
+    command: ["./persys-agent"]
+
+  # Test client
+  test-client:
+    build:
+      context: .
+      dockerfile: Dockerfile.test-client
+    environment:
+      - API_GATEWAY_URL=https://api-gateway:8551
+      - PROW_SCHEDULER_URL=https://prow-scheduler:8085
+      - PERSYS_AGENT_URL=http://persys-agent:8080
+    volumes:
+      - ./test-configs/test-client:/etc/test-client/certs
+    depends_on:
+      - api-gateway
+      - prow-scheduler
+      - persys-agent
+    command: ["./test-runner"]
+
+  # Monitoring and observability
+  prometheus:
+    image: prom/prometheus:v2.45.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./test-configs/prometheus:/etc/prometheus
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+
+  grafana:
+    image: grafana/grafana:10.0.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./test-configs/grafana:/etc/grafana/provisioning
+
+networks:
+  default:
+    name: persys-cloud-test 
