@@ -31,10 +31,10 @@ jobs:
       working-directory: ./prow
       run: |
           go mod download
-          cd cmd && go build -o main
+          cd cmd/scheduler && go build -o main
 
-    - name: Build Cloud Mgmt
-      working-directory: ./cloud-mgmt
-      run: |
-          go mod download
-          cd cmd && go build -o main
+    # - name: Build Cloud Mgmt
+    #   working-directory: ./cloud-mgmt
+    #   run: |
+    #       go mod download
+    #       cd cmd && go build -o main
