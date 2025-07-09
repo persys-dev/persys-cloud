@@ -132,5 +132,4 @@ volumes:
   mongodb_data_container:
 
 networks:
-  default:
-    name: persys-cloud-test 
+  persys-cloud-test:
