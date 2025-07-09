@@ -44,7 +44,7 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8551:8551"
-      - "8085:8085"
+      # - "8085:8085"
     environment:
       - COREDNS_ADDR=coredns:53
       - ETCD_ENDPOINTS=etcd:2379
@@ -65,6 +65,7 @@ services:
       context: ../../prow
       dockerfile: Dockerfile
     ports:
+      - "8084:8084"
       - "8085:8085"
     environment:
       - ETCD_ENDPOINTS=etcd:2379
