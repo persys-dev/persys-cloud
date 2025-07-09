@@ -366,6 +366,24 @@ These changes and lessons have resulted in a more robust, production-ready servi
 
 ---
 
+### 🚀 Observability & Instrumentation Improvements (2024-06)
+
+- **Full OpenTelemetry Tracing:**
+  - All outgoing HTTP requests in both `prow` and `api-gateway` are now instrumented with OpenTelemetry, including:
+    - Agent API calls
+    - Handshake requests
+    - Certificate signing requests to CFSSL
+  - All distributed traces are now visible in your tracing backend (e.g., Jaeger).
+- **Prometheus Metrics:**
+  - The API Gateway now exposes Prometheus metrics for all endpoints, including mTLS traffic, by instrumenting both mTLS and non-mTLS routers.
+- **Reconciliation & Monitoring Bugfixes:**
+  - Fixed grace period logic in the reconciler to prevent runaway container launches.
+  - Improved container state reporting and monitoring, ensuring accurate status (Running, Exited, Pulling, etc.) is always reported and visible in both etcd and the UI.
+- **Certificate Management:**
+  - CertificateManager in both services now includes OpenTelemetry tracing for all certificate requests, improving visibility into certificate provisioning and renewal flows.
+
+---
+
 ## Previous Versions
 
 *Note: This changelog covers the comprehensive reconciliation, discovery, proxy, and routing system implementation. Previous changes are documented in individual component histories.* 
