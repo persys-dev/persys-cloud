@@ -9,7 +9,7 @@ name = "api_gateway"
 
 
 [database]
-mongoURI= "mongodb://admin:admin@mongodb_container:27017/api-gateway?authSource=admin"
+mongoURI= "mongodb://admin:admin@mongodb:27017/api-gateway?authSource=admin"
 collections = ["events", "repos", "users"]
 name= "api-gateway"
 

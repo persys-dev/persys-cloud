@@ -138,7 +138,6 @@ services:
   # --- MongoDB (Database for API Gateway) ---
   mongodb:
     image: mongo:latest
-    container_name: mongodb_container
     restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
