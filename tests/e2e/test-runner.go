@@ -122,9 +122,9 @@ func (suite *TestSuite) waitForServices() {
 		name string
 		url  string
 	}{
-		{"API Gateway", suite.apiGatewayURL + "/health"},
-		{"Prow Scheduler", suite.prowSchedulerURL + "/health"},
-		{"Persys Agent", suite.persysAgentURL + "/health"},
+		{"API Gateway", suite.apiGatewayURL + "/"},
+		{"Prow Scheduler", suite.prowSchedulerURL + "/"},
+		{"Persys Agent", suite.persysAgentURL + "/api/v1/health"},
 	}
 
 	for _, service := range services {

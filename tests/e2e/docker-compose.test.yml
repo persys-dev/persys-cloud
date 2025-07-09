@@ -13,7 +13,7 @@ services:
     ports:
       - "53:53/udp"
     volumes:
-      - ./test-configs/coredns:/etc/coredns
+      - ./coredns:/etc/coredns
     depends_on:
       - etcd
 
