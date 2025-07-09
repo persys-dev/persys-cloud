@@ -1,5 +1,13 @@
+# Persys Cloud Full Stack Docker Compose
+#
+# This file defines all core services for local development and integration:
+# - API Gateway, Prow Scheduler, CoreDNS, CFSSL, MongoDB, Prometheus, Grafana, Jaeger, etcd, Node Exporter
+# - All services are connected via the 'milx-cloud-net' bridge network
+# - Certificates are shared via the 'certs' volume
+
 services:
 
+  # --- API Gateway (Entry point for all API requests) ---
   api-gateway:
     build: ../../api-gateway
     volumes:
@@ -12,14 +20,19 @@ services:
       - jaeger
     environment:
       - OTEL_EXPORTER_JAEGER_ENDPOINT=jaegar:4318
+    networks:
+      - milx-cloud-net
 
+  # --- Prow Scheduler (Workload scheduler and reconciler) ---
   persys-prow:
     build: ../../prow
     volumes:
       - certs:/etc/prow/certs
     ports:
-      - 8084:8084
+      - 8084:8084   # Non-mTLS API
+      - 8085:8085   # mTLS API
     depends_on:
+      - etcd
       - persys-cfssl
       - coredns
       - jaeger
@@ -31,33 +44,35 @@ services:
       - CFSSL_API_URL=https://persys-cfssl:8888
       - CERT_COMMON_NAME=prow-scheduler
       - CERT_ORGANIZATION=persys
+    networks:
+      - milx-cloud-net
 
-
-  # cloud-mgmt:
-  #   build: ../../cloud-mgmt
-  #   networks:
-  #     - milx-cloud-net
-
-# CFSSL service with PostgreSQL
+  # --- Certificate Authority (CFSSL) ---
   persys-cfssl:
     build: ../../persys-cfssl
     volumes:
       - certs:/app/certs
     ports:
       - 8888:8888
+    networks:
+      - milx-cloud-net
 
-# CoreDNS with SkyDNS
+  # --- CoreDNS (Service discovery) ---
   coredns:
     image: coredns/coredns:latest
+    command: -conf /etc/coredns/Corefile
     volumes:
-      - ./coredns/Corefile:/etc/coredns/Corefile:ro
+      - ./coredns:/etc/coredns
     ports:
       - "53:53"
       - "53:53/udp"
+      - "9153:9153/tcp"
     depends_on:
       - etcd
+    networks:
+      - milx-cloud-net
 
-# Prometheus for metrics
+  # --- Prometheus (Metrics collection) ---
   prometheus:
     image: prom/prometheus:latest
     volumes:
@@ -73,7 +88,7 @@ services:
     networks:
       - milx-cloud-net
 
-# Grafana for metrics visualization
+  # --- Grafana (Metrics visualization) ---
   grafana:
     image: grafana/grafana:latest
     container_name: grafana_container
@@ -91,7 +106,7 @@ services:
     depends_on:
       - prometheus
 
-# Jaeger for distributed tracing
+  # --- Jaeger (Distributed tracing) ---
   jaeger:
     image: jaegertracing/all-in-one:latest
     environment:
@@ -110,7 +125,7 @@ services:
     networks:
       - milx-cloud-net
 
-# required backbone services for persys
+  # --- Node Exporter (Host metrics for Prometheus) ---
   node_exporter:
     container_name: node_exporter_container
     restart: always
@@ -120,6 +135,7 @@ services:
     networks:
       - milx-cloud-net
 
+  # --- MongoDB (Database for API Gateway) ---
   mongodb:
     image: mongo:latest
     container_name: mongodb_container
@@ -135,6 +151,7 @@ services:
     networks:
       - milx-cloud-net
 
+  # --- etcd (Key-value store for Prow and CoreDNS) ---
   etcd:
     image: quay.io/coreos/etcd:v3.5.0
     command: etcd --advertise-client-urls http://etcd:2379 --listen-client-urls http://0.0.0.0:2379
@@ -143,6 +160,7 @@ services:
     networks:
       - milx-cloud-net
 
+# --- Volumes for persistent data and shared certs ---
 volumes:
   mongodb_data_container:
   postgres_data:
@@ -150,6 +168,7 @@ volumes:
   prometheus_data:
   grafana_data:
 
+# --- Shared overlay network for all services ---
 networks:
   milx-cloud-net:
     driver: bridge
