@@ -30,14 +30,29 @@ jobs:
         # Get the list of changed files
         CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
         
+        # Store the workspace root directory
+        WORKSPACE_ROOT=$(pwd)
+        
         # Function to build Docker image
         build_image() {
           local service=$1
           local dir=$2
           echo "Building $service..."
-          cd $dir
+          
+          # Check if directory exists
+          if [ ! -d "$dir" ]; then
+            echo "Error: Directory $dir does not exist"
+            return 1
+          fi
+          
+          # Change to the service directory
+          cd "$WORKSPACE_ROOT/$dir"
+          
+          # Build the Docker image
           docker build -t $service:$(date +%s) .
-          cd ../..
+          
+          # Return to workspace root
+          cd "$WORKSPACE_ROOT"
         }
 
         # Check each service directory for changes
