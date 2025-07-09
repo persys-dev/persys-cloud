@@ -8,7 +8,6 @@ import (
 
 type GithubService interface {
 	GetRepos(client *github.Client, user *models.UserInput) error
-	SetWebhook()
 	SetAccessToken()
 	ListRepos(user *models.DBResponse) (*bson.M, error)
 }

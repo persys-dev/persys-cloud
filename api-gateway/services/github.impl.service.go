@@ -51,11 +51,6 @@ func (g *GithubServiceImpl) ListRepos(user *models.DBResponse) (*bson.M, error) 
 	return &result, nil
 }
 
-func (g *GithubServiceImpl) SetWebhook() {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (g *GithubServiceImpl) GetRepos(client *github.Client, user *models.UserInput) error {
 	repos, _, _ := client.Repositories.List(context.Background(), "", &github.RepositoryListOptions{})
 

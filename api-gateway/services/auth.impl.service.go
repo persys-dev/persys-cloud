@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	jwtlib "github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
 	"github.com/gin-gonic/gin"
 	"github.com/persys-dev/persys-cloud/api-gateway/models"
-	"time"
 
 	//"github.com/wpcodevo/golang-mongodb/utils"
 	"go.mongodb.org/mongo-driver/bson"
@@ -111,4 +112,11 @@ func (uc *AuthServiceImpl) SignInUser(user *models.UserInput) (*models.DBRespons
 	}
 
 	return newUser, nil
+}
+
+func (a *AuthServiceImpl) IsAuthenticated(ctx *gin.Context) bool {
+	_, err := request.ParseFromRequest(ctx.Request, request.OAuth2Extractor, func(token *jwtlib.Token) (interface{}, error) {
+		return []byte("unicornsAreAwesome"), nil
+	})
+	return err == nil
 }
