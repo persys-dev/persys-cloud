@@ -103,7 +103,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - certs:/etc/persys-agent/certs
     environment:
-      - CENTRAL_URL="http://persys-prow:8084"
+      - CENTRAL_URL=http://persys-prow:8084
     depends_on:
       - persys-prow
 
