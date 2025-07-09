@@ -1,18 +1,35 @@
 [app]
 httpAddr = ":8551"
 grpcAddr = ":8661"
-
-storage = ""
+httpAddrNonMTLS = "8085"
+storage = "mongodb"
 
 [app.metadata]
-name = "api-gateway"
+name = "api_gateway"
+
 
 [database]
-mongoURI= "mongodb+srv://default:password@localhost/?retryWrites=true&w=majority"
+mongoURI= "mongodb://admin:admin@mongodb_container:27017/api-gateway?authSource=admin"
 collections = ["events", "repos", "users"]
+name= "api-gateway"
 
-[watermill]
-kafkaBroker = "kafka.local:9092"
+[tls]
+certPath="/etc/api-gateway/certs/tls.crt"
+keyPath="/etc/api-gateway/certs/tls.key"
+caPath="/etc/api-gateway/certs/ca.pem"
+
+[coreDNS]
+addr= "coredns:53"
+
+[cfssl]
+apiUrl= "https://persys-cfssl:8888"
+
+# Prow scheduler configuration for proxying
+[prow]
+schedulerAddr = "prow-scheduler:8085"
+enableProxy = true
+discoveryDomain = "persys.local"
+discoveryService = "_prow-scheduler"
 
 [github]
 webHookURL = "http://persys.eastus.cloudapp.azure.com/webhook"
@@ -22,12 +39,9 @@ webHookSecret = "SECRET"
 clientID = "SECRET"
 clientSecret = "SECRET"
 
-[grcp.clients]
-events-magaer = "SECRET"
-
 [log]
-format = "json"
-level = "info"
+lokiEndpoint="http://loki:3301"
+level = "debug"
 
 [telemetry]
-addr = "signoz-otel-collector.persys-dev.svc.cluster.local:4317"
+addr = "http://jaeger:14268/api/traces"
