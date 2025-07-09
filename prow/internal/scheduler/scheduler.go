@@ -24,27 +24,31 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/persys-dev/prow/internal/models"
-	"go.etcd.io/etcd/client/v3"
+	clientv3 "go.etcd.io/etcd/client/v3"
+	gootelhttp "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
 )
 
 // Constants
 const (
-	etcdTimeout   = 5 * time.Second
-	maxRetries    = 5
-	retryWaitTime = 2 * time.Second
-	keyDir        = "~/.prow"
+	etcdTimeout    = 5 * time.Second
+	maxRetries     = 5
+	retryWaitTime  = 2 * time.Second
+	keyDir         = "~/.prow"
 	privateKeyFile = "scheduler.key"
 	publicKeyFile  = "scheduler.pub"
 )
 
 // Scheduler holds the state and configuration for the cluster scheduler.
 type Scheduler struct {
-	privateKey    *rsa.PrivateKey
-	sharedSecret  string
-	etcdClient    *clientv3.Client
-	httpClient    *http.Client
-	domain        string
-	publicKeyPEM  string
+	privateKey   *rsa.PrivateKey
+	sharedSecret string
+	etcdClient   *clientv3.Client
+	httpClient   *http.Client
+	domain       string
+	publicKeyPEM string
+	monitor      *Monitor
+	reconciler   *Reconciler
 }
 
 // NewScheduler initializes the scheduler with an etcd client and configuration.
@@ -71,7 +75,7 @@ func NewScheduler() (*Scheduler, error) {
 	// Get domain from environment variable, with fallback
 	domain := os.Getenv("DOMAIN")
 	if domain == "" {
-		domain = "cluster.local.dev"
+		domain = "persys.local"
 	}
 
 	// Get shared secret from environment
@@ -96,82 +100,91 @@ func NewScheduler() (*Scheduler, error) {
 		return nil, fmt.Errorf("failed to connect to etcd: %v", err)
 	}
 
-	return &Scheduler{
-		etcdClient:    cli,
-		httpClient:    &http.Client{Timeout: 10 * time.Second},
-		domain:        domain,
-		privateKey:    privateKey,
-		publicKeyPEM:  publicKeyPEM,
-		sharedSecret:  sharedSecret,
-	}, nil
+	scheduler := &Scheduler{
+		etcdClient: cli,
+		httpClient: &http.Client{
+			Transport: gootelhttp.NewTransport(&http.Transport{}),
+			Timeout:   10 * time.Second,
+		},
+		domain:       domain,
+		privateKey:   privateKey,
+		publicKeyPEM: publicKeyPEM,
+		sharedSecret: sharedSecret,
+	}
+
+	// Initialize monitor and reconciler
+	scheduler.monitor = NewMonitor(scheduler)
+	scheduler.reconciler = NewReconciler(scheduler, scheduler.monitor)
+
+	return scheduler, nil
 }
 
 // loadOrGenerateKeys loads existing keys or generates new ones
 func loadOrGenerateKeys(keyDirPath string) (*rsa.PrivateKey, string, error) {
-    if err := os.MkdirAll(keyDirPath, 0700); err != nil {
-        return nil, "", fmt.Errorf("failed to create key directory %s: %w", keyDirPath, err)
-    }
+	if err := os.MkdirAll(keyDirPath, 0700); err != nil {
+		return nil, "", fmt.Errorf("failed to create key directory %s: %w", keyDirPath, err)
+	}
 
-    privateKeyPath := filepath.Join(keyDirPath, privateKeyFile)
-    publicKeyPath := filepath.Join(keyDirPath, publicKeyFile)
+	privateKeyPath := filepath.Join(keyDirPath, privateKeyFile)
+	publicKeyPath := filepath.Join(keyDirPath, publicKeyFile)
 
-    // Try to load existing private key
-    if _, err := os.Stat(privateKeyPath); err == nil {
-        privateKeyBytes, err := ioutil.ReadFile(privateKeyPath)
-        if err != nil {
-            return nil, "", fmt.Errorf("failed to read private key %s: %w", privateKeyPath, err)
-        }
-        privateBlock, _ := pem.Decode(privateKeyBytes)
-        if privateBlock == nil || privateBlock.Type != "RSA PRIVATE KEY" {
-            return nil, "", fmt.Errorf("invalid private key format in %s", privateKeyPath)
-        }
-        privateKey, err := x509.ParsePKCS1PrivateKey(privateBlock.Bytes)
-        if err != nil {
-            return nil, "", fmt.Errorf("failed to parse private key: %w", err)
-        }
+	// Try to load existing private key
+	if _, err := os.Stat(privateKeyPath); err == nil {
+		privateKeyBytes, err := ioutil.ReadFile(privateKeyPath)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to read private key %s: %w", privateKeyPath, err)
+		}
+		privateBlock, _ := pem.Decode(privateKeyBytes)
+		if privateBlock == nil || privateBlock.Type != "RSA PRIVATE KEY" {
+			return nil, "", fmt.Errorf("invalid private key format in %s", privateKeyPath)
+		}
+		privateKey, err := x509.ParsePKCS1PrivateKey(privateBlock.Bytes)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to parse private key: %w", err)
+		}
 
-        // Load public key
-        publicKeyBytes, err := ioutil.ReadFile(publicKeyPath)
-        if err != nil {
-            return nil, "", fmt.Errorf("failed to read public key %s: %w", publicKeyPath, err)
-        }
-        log.Printf("Loaded public key from %s: %s...", publicKeyPath, string(publicKeyBytes)[:50])
-        return privateKey, string(publicKeyBytes), nil
-    }
+		// Load public key
+		publicKeyBytes, err := ioutil.ReadFile(publicKeyPath)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to read public key %s: %w", publicKeyPath, err)
+		}
+		log.Printf("Loaded public key from %s: %s...", publicKeyPath, string(publicKeyBytes)[:50])
+		return privateKey, string(publicKeyBytes), nil
+	}
 
-    // Generate new key pair
-    privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-    if err != nil {
-        return nil, "", fmt.Errorf("failed to generate private key: %w", err)
-    }
+	// Generate new key pair
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to generate private key: %w", err)
+	}
 
-    // Encode private key
-    privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
-    privateBlock := &pem.Block{
-        Type:  "RSA PRIVATE KEY",
-        Bytes: privateKeyBytes,
-    }
-    privatePem := new(bytes.Buffer)
-    if err := pem.Encode(privatePem, privateBlock); err != nil {
-        return nil, "", fmt.Errorf("failed to encode private key: %w", err)
-    }
+	// Encode private key
+	privateKeyBytes := x509.MarshalPKCS1PrivateKey(privateKey)
+	privateBlock := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: privateKeyBytes,
+	}
+	privatePem := new(bytes.Buffer)
+	if err := pem.Encode(privatePem, privateBlock); err != nil {
+		return nil, "", fmt.Errorf("failed to encode private key: %w", err)
+	}
 
-    // Encode public key
-    publicKeyPEM, err := encodePublicKey(&privateKey.PublicKey)
-    if err != nil {
-        return nil, "", fmt.Errorf("failed to encode public key: %w", err)
-    }
+	// Encode public key
+	publicKeyPEM, err := encodePublicKey(&privateKey.PublicKey)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to encode public key: %w", err)
+	}
 
-    // Save keys
-    if err := ioutil.WriteFile(privateKeyPath, privatePem.Bytes(), 0600); err != nil {
-        return nil, "", fmt.Errorf("failed to write private key %s: %w", privateKeyPath, err)
-    }
-    if err := ioutil.WriteFile(publicKeyPath, []byte(publicKeyPEM), 0644); err != nil {
-        return nil, "", fmt.Errorf("failed to write public key %s: %w", publicKeyPath, err)
-    }
+	// Save keys
+	if err := ioutil.WriteFile(privateKeyPath, privatePem.Bytes(), 0600); err != nil {
+		return nil, "", fmt.Errorf("failed to write private key %s: %w", privateKeyPath, err)
+	}
+	if err := ioutil.WriteFile(publicKeyPath, []byte(publicKeyPEM), 0644); err != nil {
+		return nil, "", fmt.Errorf("failed to write public key %s: %w", publicKeyPath, err)
+	}
 
-    log.Printf("Generated and saved new key pair: private=%s, public=%s", privateKeyPath, publicKeyPath)
-    return privateKey, publicKeyPEM, nil
+	log.Printf("Generated and saved new key pair: private=%s, public=%s", privateKeyPath, publicKeyPath)
+	return privateKey, publicKeyPEM, nil
 }
 
 func encodePublicKey(pubKey *rsa.PublicKey) (string, error) {
@@ -241,17 +254,17 @@ func (s *Scheduler) RegisterNode(node models.Node) error {
 	}
 
 	// Initiate handshake in a Go routine
-    go func(node models.Node) {
-        if err := s.initiateHandshake(node); err != nil {
-            log.Printf("Failed to initiate handshake with node %s: %v", node.NodeID, err)
-            // Optionally update node status in etcd
-            node.Status = "HandshakeFailed"
-            nodeJSON, _ := json.Marshal(node)
-            s.RetryableEtcdPut("/nodes/"+node.NodeID, string(nodeJSON))
-        } else {
-            log.Printf("Handshake successful with node %s", node.NodeID)
-        }
-    }(node)
+	go func(node models.Node) {
+		if err := s.initiateHandshake(node); err != nil {
+			log.Printf("Failed to initiate handshake with node %s: %v", node.NodeID, err)
+			// Optionally update node status in etcd
+			node.Status = "HandshakeFailed"
+			nodeJSON, _ := json.Marshal(node)
+			s.RetryableEtcdPut("/nodes/"+node.NodeID, string(nodeJSON))
+		} else {
+			log.Printf("Handshake successful with node %s", node.NodeID)
+		}
+	}(node)
 
 	nodeJSON, err := json.Marshal(node)
 	if err != nil {
@@ -305,7 +318,11 @@ func (s *Scheduler) initiateHandshake(node models.Node) error {
 
 		time.Sleep(10 * time.Second)
 
-		req, err := http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
+		tr := otel.Tracer("prow-scheduler/handshake")
+		ctx, span := tr.Start(context.Background(), "initiateHandshake")
+		defer span.End()
+
+		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(payloadBytes))
 		if err != nil {
 			log.Printf("Failed to create handshake request for node %s: %v", node.NodeID, err)
 			continue
@@ -315,8 +332,7 @@ func (s *Scheduler) initiateHandshake(node models.Node) error {
 		req.Header.Set("X-Scheduler-PublicKey", s.publicKeyPEM)
 		log.Printf("Handshake public key for node %s: %s...", node.NodeID, s.publicKeyPEM[:50])
 
-		client := &http.Client{Timeout: 10 * time.Second}
-		resp, err := client.Do(req)
+		resp, err := s.httpClient.Do(req)
 		if err != nil {
 			log.Printf("Failed to send handshake request for node %s: %v", node.NodeID, err)
 		} else if resp.StatusCode != http.StatusOK {
@@ -341,84 +357,88 @@ func (s *Scheduler) initiateHandshake(node models.Node) error {
 
 // SendCommandToNode sends a signed request to the node's agent API
 func (s *Scheduler) SendCommandToNode(node models.Node, endpoint string, payload interface{}) (string, error) {
-    if node.IPAddress == "" || node.AgentPort == 0 {
-        return "", fmt.Errorf("node IPAddress and AgentPort are required")
-    }
+	// Start a span for the outgoing agent API call
+	tr := otel.Tracer("prow-scheduler/agent-api")
+	ctx, span := tr.Start(context.Background(), "SendCommandToNode")
+	defer span.End()
+	if node.IPAddress == "" || node.AgentPort == 0 {
+		return "", fmt.Errorf("node IPAddress and AgentPort are required")
+	}
 
-    url := fmt.Sprintf("http://%s:%d%s", node.IPAddress, node.AgentPort, endpoint)
-    var req *http.Request
-    var err error
-    var signatureB64 string
+	url := fmt.Sprintf("http://%s:%d%s", node.IPAddress, node.AgentPort, endpoint)
+	var req *http.Request
+	var err error
+	var signatureB64 string
 
-    if payload != nil {
-        // Handle POST request
-        payloadBytes, err := json.Marshal(payload)
-        if err != nil {
-            return "", fmt.Errorf("failed to marshal payload: %v", err)
-        }
-        log.Printf("Sending POST command to %s with payload: %s", url, string(payloadBytes))
+	if payload != nil {
+		// Handle POST request
+		payloadBytes, err := json.Marshal(payload)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal payload: %v", err)
+		}
+		log.Printf("Sending POST command to %s with payload: %s", url, string(payloadBytes))
 
-        // Sign payload
-        hash := sha256.Sum256(payloadBytes)
-        signature, err := rsa.SignPKCS1v15(rand.Reader, s.privateKey, crypto.SHA256, hash[:])
-        if err != nil {
-            return "", fmt.Errorf("failed to sign payload: %v", err)
-        }
-        signatureB64 = base64.StdEncoding.EncodeToString(signature)
-        // log.Printf("Signature for node %s: %s...", node.NodeID, signatureB64[:50])
+		// Sign payload
+		hash := sha256.Sum256(payloadBytes)
+		signature, err := rsa.SignPKCS1v15(rand.Reader, s.privateKey, crypto.SHA256, hash[:])
+		if err != nil {
+			return "", fmt.Errorf("failed to sign payload: %v", err)
+		}
+		signatureB64 = base64.StdEncoding.EncodeToString(signature)
+		// log.Printf("Signature for node %s: %s...", node.NodeID, signatureB64[:50])
 
-        // Create POST request
-        req, err = http.NewRequest("POST", url, bytes.NewBuffer(payloadBytes))
-        if err != nil {
-            return "", fmt.Errorf("failed to create POST request: %v", err)
-        }
-        req.Header.Set("Content-Type", "application/json")
-    } else {
-        // Handle GET request
-        log.Printf("Sending GET command to %s", url)
+		// Create POST request
+		req, err = http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(payloadBytes))
+		if err != nil {
+			return "", fmt.Errorf("failed to create POST request: %v", err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+	} else {
+		// Handle GET request
+		log.Printf("Sending GET command to %s", url)
 
-        // Sign an empty payload or URL for GET request
-        hash := sha256.Sum256([]byte("")) // Sign the "" for GET requests
-        signature, err := rsa.SignPKCS1v15(rand.Reader, s.privateKey, crypto.SHA256, hash[:])
-        if err != nil {
-            return "", fmt.Errorf("failed to sign URL for GET request: %v", err)
-        }
-        signatureB64 = base64.StdEncoding.EncodeToString(signature)
-        // log.Printf("Signature for node %s: %s...", node.NodeID, signatureB64[:50])
+		// Sign an empty payload or URL for GET request
+		hash := sha256.Sum256([]byte("")) // Sign the "" for GET requests
+		signature, err := rsa.SignPKCS1v15(rand.Reader, s.privateKey, crypto.SHA256, hash[:])
+		if err != nil {
+			return "", fmt.Errorf("failed to sign URL for GET request: %v", err)
+		}
+		signatureB64 = base64.StdEncoding.EncodeToString(signature)
+		// log.Printf("Signature for node %s: %s...", node.NodeID, signatureB64[:50])
 
-        // Create GET request
-        req, err = http.NewRequest("GET", url, nil)
-        if err != nil {
-            return "", fmt.Errorf("failed to create GET request: %v", err)
-        }
-    }
+		// Create GET request
+		req, err = http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return "", fmt.Errorf("failed to create GET request: %v", err)
+		}
+	}
 
-    // Set common headers
-    req.Header.Set("X-Scheduler-Signature", signatureB64)
-    req.Header.Set("X-Scheduler-PublicKey", s.publicKeyPEM)
-    log.Printf("Public key sent to node %s: %s...", node.NodeID, s.publicKeyPEM[:50])
+	// Set common headers
+	req.Header.Set("X-Scheduler-Signature", signatureB64)
+	req.Header.Set("X-Scheduler-PublicKey", s.publicKeyPEM)
+	log.Printf("Public key sent to node %s: %s...", node.NodeID, s.publicKeyPEM[:50])
 
-    // Send request
-    resp, err := s.httpClient.Do(req)
-    if err != nil {
-        return "", fmt.Errorf("failed to send request to node %s: %v", node.NodeID, err)
-    }
-    defer resp.Body.Close()
+	// Send request
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request to node %s: %v", node.NodeID, err)
+	}
+	defer resp.Body.Close()
 
-    if resp.StatusCode != http.StatusOK {
-        return "", fmt.Errorf("agent API %s for node %s returned status: %d", endpoint, node.NodeID, resp.StatusCode)
-    }
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("agent API %s for node %s returned status: %d", endpoint, node.NodeID, resp.StatusCode)
+	}
 
-    // Read the response body
-    responseBytes, err := io.ReadAll(resp.Body)
-    if err != nil {
-        return "", fmt.Errorf("failed to read response body from node %s: %v", node.NodeID, err)
-    }
+	// Read the response body
+	responseBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body from node %s: %v", node.NodeID, err)
+	}
 
-    log.Printf("Request to %s sent successfully to node %s", endpoint, node.NodeID)
-    log.Printf("Agent Response from node %s: %s", node.NodeID, string(responseBytes))
+	log.Printf("Request to %s sent successfully to node %s", endpoint, node.NodeID)
+	log.Printf("Agent Response from node %s: %s", node.NodeID, string(responseBytes))
 
-    return string(responseBytes), nil
+	return string(responseBytes), nil
 }
 
 // matchesLabels checks if workload labels are a subset of node labels
@@ -437,13 +457,14 @@ func matchesLabels(workloadLabels, nodeLabels map[string]string) bool {
 // ScheduleWorkload assigns a workload to a suitable node and sends a command via the agent API.
 func (s *Scheduler) ScheduleWorkload(workload models.Workload) (string, error) {
 	if workload.ID == "" {
-        workload.ID = uuid.New().String()
-        log.Printf("Generated workload ID: %s", workload.ID)
-    }
+		workload.ID = uuid.New().String()
+		log.Printf("Generated workload ID: %s", workload.ID)
+	}
 	log.Printf("Scheduling workload: %+v", workload)
 
 	workload.CreatedAt = time.Now()
 	workload.Status = "Pending"
+	workload.DesiredState = "Running" // Set default desired state
 
 	// Fetch nodes from etcd
 	resp, err := s.RetryableEtcdGet("/nodes/", clientv3.WithPrefix())
@@ -492,55 +513,7 @@ func (s *Scheduler) ScheduleWorkload(workload models.Workload) (string, error) {
 	workload.NodeID = selectedNode.NodeID
 	workload.Status = "Scheduled"
 
-	// Prepare agent API request
-	var endpoint string
-	var payload interface{}
-	switch workload.Type {
-	case "docker-container":
-		endpoint = "/docker/run"
-		payload = map[string]interface{}{
-			"image":         workload.Image,
-			"name":          workload.Name,
-			"command":       workload.Command,
-			"env":           workload.EnvVars,
-			"ports":         workload.Ports,
-			"volumes":       workload.Volumes,
-			"network":       workload.Network,
-			"restartPolicy": workload.RestartPolicy,
-			"detach":        true,
-		}
-	case "docker-compose":
-		if workload.LocalPath == "" {
-			return "", fmt.Errorf("LocalPath required for docker-compose type")
-		}
-		endpoint = "/compose/run"
-		payload = map[string]interface{}{
-			"composeDir":   workload.LocalPath,
-			"envVariables": workload.EnvVars,
-		}
-	case "git-compose":
-		if workload.GitRepo == "" {
-			return "", fmt.Errorf("GitRepo required for git-compose type")
-		}
-		endpoint = "/compose/clone"
-		payload = map[string]interface{}{
-			"repoUrl":      workload.GitRepo,
-			"branch":       workload.GitBranch,
-			"authToken":    workload.GitToken,
-			"envVariables": workload.EnvVars,
-		}
-	default:
-		return "", fmt.Errorf("unsupported workload type: %s", workload.Type)
-	}
-
-	if response ,err := s.SendCommandToNode(selectedNode, endpoint, payload); err != nil {
-		return "", fmt.Errorf("failed to send command to node %s: %v", selectedNode.NodeID, err)
-	} else {
-		log.Printf("Agent: %s response: %v", selectedNode.NodeID, response)
-	}
-	
-
-	// Store workload in etcd
+	// Store workload in etcd FIRST before sending command to agent
 	workloadJSON, err := json.Marshal(workload)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal workload: %v", err)
@@ -551,7 +524,69 @@ func (s *Scheduler) ScheduleWorkload(workload models.Workload) (string, error) {
 		return "", fmt.Errorf("failed to store workload %s: %v", workload.ID, err)
 	}
 
-	log.Printf("Workload %s successfully scheduled on node %s", workload.ID, selectedNode.NodeID)
+	// Prepare agent API request with workload ID for tracking
+	var endpoint string
+	var payload interface{}
+	switch workload.Type {
+	case "docker-container":
+		endpoint = "/docker/run"
+		payload = map[string]interface{}{
+			"workloadId":    workload.ID,
+			"image":         workload.Image,
+			"name":          workload.ID,   // Use workload ID as container name for consistency
+			"displayName":   workload.Name, // Keep original name for display purposes
+			"command":       workload.Command,
+			"env":           workload.EnvVars,
+			"ports":         workload.Ports,
+			"volumes":       workload.Volumes,
+			"network":       workload.Network,
+			"restartPolicy": workload.RestartPolicy,
+			"detach":        true,
+			"async":         true, // Tell agent to run asynchronously
+		}
+	case "docker-compose":
+		if workload.LocalPath == "" {
+			return "", fmt.Errorf("LocalPath required for docker-compose type")
+		}
+		endpoint = "/compose/run"
+		payload = map[string]interface{}{
+			"workloadId":   workload.ID,
+			"displayName":  workload.Name,
+			"composeDir":   workload.LocalPath,
+			"envVariables": workload.EnvVars,
+			"async":        true,
+		}
+	case "git-compose":
+		if workload.GitRepo == "" {
+			return "", fmt.Errorf("GitRepo required for git-compose type")
+		}
+		endpoint = "/compose/clone"
+		payload = map[string]interface{}{
+			"workloadId":   workload.ID,
+			"displayName":  workload.Name,
+			"repoUrl":      workload.GitRepo,
+			"branch":       workload.GitBranch,
+			"authToken":    workload.GitToken,
+			"envVariables": workload.EnvVars,
+			"async":        true,
+		}
+	default:
+		return "", fmt.Errorf("unsupported workload type: %s", workload.Type)
+	}
+
+	// Send command to agent asynchronously - don't wait for completion
+	go func() {
+		if response, err := s.SendCommandToNode(selectedNode, endpoint, payload); err != nil {
+			log.Printf("Failed to send command to node %s for workload %s: %v", selectedNode.NodeID, workload.ID, err)
+			// Update workload status to failed
+			s.UpdateWorkloadStatus(workload.ID, "Failed")
+			s.UpdateWorkloadLogs(workload.ID, fmt.Sprintf("Failed to send command to agent: %v", err))
+		} else {
+			log.Printf("Agent: %s response for workload %s: %v", selectedNode.NodeID, workload.ID, response)
+		}
+	}()
+
+	log.Printf("Workload %s successfully scheduled on node %s (async execution)", workload.ID, selectedNode.NodeID)
 	return selectedNode.NodeID, nil
 }
 
@@ -694,6 +729,36 @@ func (s *Scheduler) UpdateWorkloadStatus(workloadID, status string) error {
 	return nil
 }
 
+// UpdateWorkloadLogs updates the logs of a workload.
+func (s *Scheduler) UpdateWorkloadLogs(workloadID, logs string) error {
+	workload, err := s.GetWorkloadByID(workloadID)
+	if err != nil {
+		return err
+	}
+
+	// Append logs with timestamp
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	logEntry := fmt.Sprintf("[%s] %s\n", timestamp, logs)
+
+	if workload.Logs == "" {
+		workload.Logs = logEntry
+	} else {
+		workload.Logs += logEntry
+	}
+
+	workloadJSON, err := json.Marshal(workload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal workload %s: %v", workloadID, err)
+	}
+
+	if err := s.RetryableEtcdPut("/workloads/"+workloadID, string(workloadJSON)); err != nil {
+		return fmt.Errorf("failed to update workload %s logs: %v", workloadID, err)
+	}
+
+	log.Printf("Updated workload %s logs", workloadID)
+	return nil
+}
+
 // GetWorkloadsByNode retrieves all workloads assigned to a specific node.
 func (s *Scheduler) GetWorkloadsByNode(nodeID string) ([]models.Workload, error) {
 	workloads, err := s.GetWorkloads()
@@ -727,7 +792,7 @@ func (s *Scheduler) MonitorNodes(ctx context.Context) {
 				continue
 			}
 			for _, node := range nodes {
-				if time.Since(node.LastHeartbeat) > 10*time.Minute {
+				if time.Since(node.LastHeartbeat) > 5*time.Minute {
 					log.Printf("Node %s inactive, last heartbeat: %v", node.NodeID, node.LastHeartbeat)
 					node.Status = "Inactive"
 					nodeJSON, err := json.Marshal(node)
@@ -744,4 +809,46 @@ func (s *Scheduler) MonitorNodes(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// StartMonitoring starts both node monitoring and workload monitoring
+func (s *Scheduler) StartMonitoring(ctx context.Context) {
+	// Start node monitoring
+	go s.MonitorNodes(ctx)
+
+	// Start workload monitoring
+	if s.monitor != nil {
+		go s.monitor.MonitorWorkloads(ctx, 60*time.Second)
+	}
+}
+
+// StartReconciliation starts the reconciliation loop
+func (s *Scheduler) StartReconciliation(ctx context.Context) {
+	if s.reconciler != nil {
+		go s.reconciler.StartReconciliationLoop(ctx, 2*time.Minute)
+	}
+}
+
+// GetReconciliationStats returns reconciliation statistics
+func (s *Scheduler) GetReconciliationStats() (map[string]interface{}, error) {
+	if s.reconciler != nil {
+		return s.reconciler.GetReconciliationStats()
+	}
+	return nil, fmt.Errorf("reconciler not initialized")
+}
+
+// ReconcileAllWorkloads performs reconciliation on all workloads
+func (s *Scheduler) ReconcileAllWorkloads() ([]*ReconciliationResult, error) {
+	if s.reconciler != nil {
+		return s.reconciler.ReconcileAllWorkloads()
+	}
+	return nil, fmt.Errorf("reconciler not initialized")
+}
+
+// ReconcileWorkload performs reconciliation on a specific workload
+func (s *Scheduler) ReconcileWorkload(workload models.Workload) (*ReconciliationResult, error) {
+	if s.reconciler != nil {
+		return s.reconciler.ReconcileWorkload(workload)
+	}
+	return nil, fmt.Errorf("reconciler not initialized")
 }

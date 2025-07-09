@@ -1,219 +1,299 @@
 # Persys Cloud
 
-## introduction
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/persys-dev/persys-cloud/api-gateway)](go.mod)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/persys-dev/persys-cloud/actions)
 
-![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/arvancloud/cdn-go)
+> **Note**: This project is under active development and may have issues and limitations. We welcome contributions and feedback!
 
-Persys Cloud is an open source platform that makes it easy to build and deploy cloud native applications. Whether you're a seasoned developer or just getting started with coding, Persys Cloud provides a user-friendly interface and powerful automation capabilities to help you get up and running quickly. In this document, we'll cover the features and benefits of Persys Cloud, as well as its use cases.
+## Table of Contents
 
-> **Note**: This project is under active development and may have problems and shortcomings.
->
-<!-- TOC -->
-* [Persys Cloud](#persys-cloud)
-  * [introduction](#introduction)
-  * [Overview](#overview)
-    * [Features and Capabilities](#features-and-capabilities)
-    * [Benefits](#benefits)
-    * [Some Of Our Services](#some-of-our-services)
-    * [Use Cases](#use-cases)
-  * [Architecture](#architecture)
-  * [Local Development](#local-development)
-    * [Docker-Compose:](#docker-compose)
-    * [Kind:](#kind)
-    * [ShellScript:](#shellscript)
-  * [Getting started!](#getting-started)
-  * [Contributions](#contributions)
-  * [Open Source Tech We Use](#open-source-tech-we-use)
-  * [Project Road Map](#project-road-map)
-  * [Services Description](#services-description)
-  * [Documentation](#documentation)
-  * [Community:](#community)
-  * [Conclusion:](#conclusion)
-  * [Cloud Native Computing Foundation](#cloud-native-computing-foundation)
-<!-- TOC -->
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Core Components](#core-components)
+- [Quick Start](#quick-start)
+- [Local Development](#local-development)
+- [Services](#services)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [Community](#community)
+- [License](#license)
 
-### Overview
+## Overview
 
-#### Features and Capabilities
+Persys Cloud is an open-source platform that provides **DevOps/SRE as a Service** with automated workload orchestration across both Kubernetes clusters and Docker-based Linux nodes. It simplifies the deployment and management of containerized applications through intelligent scheduling and multi-cloud infrastructure management.
 
-* User-friendly interface for managing applications and infrastructure.
+### What is Persys Cloud?
 
-* Powerful automation capabilities for scaling applications up or down as needed.
-* Highly scalable and flexible, designed to work with a wide range of cloud providers.
-* Open source and community-driven development, allowing users to contribute new features and improvements.
-* Customizable to meet the unique needs of your organization.
-* Supports a wide range of containerized workloads, including microservices, web applications, and more.
-* Provides powerful monitoring and management capabilities, including logs, metrics, and health checks for your applications,
-* Easy to use, with step-by-step instructions for performing specific tasks and best practices for Kubernetes application deployment and management.
-* CI/CD pipeline management capabilities, allowing you to easily set up and manage your entire pipeline.
-* Integration with other cloud service providers, making it easy to build and manage complex cloud native applications that span multiple cloud environments and services.
-* Fabric Service to create a service mesh and manage multiple clusters across multiple cloud environments.
-* GPU-accelerated Kubernetes clusters for AI and MLOps workloads.
-* Automates many of the tasks typically performed by SRE engineers
-* Provides DevOps/SRE as a service
+Persys Cloud is a comprehensive platform that offers:
 
-#### Benefits
-
-* Simplifies the process of building and deploying cloud native applications.
-* Provides a powerful, flexible, and easy-to-use platform that can be customized to meet the unique needs of your organization.
-* Reduces the workload of SRE engineers by automating many of the tasks typically performed by them.
-* Streamlines operations and improves overall efficiency.
-* Open source and community-driven development ensures that the platform is constantly evolving and improving.
-
-#### Some Of Our Services
-
-1. Managed Kubernetes as a service across multiple clouds.
-2. DevOps/SRE as a Service: Persys Cloud provides DevOps/SRE as a service, including automation capabilities, powerful monitoring and management, and CI/CD pipeline management.
-3. Fabric Service: Persys Cloud uses Fabric Service to create a service mesh and manage multiple clusters across multiple cloud environments.
-4. GPU-accelerated Kubernetes Clusters: Persys Cloud will soon provide GPU-accelerated Kubernetes clusters for AI and MLOps workloads.
-5. Object Storage Integration: Persys Cloud will soon integrate with S3 buckets, Azure files, and other cloud provider object storages as a sidecar to your workloads.
-6. MongoDB, Kafka , Postgres, Signoz, Backstage, ETCD, ...etc as a service.
-
-#### Use Cases
-
-* Building and deploying cloud native applications.
-* Managing multiple clusters across multiple cloud environments.
-* Running complex machine learning and deep learning workloads.
-* Automating the job of an SRE engineer.
-* Streamlining operations and improving overall efficiency.
+- **Hybrid Workload Orchestration**: Manage workloads across Kubernetes clusters and Docker-based Linux nodes
+- **Intelligent Scheduling**: Automated workload placement and resource optimization
+- **Multi-cloud Infrastructure Management**: Unified management across AWS, Azure, GCP, and on-premises
+- **DevOps/SRE Automation**: Streamlined CI/CD pipelines and operational tasks
+- **Secure Agent Communication**: mTLS-based secure communication between components
+- **Real-time Monitoring**: Container status monitoring and health checks
 
 ## Architecture
 
-* **this is the system design that i came up with, a high level mind map to look at.**
-* feel free to open an ISSUE mentioning any problems or ideas you might have!
+### System Design
 
-  ![](docs/architecture/milx-cloud.drawio.png)
+Persys Cloud uses a distributed architecture with secure agent-based communication:
 
-* **an over simplified request flow**
+![System Architecture](docs/architecture/persys-cloud.drawio.png)
 
-  ![](docs/architecture/arch-flow.drawio.png)
+### Core Architecture Components
 
-## Local Development
+1. **API Gateway**: Main entry point for all API requests with authentication and routing
+2. **Prow Scheduler**: Intelligent workload scheduler that manages container deployment
+3. **Persys Agent**: Lightweight agent deployed on Docker-based Linux nodes for workload execution
+4. **Cloud Management**: Multi-cloud infrastructure provisioning and management
+5. **Persys CFSSL**: Certificate authority for secure mTLS communication
+6. **ETCD**: Distributed key-value store for configuration and state management
+7. **CoreDNS**: Service discovery and DNS management
 
-* First clone the repository:
+### Request Flow
 
-```shell
-git clone https://github.com/persys-dev/persys-devops
+Here's how requests flow through the system:
+
+![Request Flow](docs/architecture/arch-flow.drawio.png)
+
+> **Have suggestions or found issues?** Please [open an issue](https://github.com/persys-dev/persys-cloud/issues) with your feedback!
+
+## Core Components
+
+### Prow Scheduler
+The intelligent workload orchestrator that:
+- Manages workload scheduling across nodes
+- Handles container lifecycle management
+- Provides real-time monitoring and status updates
+- Implements secure mTLS communication with agents
+- Stores configuration and state in ETCD
+
+### Persys Agent
+Lightweight agents deployed on Docker-based Linux nodes that:
+- Execute container workloads (Docker containers, Docker Compose, Git-based deployments)
+- Report node status and resource utilization
+- Handle secure communication with the scheduler
+- Manage local container lifecycle
+- Support multiple workload types:
+  - `docker-container`: Single container deployments
+  - `docker-compose`: Multi-container applications
+  - `git-compose`: Git repository-based deployments
+
+### Cloud Management
+Multi-cloud infrastructure management service that:
+- Provisions and manages Kubernetes clusters
+- Handles cloud provider integrations (AWS, Azure, GCP)
+- Manages infrastructure as code with Terraform
+- Provides unified cloud resource management
+
+### API Gateway
+Centralized API management that:
+- Provides RESTful APIs for all platform operations
+- Handles authentication and authorization
+- Routes requests to appropriate services
+- Manages API versioning and documentation
+
+## Quick Start
+
+### Prerequisites
+
+- Docker and Docker Compose
+- Kubernetes CLI (kubectl) - for Kubernetes operations
+- Git
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/persys-dev/persys-cloud.git
+cd persys-cloud
 ```
 
-### Docker-Compose
+### 2. Choose Your Setup Method
 
-* Then using make file you can do :
+#### Option A: Docker Compose (Recommended for Development)
 
-```shell
+```bash
 make up
 ```
 
-**this initializes the project on a local docker environment using docker-compose**
+This initializes the complete platform in a local Docker environment using docker-compose.
 
-### Kind
+#### Option B: Kind (Local Kubernetes)
 
-* As an alternative way you can use make which will build and deploy the project to a kind environment:
-
-```shell
+```bash
 make kind
 ```
 
-**this will build every docker file locally tag it and generate kubernetes deployment files and deploying them.**
+This builds all Docker images locally, generates Kubernetes deployment files, and deploys to a Kind cluster.
 
-### ShellScript
+#### Option C: Shell Script
 
-* if you don't have make just run the following commands to use the initialization script.
+```bash
+chmod +x init.sh
+./init.sh
+```
 
-````shell
-chmod +x /.init.sh
-/.init.sh
-````
+### 3. Access the Platform
 
-**PLEASE MAKE SURE YOU HAVE : Docker , Kubectl , Kind to run the project in you desired environment.**
+Once deployed, you can interact with Persys Cloud using:
 
-## Getting started
+- **REST API**: Direct HTTP requests to the API Gateway
+- **CLI Client**: Command-line interface (when available)
+- **Postman**: API testing and automation
 
-**you can use pure http rest requests/ CLI client to interact with our platform.**
-<br>
-<br>
-**to keep it very simple:**
-<br>
+### 4. Deploy Your First Workload
 
-* download the CLI client or use Postman to interact with our api.
-* login using gitHub oAuth.
-* the application will read all of your repositories and list them so you can add them to your pipeline.
-* our servers will prepare a kubernetes as a service for you or connect to your cloud provider.
-* then we'll read your pipeline details from root of your repo and initialize all your required services for your app.if theres no pipeline manifest we will let you know!
-* then add personal access tokens and set webhooks for your repositories.
-* you can run a pipeline manually but when the application adds webhook to your repo you simply just need to push your code to github!
-* push your code to github!
-* monitor the building , tests , security , deployment!
-* notify the project owner and/or your team!
-  <br>
-**that's it now you have a ci/cd pipeline + production environment!**
-  <br>
-  **refer to [getting-started.md](https://github.com/miladhzzzz/persys-cicd/docs/getting-started.md) for a better understanding of how this software works!**
+1. **Register Nodes**: Add Docker-based Linux nodes to the cluster
+2. **Create Workload**: Define your container workload specification
+3. **Schedule Workload**: Submit workload to the Prow Scheduler
+4. **Monitor**: Track deployment status and container health
+5. **Scale**: Automatically scale workloads based on demand
 
-## Contributions
+## Local Development
 
-**we are looking for contributors in fields of expertise listed below:**
-<br>
+### Development Environment Setup
 
-* DevOps Engineers
-* Golang developers
-* Rust developers
-* Cloud network engineers
-* Datacenter Architectures and designers
-* Software test specialist
-* Project managers
+1. **Clone and Setup**:
+   ```bash
+   git clone https://github.com/persys-dev/persys-cloud.git
+   cd persys-cloud
+   ```
 
-**please refer to community section and consider joining us**
-[Community](#community)
+2. **Start Services**:
+   ```bash
+   # Using Docker Compose
+   make up
+   
+   # Or using Kind
+   make kind
+   ```
 
-## Open Source Tech We Use
+3. **Access Services**:
+   - API Gateway: `http://localhost:8551`
+   - Prow Scheduler: `http://localhost:8084`
+   - Cloud Management: `http://localhost:9090`
+   - ETCD: `http://localhost:2379`
+   - CoreDNS: `http://localhost:53`
 
-* [Backstage](https://github.com/backstage/backstage)
-* [apache kafka](https://github.com/obsidiandynamics/kafdrop)
-* [gRPC](https://github.com/grpc)
-* [Git]()
-* [Rust (Programming Language)]()
-* [Terraform]()
-* [Kubernetes](https://github.com/kubernetes/kubernetes)
-* [Go (Programming Language)]()
-* [OpenTelemtry](https://github.com/opentelemtry)
-* [Watermill](https://github.com/watermill)
-* [Mongodb](https://github.com/mongodb)
-* [Signoz](https://github.com/signoz)
-* [Kafdrop](https://github.com/obsidiandynamics/kafdrop)
-* [Ceph](https://github.com/ceph)
-* [Github](https://github.com)
+### Development Workflow
 
-## Services Description
+1. Make changes to the codebase
+2. Run tests: `make test`
+3. Build images: `make build`
+4. Deploy changes: `make deploy`
+5. Verify functionality
 
-**Each Service have an README.md in the root of the service refer to those for seeing what each component does and who are the owners.**
+### Agent Development
+
+To develop or test the Persys Agent:
+
+```bash
+# Build the agent
+cd prow
+make build
+
+# Run the agent locally
+make run
+
+# Test agent communication
+curl -X POST http://localhost:8084/api/v1/nodes/register \
+  -H "Content-Type: application/json" \
+  -d '{"nodeId":"test-node","ipAddress":"localhost","agentPort":8080}'
+```
+
+## Services
+
+Persys Cloud consists of several microservices, each with its own README and documentation:
+
+### Core Services
+
+- **[API Gateway](api-gateway/)**: Main entry point for all API requests with authentication
+- **[Prow Scheduler](prow/)**: Intelligent workload orchestration and scheduling
+- **[Cloud Management](cloud-mgmt/)**: Multi-cloud infrastructure management
+- **[Persys CFSSL](persys-cfssl/)**: Certificate management and PKI for mTLS
+- **[Persys Operator](persys-operator/)**: Place Holder
+- **[Persys Agent](persys-agent/)**: Place Holder
+- **[Persys CLI](persys-cli/)**: Place Holder
+
+### Infrastructure
+
+- **[Infrastructure](infra/)**: Terraform configurations, Kubernetes manifests, and deployment scripts
+- **[Documentation](docs/)**: Comprehensive documentation and guides
+
+Each service directory contains detailed README files explaining the component's purpose, architecture, and ownership.
 
 ## Documentation
 
-**the documentation will be located at <https://github.com/miladhzzzz/persys-devops/docs>**
+Comprehensive documentation is available in the [docs/](docs/) directory:
 
-* [getting-started.md](https://github.com/miladhzzzz/persys-cicd/docs/getting-started.md)
-* [how-it-works.md](https://github.com/miladhzzzz/persys-cicd/docs/how-it-works.md)
-* [install.md](https://github.com/miladhzzzz/persys-cicd/install.md)
-* [architecture.md](https://github.com/miladhzzzz/persys-cicd/architecture.md)
-* [contributions.md](https://github.com/miladhzzzz/persys-cicd/contributions.md)
+- **[Getting Started](docs/getting-started.md)**: Step-by-step guide for new users
+- **[How It Works](docs/how-it-works.md)**: Detailed explanation of system components
+- **[Installation](docs/install.md)**: Installation and deployment instructions
+- **[Architecture](docs/architecture.md)**: System architecture and design decisions
+- **[Contributing](docs/contributions.md)**: Guidelines for contributors
+
+## Contributing
+
+We welcome contributions from the community! Here's how you can help:
+
+### Ways to Contribute
+
+- 🐛 **Report Bugs**: Open an issue with detailed bug reports
+- 💡 **Feature Requests**: Suggest new features and improvements
+- 🔧 **Code Contributions**: Submit pull requests with code changes
+- 📚 **Documentation**: Help improve our documentation
+- 🧪 **Testing**: Test features and report issues
+
+### Getting Started
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes
+4. Add tests for new functionality
+5. Commit your changes: `git commit -m 'Add amazing feature'`
+6. Push to the branch: `git push origin feature/amazing-feature`
+7. Open a Pull Request
+
+### Development Guidelines
+
+- Follow Go coding standards and best practices
+- Add tests for new functionality
+- Update documentation for any changes
+- Ensure all tests pass before submitting PRs
+- Use conventional commit messages
 
 ## Community
 
-Persys Cloud is an open source and community-driven development platform, which means that users can contribute new features and improvements to the platform directly through GitHub. If you want a specific service or feature in Persys Cloud, you can open up a pull request against our repository, and we will review the PR. Alternatively, if you encounter any issues or have questions about the platform, you can open an issue, and we will respond to each one. By contributing to Persys Cloud, you can help to shape the future of the platform and ensure that it continues to meet the evolving needs of the cloud native community. We welcome all contributions and feedback from our users, and we are committed to providing a high-quality and user-friendly platform for building and deploying cloud native applications.
-<https://join.slack.com/t/persys-cicd/shared_invite/zt-1lje1wst0-E0TjKMIXGe1FGLex1uQoxg>
+Join our growing community of developers and contributors:
 
-## Conclusion
+### Communication Channels
 
-Persys Cloud is a powerful and flexible platform that simplifies the process of building and deploying cloud native applications. Its user-friendly interface, automation capabilities, and highly scalable and flexible design make it a popular choice for organizations of all sizes. With its open source and community-driven development, Persys Cloud is constantly evolving and improving, ensuring that it remains a cutting-edge solution for cloud native development.
+- **Slack**: [Join our Slack workspace](https://join.slack.com/t/persys-cicd/shared_invite/zt-1lje1wst0-E0TjKMIXGe1FGLex1uQoxg)
+- **GitHub Issues**: [Report bugs and request features](https://github.com/persys-dev/persys-cloud/issues)
+- **GitHub Discussions**: [Join discussions](https://github.com/persys-dev/persys-cloud/discussions)
 
-## Cloud Native Computing Foundation
+### Community Guidelines
 
-<br>
-this project is currently in the sandbox waiting list of Cloud Native Computing Foundation, and as we mentioned above we are using and supporting a lot of CNCF technologies
-<br>
-so, thank you
+- Be respectful and inclusive
+- Help others learn and grow
+- Share knowledge and best practices
+- Provide constructive feedback
+- Follow the [Code of Conduct](CODE_OF_CONDUCT.md)
 
-[CNCF](https://github.com/miladhzzzz/persys-cicd) <3
+## License
 
-![](docs/architecture/cncf-ambassador.png)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Built with love by the Persys Cloud community
+- Powered by open-source technologies including Docker, Kubernetes, ETCD, and CoreDNS
+- Inspired by the Cloud Native Computing Foundation (CNCF) ecosystem
+
+---
+
+**Persys Cloud** - Simplifying DevOps/SRE with intelligent workload orchestration.
+
+For more information, visit [https://github.com/persys-dev/persys-cloud](https://github.com/persys-dev/persys-cloud)

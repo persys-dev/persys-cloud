@@ -1,0 +1,13 @@
+{
+    "CN": "Persys Cloud CA",
+    "key": {
+        "algo": "rsa",
+        "size": 2048
+    },
+    "names": [
+        {
+            "O": "Persys Cloud",
+            "C": "US"
+        }
+    ]
+}

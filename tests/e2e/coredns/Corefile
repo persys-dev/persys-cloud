@@ -1,0 +1,14 @@
+.:53 {
+    errors
+    health
+    reload
+    prometheus 0.0.0.0:9153
+    etcd persys.local {
+        path /skydns
+        endpoint http://etcd:2379
+    }
+    forward . /etc/resolv.conf
+    cache 30
+    loop
+    loadbalance
+}

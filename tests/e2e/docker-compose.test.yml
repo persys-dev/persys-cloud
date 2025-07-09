@@ -1,0 +1,135 @@
+services:
+  # --- etcd (Key-value store for Prow and CoreDNS) ---
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.0
+    command: ["etcd", "--advertise-client-urls=http://0.0.0.0:2379", "--listen-client-urls=http://0.0.0.0:2379"]
+    ports:
+      - "2379:2379"
+    networks:
+      - persys-cloud-test
+
+  # --- CoreDNS (Service discovery) ---
+  coredns:
+    image: coredns/coredns:1.11.1
+    command: ["-conf", "/etc/coredns/Corefile"]
+    ports:
+      - "53:53/udp"
+    networks:
+      - persys-cloud-test
+    volumes:
+      - ./coredns:/etc/coredns
+    depends_on:
+      - etcd
+
+  # --- Certificate Authority (CFSSL) ---
+  persys-cfssl:
+    build: ../../persys-cfssl
+    volumes:
+      - certs:/app/certs
+    ports:
+      - 8888:8888
+    networks:
+      - persys-cloud-test
+
+  # --- MongoDB (Database for API Gateway) ---
+  mongodb:
+    image: mongo:latest
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+      MONGODB_DATABASE: api-gateway
+    ports:
+      - 27017:27017
+    networks:
+      - persys-cloud-test
+    volumes:
+      - mongodb_data_container:/data/db
+
+  # --- API Gateway ---
+  api-gateway:
+    build:
+      context: ../../api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8551:8551"
+      # - "8085:8085"
+    environment:
+      - COREDNS_ADDR=coredns:53
+      - ETCD_ENDPOINTS=etcd:2379
+      - MONGODB_URI=mongodb://admin:admin@mongodb:27017/api-gateway?authSource=admin
+      - CFSSL_API_URL=https://persys-cfssl:8888
+      - CA_FILE=/etc/api-gateway/certs/ca.pem
+    volumes:
+      - certs:/etc/api-gateway/certs
+    networks:
+      - persys-cloud-test
+    depends_on:
+      - coredns
+      - etcd
+      - mongodb
+      - persys-cfssl
+
+  # --- Prow Scheduler ---
+  persys-prow:
+    build:
+      context: ../../prow
+      dockerfile: Dockerfile
+    ports:
+      - "8084:8084"
+      - "8085:8085"
+    networks:
+      - persys-cloud-test
+    environment:
+      - ETCD_ENDPOINTS=etcd:2379
+      - DOMAIN=persys.local
+      - CFSSL_API_URL=https://persys-cfssl:8888
+      - CA_FILE=/etc/prow/certs/ca.pem
+    volumes:
+      - certs:/etc/prow/certs
+    depends_on:
+      - etcd
+      - persys-cfssl
+
+  # --- Persys Agent ---
+  persys-agent:
+    build:
+      context: ../../persys-agent
+      dockerfile: Dockerfile.ubuntu
+    ports:
+      - "8080:8080"
+    networks:
+      - persys-cloud-test
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - certs:/etc/persys-agent/certs
+    environment:
+      - CENTRAL_URL=http://persys-prow:8084
+    depends_on:
+      - persys-prow
+
+  # --- Test Client ---
+  test-client:
+    build:
+      context: .
+      dockerfile: Dockerfile.test-client
+    environment:
+      - API_GATEWAY_URL=http://api-gateway:8085
+      - PROW_SCHEDULER_URL=http://persys-prow:8084
+      - PERSYS_AGENT_URL=http://persys-agent:8080
+    networks:
+      - persys-cloud-test
+    volumes:
+      - certs:/etc/test-client/certs
+    depends_on:
+      - api-gateway
+      - persys-prow
+      - persys-agent
+    command: ["./test-runner"]
+
+
+volumes:
+  certs:
+  mongodb_data_container:
+
+networks:
+  persys-cloud-test:

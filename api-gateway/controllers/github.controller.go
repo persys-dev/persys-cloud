@@ -3,22 +3,16 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"log"
+
 	"github.com/gin-gonic/gin"
 	webhook "github.com/go-playground/webhooks/v6/github"
 	"github.com/google/go-github/github"
-	trig "github.com/persys-dev/persys-cloud/api-gateway/internal/trigger-grpc"
-	"github.com/persys-dev/persys-cloud/api-gateway/models"
+	"github.com/persys-dev/persys-cloud/api-gateway/config"
 	"github.com/persys-dev/persys-cloud/api-gateway/services"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/oauth2"
-	"log"
-	"time"
-)
-
-var (
-	webhookURL    = cnf.WebHookURL
-	webhookSecret = cnf.WebHookSecret
 )
 
 type GithubController struct {
@@ -27,33 +21,38 @@ type GithubController struct {
 	//userService services.UserService
 	ctx        context.Context
 	collection *mongo.Collection
+	config     *config.Config
 }
 
-func NewGithubController(authService services.AuthService, ctx context.Context, githubService services.GithubService, collection *mongo.Collection) GithubController {
-	return GithubController{authService: authService, githubService: githubService, ctx: ctx, collection: collection}
+func NewGithubController(authService services.AuthService, ctx context.Context, githubService services.GithubService, collection *mongo.Collection, cfg *config.Config) GithubController {
+	return GithubController{
+		authService:   authService,
+		githubService: githubService,
+		ctx:           ctx,
+		collection:    collection,
+		config:        cfg,
+	}
 }
-
-// TODO: we need to implement all of these func's
 
 func (gc *GithubController) WebhookHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		log.Println("Received webhook...")
 
-		hook, err := webhook.New(webhook.Options.Secret(webhookSecret))
+		hook, err := webhook.New(webhook.Options.Secret(gc.config.GitHub.WebHookSecret))
 		if err != nil {
+			c.AbortWithError(500, err)
 			return
 		}
+
 		payload, e := hook.Parse(c.Request, webhook.PushEvent)
 		if e != nil {
 			log.Println("Error parsing", e)
+			c.AbortWithError(400, e)
+			return
 		}
 
-		switch payload.(type) {
-
+		switch event := payload.(type) {
 		case webhook.PushPayload:
-
-			event := payload.(webhook.PushPayload)
 			owner := event.Repository.Owner.Login
 			eventID := "int64(idGen())"
 
@@ -65,24 +64,20 @@ func (gc *GithubController) WebhookHandler() gin.HandlerFunc {
 				"webhook": event,
 			}
 
-			// TRIGGERING GRPC
-			client := trig.EventsManagerClient{}
-
-			client.SendRepoData(&models.Repos{
-				RepoID:      0,
-				GitURL:      event.Repository.GitURL,
-				Name:        event.Repository.Name,
-				Owner:       event.Repository.Owner.Login,
-				UserID:      0,
-				Private:     event.Repository.Private,
-				AccessToken: "",
-				WebhookURL:  "",
-				EventID:     0,
-				CreatedAt:   time.Now().String(),
-			})
+			// &models.Repos{
+			// 	RepoID:      0,
+			// 	GitURL:      event.Repository.GitURL,
+			// 	Name:        event.Repository.Name,
+			// 	Owner:       event.Repository.Owner.Login,
+			// 	UserID:      0,
+			// 	Private:     event.Repository.Private,
+			// 	AccessToken: "",
+			// 	WebhookURL:  "",
+			// 	EventID:     0,
+			// 	CreatedAt:   time.Now().String(),
+			// }
 
 			fmt.Println(events)
-
 		}
 		c.Status(200)
 	}
@@ -95,11 +90,8 @@ func (gc *GithubController) SetAccessToken() gin.HandlerFunc {
 }
 
 func (gc *GithubController) SetWebhook() gin.HandlerFunc {
-
 	return func(c *gin.Context) {
-
 		repoName := c.Param("repoName")
-
 		user, _ := gc.authService.ReadUserData(c)
 
 		name := "web"
@@ -111,7 +103,12 @@ func (gc *GithubController) SetWebhook() gin.HandlerFunc {
 			Name:   &name,
 			Events: []string{"push"},
 			Active: &active,
-			Config: map[string]interface{}{"url": webhookURL, "content-type": "json", "insecure-ssl": "0", "secret": webhookSecret},
+			Config: map[string]interface{}{
+				"url":          gc.config.GitHub.WebHookURL,
+				"content-type": "json",
+				"insecure-ssl": "0",
+				"secret":       gc.config.GitHub.WebHookSecret,
+			},
 		})
 		if err != nil {
 			fmt.Println(err)
@@ -121,23 +118,22 @@ func (gc *GithubController) SetWebhook() gin.HandlerFunc {
 
 		gc.collection.FindOneAndUpdate(gc.ctx, bson.M{"name": repoName},
 			bson.M{"$set": bson.M{
-				"webhookURL": webhookURL,
+				"webhookURL": gc.config.GitHub.WebHookURL,
 			}})
 
 		c.JSON(200, "your repository webhook was set")
-
 	}
 }
 
 func (gc *GithubController) ListRepos() gin.HandlerFunc {
 	return func(c *gin.Context) {
-
 		data := c.Copy()
 		//fmt.Println(data.Request.Header)
 		user, errp := gc.authService.ReadUserData(data)
 
 		if errp != nil {
-			panic(errp)
+			c.AbortWithError(500, errp)
+			return
 		}
 
 		fmt.Println(user.Name)

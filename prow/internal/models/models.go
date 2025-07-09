@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"go.etcd.io/etcd/client/v3"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 // Hypervisor represents virtualization technology details
@@ -49,42 +49,45 @@ type Node struct {
 	Status          string            `json:"status" binding:"required"`
 	Timestamp       string            `json:"timestamp" binding:"required"`
 	Resources       Resources         `json:"resources"`
-	TotalCPU         float64           `json:"totalCpu"`
-    TotalMemory      int64             `json:"totalMemory"`
-    AvailableCPU     float64           `json:"availableCpu"`
-    AvailableMemory  int64             `json:"availableMemory"`
+	TotalCPU        float64           `json:"totalCpu"`
+	TotalMemory     int64             `json:"totalMemory"`
+	AvailableCPU    float64           `json:"availableCpu"`
+	AvailableMemory int64             `json:"availableMemory"`
 	Hypervisor      Hypervisor        `json:"hypervisor" binding:"required"`
 	ContainerEngine ContainerEngine   `json:"containerEngine" binding:"required"`
 	DockerSwarm     DockerSwarm       `json:"dockerSwarm"`
 	LastHeartbeat   time.Time         `json:"lastHeartbeat"`
 	Labels          map[string]string `json:"labels,omitempty"`
-	AgentPort       int               `json:"agentPort"` // Added for agent communication
+	AgentPort       int               `json:"agentPort"`            // Added for agent communication
 	DomainName      string            `json:"domainName,omitempty"` // Added field
-	AuthConfig      AuthConfig        `json:"authConfig"` // Authentication configuration
+	AuthConfig      AuthConfig        `json:"authConfig"`           // Authentication configuration
 }
 
 // Workload represents a scheduled task
 type Workload struct {
-    ID          string            `json:"id,omitempty"`
-    Name        string            `json:"name" binding:"required"`
-    Type        string            `json:"type" binding:"required"` // "docker-container", "docker-compose", "git-compose"
-    Image       string            `json:"image" binding:"required"`         // For docker-container
-    Command     string            `json:"command,omitempty"`       // For docker-container
-    Compose     string            `json:"compose,omitempty"`       // Base64-encoded Compose content (optional)
-    GitRepo     string            `json:"gitRepo,omitempty"`       // Git URL for git-compose
-    GitBranch   string            `json:"gitBranch,omitempty"`     // Git branch for git-compose
-    GitToken    string            `json:"gitToken,omitempty"`      // Optional Git auth token
-    EnvVars     map[string]string `json:"envVars,omitempty"`       // Environment variables
-    Resources   Resources         `json:"resources"`
-    NodeID      string            `json:"nodeId,omitempty"`
-    Status      string            `json:"status"`
-    Labels      map[string]string `json:"labels,omitempty"`
-    CreatedAt   time.Time         `json:"createdAt"`
-    LocalPath   string            `json:"localPath,omitempty"`     // Local path for docker-compose
-	Ports         []string        `json:"ports,omitempty"`    // e.g., ["8080:80"]
-    Volumes       []string        `json:"volumes,omitempty"`  // e.g., ["/host:/container"]
-    Network       string          `json:"network,omitempty"`  // e.g., "bridge"
-    RestartPolicy string          `json:"restartPolicy,omitempty"` // e.g., "always"
+	ID            string                 `json:"id,omitempty"`
+	Name          string                 `json:"name" binding:"required"`
+	Type          string                 `json:"type" binding:"required"`  // "docker-container", "docker-compose", "git-compose"
+	Image         string                 `json:"image" binding:"required"` // For docker-container
+	Command       string                 `json:"command,omitempty"`        // For docker-container
+	Compose       string                 `json:"compose,omitempty"`        // Base64-encoded Compose content (optional)
+	GitRepo       string                 `json:"gitRepo,omitempty"`        // Git URL for git-compose
+	GitBranch     string                 `json:"gitBranch,omitempty"`      // Git branch for git-compose
+	GitToken      string                 `json:"gitToken,omitempty"`       // Optional Git auth token
+	EnvVars       map[string]string      `json:"envVars,omitempty"`        // Environment variables
+	Resources     Resources              `json:"resources"`
+	NodeID        string                 `json:"nodeId,omitempty"`
+	Status        string                 `json:"status"`
+	DesiredState  string                 `json:"desiredState,omitempty"` // Desired state for reconciliation
+	Labels        map[string]string      `json:"labels,omitempty"`
+	CreatedAt     time.Time              `json:"createdAt"`
+	LocalPath     string                 `json:"localPath,omitempty"`     // Local path for docker-compose
+	Ports         []string               `json:"ports,omitempty"`         // e.g., ["8080:80"]
+	Volumes       []string               `json:"volumes,omitempty"`       // e.g., ["/host:/container"]
+	Network       string                 `json:"network,omitempty"`       // e.g., "bridge"
+	RestartPolicy string                 `json:"restartPolicy,omitempty"` // e.g., "always"
+	Logs          string                 `json:"logs,omitempty"`          // Execution logs and output
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`      // Reconciliation metadata
 }
 
 // AgentCommand represents a command payload for the agent API

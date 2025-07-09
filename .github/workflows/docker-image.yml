@@ -2,16 +2,15 @@ name: docker image CI
 
 on:
   push:
+    branches:
+      - main
     paths-ignore:
-      - 'persys-cloud/vendor/**/*'
-      - 'persys-cloud/staging/**/*'
-      - 'persys-cloud/IaC/**/*'
-      - 'persys-cloud/hack/**/*'
-      - 'persys-cloud/docs/**/*'
-      - 'persys-cloud/clinets/**/*'
-      - 'persys-cloud/build/**/*'
-      - 'persys-cloud/*'
-      - '**.md'
+      - 'infra/**/*'
+      - 'hack/**/*'
+      - 'docs/**/*'
+      - 'clients/**/*'
+      - 'build/**/*'
+      - '*.md'
 
 jobs:
   build-and-deploy:
@@ -20,20 +19,43 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # Fetch all history for proper change detection
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
 
     - name: Build and Deploy
       run: |
-        # Determine the changed directory
-        CHANGED_DIR=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^persys-cloud/' | sed -E 's|^persys-cloud/([^/]+).*|\1|' | uniq)
+        # Get the list of changed files
+        CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
+        
+        # Function to build Docker image
+        build_image() {
+          local service=$1
+          local dir=$2
+          echo "Building $service..."
+          cd $dir
+          docker build -t $service:$(date +%s) .
+          cd ../..
+        }
 
-        case $CHANGED_DIR in
-          "api-gateway")
-            cd persys-cloud/api-gateway
-            docker build . --file api-gateway/Dockerfile --tag api-gateway:$(date +%s)
-            ;;
-          "audit-service")
-            cd persys-cloud/audit-service
-            docker build . --file audit-service/Dockerfile --tag audit-service:$(date +%s)
-            ;;
-          # Add similar blocks for other services...
-        esac
+        # Check each service directory for changes
+        if echo "$CHANGED_FILES" | grep -q "^api-gateway/"; then
+          build_image "api-gateway" "api-gateway"
+        fi
+
+        if echo "$CHANGED_FILES" | grep -q "^prow/"; then
+          build_image "prow" "prow"
+        fi
+
+        if echo "$CHANGED_FILES" | grep -q "^cloud-mgmt/"; then
+          build_image "cloud-mgmt" "cloud-mgmt"
+        fi
+
+        if echo "$CHANGED_FILES" | grep -q "^persys-cfssl/"; then
+          build_image "persys-cfssl" "persys-cfssl"
+        fi
+
+    - name: List built images
+      run: docker images

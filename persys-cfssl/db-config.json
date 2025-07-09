@@ -1,0 +1,4 @@
+{
+    "driver": "postgres",
+    "data_source": "postgres://cfssl:cfssl@postgres:5432/cfssl?sslmode=disable"
+} 

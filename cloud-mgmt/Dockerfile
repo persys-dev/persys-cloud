@@ -1,5 +1,4 @@
-FROM golang:1.19-alpine as build
-RUN apk add build-base
+FROM golang:1.24-alpine AS build
 
 WORKDIR /app
 
@@ -9,7 +8,7 @@ RUN go mod download
 
 RUN cd cmd && go build -o main
 
-FROM alpine:latest as server
+FROM alpine:latest AS server
 
 WORKDIR /app
 

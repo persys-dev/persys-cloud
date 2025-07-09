@@ -1,0 +1,20 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'api-gateway'
+    static_configs:
+      - targets: ['api-gateway:8085']
+
+  - job_name: 'prow-scheduler'
+    static_configs:
+      - targets: ['persys-prow:8084']
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node_exporter:9100'] 
+
+  - job_name: 'coredns'
+    static_configs:
+      - targets: ['coredns:9153'] 

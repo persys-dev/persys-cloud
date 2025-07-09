@@ -1,17 +1,17 @@
-FROM golang:1.19-alpine as build
-RUN apk add build-base
+FROM golang:1.24-alpine AS build
 
 WORKDIR /app
 
-COPY /api-gateway .
-
-# RUN ls -la
-
+# Copy go.mod and go.sum to download dependencies
+COPY go.mod go.sum ./
 RUN go mod download
+
+# Copy the rest of the application code
+COPY . .
 
 RUN cd cmd && go build -o main
 
-FROM alpine:latest as server
+FROM alpine:latest AS server
 
 WORKDIR /app
 

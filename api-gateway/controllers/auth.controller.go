@@ -3,6 +3,9 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
+
 	jwtlib "github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
 	"github.com/gin-gonic/gin"
@@ -14,8 +17,6 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/oauth2"
 	oauth2gh "golang.org/x/oauth2/github"
-	"net/http"
-	"time"
 )
 
 var (
@@ -24,7 +25,7 @@ var (
 	users                 *models.UserInput
 	repos                 *models.Repos
 	mySuperSecretPassword = "unicornsAreAwesome"
-	cnf, _                = config.ReadConfig()
+	cnf, _                = config.LoadConfig()
 )
 
 type Credentials struct {
@@ -95,7 +96,7 @@ func (ac *AuthController) Auth() gin.HandlerFunc {
 				ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("Failed to get user: %v", err))
 				return
 			}
-			persysToken, err := utils.GenerateToken(user)
+			persysToken, _ := utils.GenerateToken(user)
 
 			data := models.UserInput{
 				Login:       stringFromPointer(user.Login),
@@ -132,8 +133,8 @@ func (ac *AuthController) LoginHandler() gin.HandlerFunc {
 func (ac *AuthController) Setup(redirectURL string, scopes []string) {
 	// IMPORTANT SECURITY ISSUE
 	c := Credentials{
-		ClientID:     cnf.ClientID,
-		ClientSecret: cnf.ClientSecret,
+		ClientID:     cnf.GitHub.Auth.ClientID,
+		ClientSecret: cnf.GitHub.Auth.ClientSecret,
 	}
 
 	conf = &oauth2.Config{

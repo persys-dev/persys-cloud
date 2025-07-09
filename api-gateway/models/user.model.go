@@ -1,8 +1,9 @@
 package models
 
 import (
+		"time"
+
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"time"
 )
 
 type CliReq struct {
@@ -11,7 +12,7 @@ type CliReq struct {
 
 type UserInput struct {
 	Login       string `json:"login" bson:"login"`
-	Name        string `json:"name" bson:"name""`
+	Name        string `json:"name" bson:"name"`
 	Email       string `json:"email" bson:"email"`
 	Company     string `json:"company" bson:"company"`
 	URL         string `json:"url" bson:"URL"`
@@ -26,7 +27,7 @@ type UserInput struct {
 
 type DBResponse struct {
 	Login       string `json:"login" bson:"login"`
-	Name        string `json:"name" bson:"name""`
+	Name        string `json:"name" bson:"name"`
 	Email       string `json:"email" bson:"email"`
 	Company     string `json:"company" bson:"company"`
 	URL         string `json:"url" bson:"URL"`
@@ -47,14 +48,3 @@ type UserResponse struct {
 	CreatedAt time.Time          `json:"created_at" bson:"created_at"`
 	UpdatedAt time.Time          `json:"updated_at" bson:"updated_at"`
 }
-
-//func FilteredResponse(user *DBResponse) UserResponse {
-//	return UserResponse{
-//		ID:        user.ID,
-//		Email:     user.Email,
-//		Name:      user.Name,
-//		Role:      user.Role,
-//		CreatedAt: user.CreatedAt,
-//		UpdatedAt: user.UpdatedAt,
-//	}
-//}

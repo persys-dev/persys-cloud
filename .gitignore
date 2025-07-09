@@ -1,10 +1,11 @@
 .idea
 *.log
+*.toml
 __pycache__
 .old/azure-pipeline/azure-pipelines.yml
-.old
-/clients/cli/target/
-notes.md
+.old/**
 *.bak
 terraform.tfvars
 **/bin/
+api-gateway/config.toml
+prow/internal/scheduler/reconcile.txt
