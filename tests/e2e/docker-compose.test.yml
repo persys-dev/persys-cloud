@@ -1,15 +1,12 @@
-version: '3.8'
-
 services:
-  # Test infrastructure
+  # --- etcd (Key-value store for Prow and CoreDNS) ---
   etcd:
     image: quay.io/coreos/etcd:v3.5.0
     command: ["etcd", "--advertise-client-urls=http://0.0.0.0:2379", "--listen-client-urls=http://0.0.0.0:2379"]
     ports:
       - "2379:2379"
-    environment:
-      - ETCDCTL_API=3
 
+  # --- CoreDNS (Service discovery) ---
   coredns:
     image: coredns/coredns:1.11.1
     command: ["-conf", "/etc/coredns/Corefile"]
@@ -20,7 +17,27 @@ services:
     depends_on:
       - etcd
 
-  # Persys Cloud components
+  # --- Certificate Authority (CFSSL) ---
+  persys-cfssl:
+    build: ../../persys-cfssl
+    volumes:
+      - certs:/app/certs
+    ports:
+      - 8888:8888
+
+  # --- MongoDB (Database for API Gateway) ---
+  mongodb:
+    image: mongo:latest
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+      MONGODB_DATABASE: api-gateway
+    ports:
+      - 27017:27017
+    volumes:
+      - mongodb_data_container:/data/db
+
+  # --- API Gateway ---
   api-gateway:
     build:
       context: ../../api-gateway
@@ -31,13 +48,18 @@ services:
     environment:
       - COREDNS_ADDR=coredns:53
       - ETCD_ENDPOINTS=etcd:2379
+      - MONGODB_URI=mongodb://admin:admin@mongodb:27017/api-gateway?authSource=admin
+      - CFSSL_API_URL=https://persys-cfssl:8888
+      - CA_FILE=/etc/api-gateway/certs/ca.pem
     volumes:
-      - ./test-configs/api-gateway:/etc/api-gateway/certs
+      - certs:/etc/api-gateway/certs
     depends_on:
       - coredns
       - etcd
-    command: ["./bin/api-gateway"]
+      - mongodb
+      - persys-cfssl
 
+  # --- Prow Scheduler ---
   prow-scheduler:
     build:
       context: ../../prow
@@ -46,30 +68,30 @@ services:
       - "8085:8085"
     environment:
       - ETCD_ENDPOINTS=etcd:2379
-      - DOMAIN=test.local
-      - AGENT_SECRET=test-secret
+      - DOMAIN=persys.local
+      - CFSSL_API_URL=https://persys-cfssl:8888
+      - CA_FILE=/etc/prow/certs/ca.pem
     volumes:
-      - ./test-configs/prow:/etc/prow/certs
+      - certs:/etc/prow/certs
     depends_on:
       - etcd
-    command: ["./bin/prow-scheduler"]
+      - persys-cfssl
 
+  # --- Persys Agent ---
   persys-agent:
     build:
       context: ../../persys-agent
       dockerfile: Dockerfile.ubuntu
     ports:
       - "8080:8080"
-    environment:
-      - AGENT_SECRET=test-secret
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./test-configs/persys-agent:/etc/persys-agent/certs
+      - certs:/etc/persys-agent/certs
     depends_on:
       - prow-scheduler
     command: ["./persys-agent"]
 
-  # Test client
+  # --- Test Client ---
   test-client:
     build:
       context: .
@@ -79,30 +101,17 @@ services:
       - PROW_SCHEDULER_URL=https://prow-scheduler:8085
       - PERSYS_AGENT_URL=http://persys-agent:8080
     volumes:
-      - ./test-configs/test-client:/etc/test-client/certs
+      - certs:/etc/test-client/certs
     depends_on:
       - api-gateway
       - prow-scheduler
       - persys-agent
     command: ["./test-runner"]
 
-  # Monitoring and observability
-  prometheus:
-    image: prom/prometheus:v2.45.0
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./test-configs/prometheus:/etc/prometheus
-    command: ["--config.file=/etc/prometheus/prometheus.yml"]
 
-  grafana:
-    image: grafana/grafana:10.0.0
-    ports:
-      - "3000:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-    volumes:
-      - ./test-configs/grafana:/etc/grafana/provisioning
+volumes:
+  certs:
+  mongodb_data_container:
 
 networks:
   default:
