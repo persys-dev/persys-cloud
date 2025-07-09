@@ -19,8 +19,8 @@ test: test-script
 # Run tests using Docker Compose
 test-docker:
 	@echo "🐳 Running E2E tests with Docker Compose..."
-	docker-compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from test-client
-	docker-compose -f docker-compose.test.yml down
+	docker compose -f docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from test-client
+	docker compose -f docker-compose.test.yml down
 
 # Run tests using bash script
 test-script:
@@ -40,7 +40,7 @@ test-go:
 # Clean up test environment
 clean:
 	@echo "🧹 Cleaning up test environment..."
-	docker-compose -f docker-compose.test.yml down -v 2>/dev/null || true
+	docker compose -f docker-compose.test.yml down -v 2>/dev/null || true
 	rm -rf test-configs
 	rm -f test-runner
 	docker ps -a --filter "name=persys-cloud-test" --format "{{.ID}}" | xargs -r docker rm -f
