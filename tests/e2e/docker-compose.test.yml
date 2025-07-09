@@ -90,7 +90,7 @@ services:
     environment:
       - CENTRAL_URL="http://persys-prow:8084"
     depends_on:
-      - prow-scheduler
+      - persys-prow
 
   # --- Test Client ---
   test-client:
@@ -105,7 +105,7 @@ services:
       - certs:/etc/test-client/certs
     depends_on:
       - api-gateway
-      - prow-scheduler
+      - persys-prow
       - persys-agent
     command: ["./test-runner"]
 
