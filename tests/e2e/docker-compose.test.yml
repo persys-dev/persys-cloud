@@ -5,6 +5,8 @@ services:
     command: ["etcd", "--advertise-client-urls=http://0.0.0.0:2379", "--listen-client-urls=http://0.0.0.0:2379"]
     ports:
       - "2379:2379"
+    networks:
+      - persys-cloud-test
 
   # --- CoreDNS (Service discovery) ---
   coredns:
@@ -12,6 +14,8 @@ services:
     command: ["-conf", "/etc/coredns/Corefile"]
     ports:
       - "53:53/udp"
+    networks:
+      - persys-cloud-test
     volumes:
       - ./coredns:/etc/coredns
     depends_on:
@@ -24,6 +28,8 @@ services:
       - certs:/app/certs
     ports:
       - 8888:8888
+    networks:
+      - persys-cloud-test
 
   # --- MongoDB (Database for API Gateway) ---
   mongodb:
@@ -34,6 +40,8 @@ services:
       MONGODB_DATABASE: api-gateway
     ports:
       - 27017:27017
+    networks:
+      - persys-cloud-test
     volumes:
       - mongodb_data_container:/data/db
 
@@ -53,6 +61,8 @@ services:
       - CA_FILE=/etc/api-gateway/certs/ca.pem
     volumes:
       - certs:/etc/api-gateway/certs
+    networks:
+      - persys-cloud-test
     depends_on:
       - coredns
       - etcd
@@ -67,6 +77,8 @@ services:
     ports:
       - "8084:8084"
       - "8085:8085"
+    networks:
+      - persys-cloud-test
     environment:
       - ETCD_ENDPOINTS=etcd:2379
       - DOMAIN=persys.local
@@ -85,6 +97,8 @@ services:
       dockerfile: Dockerfile.ubuntu
     ports:
       - "8080:8080"
+    networks:
+      - persys-cloud-test
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - certs:/etc/persys-agent/certs
@@ -102,6 +116,8 @@ services:
       - API_GATEWAY_URL=https://api-gateway:8551
       - PROW_SCHEDULER_URL=https://prow-scheduler:8085
       - PERSYS_AGENT_URL=http://persys-agent:8080
+    networks:
+      - persys-cloud-test
     volumes:
       - certs:/etc/test-client/certs
     depends_on:
