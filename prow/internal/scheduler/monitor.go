@@ -17,10 +17,18 @@ type Monitor struct {
 }
 
 // ContainerInfo represents a container's info from /docker/list
+// Add Reason field for detailed status
 type ContainerInfo struct {
 	ID     string `json:"id"`
 	Name   string `json:"names"`
 	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// ContainerLogs represents container logs from /docker/logs
+type ContainerLogs struct {
+	ContainerID string `json:"containerId"`
+	Logs        string `json:"logs"`
 }
 
 // dockerListResponse matches the /docker/list JSON structure
@@ -52,10 +60,35 @@ func (m *Monitor) getContainerList(node models.Node) ([]ContainerInfo, error) {
 	return dockerResp.Result, nil
 }
 
+// getContainerLogs queries the node's /docker/logs endpoint for a specific container
+func (m *Monitor) getContainerLogs(node models.Node, containerID string) (string, error) {
+	endpoint := fmt.Sprintf("/docker/logs/%s", containerID)
+	response, err := m.scheduler.SendCommandToNode(node, endpoint, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to query %s on node %s: %v", endpoint, node.NodeID, err)
+	}
+
+	// Parse the response to extract logs
+	var logsResp struct {
+		Result string `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(response), &logsResp); err != nil {
+		return "", fmt.Errorf("failed to decode logs response from node %s: %v", node.NodeID, err)
+	}
+
+	return logsResp.Result, nil
+}
+
 // mapContainerStatus maps Docker container status to workload status
 func mapContainerStatus(dockerStatus string) string {
 	dockerStatus = strings.ToLower(dockerStatus)
 	switch {
+	case strings.Contains(dockerStatus, "pulling"):
+		return "Pulling"
+	case strings.Contains(dockerStatus, "imagepullbackoff"):
+		return "ImagePullBackOff"
+	case strings.Contains(dockerStatus, "containercreating"):
+		return "ContainerCreating"
 	case strings.Contains(dockerStatus, "up"):
 		return "Running"
 	case strings.Contains(dockerStatus, "exited"):
@@ -113,27 +146,51 @@ func (m *Monitor) MonitorWorkloads(ctx context.Context, interval time.Duration) 
 					containerMap[container.Name] = container
 				}
 
-				// Update workload statuses
+				// Update workload statuses and capture logs
 				for _, workload := range workloads {
-					container, exists := containerMap[workload.Name]
+					container, exists := containerMap[workload.ID] // Match by workload ID instead of name
 					newStatus := workload.Status
-
+					statusChanged := false
+					var reason string
 					if !exists {
 						if workload.Status != "Missing" {
 							newStatus = "Missing"
-							log.Printf("Workload %s on node %s not found in container list, setting status to %s", workload.ID, node.NodeID, newStatus)
+							statusChanged = true
+							log.Printf("Workload %s (name: %s) on node %s not found in container list, setting status to %s", workload.ID, workload.Name, node.NodeID, newStatus)
 						}
 					} else {
 						mappedStatus := mapContainerStatus(container.Status)
 						if mappedStatus != workload.Status {
 							newStatus = mappedStatus
-							log.Printf("Workload %s on node %s status changed from %s to %s", workload.ID, node.NodeID, workload.Status, newStatus)
+							statusChanged = true
+							log.Printf("Workload %s (name: %s) on node %s status changed from %s to %s", workload.ID, workload.Name, node.NodeID, workload.Status, newStatus)
+						}
+						// If container has a Reason field, propagate it
+						if (mappedStatus == "Pulling" || mappedStatus == "ImagePullBackOff" || mappedStatus == "ContainerCreating") && container.Reason != "" {
+							reason = container.Reason
 						}
 					}
-
-					if newStatus != workload.Status {
+					if statusChanged {
+						// Update status
 						if err := m.scheduler.UpdateWorkloadStatus(workload.ID, newStatus); err != nil {
 							log.Printf("Failed to update status for workload %s: %v", workload.ID, err)
+						}
+						// Update logs with reason if present
+						if reason != "" {
+							if err := m.scheduler.UpdateWorkloadLogs(workload.ID, "Reason: "+reason); err != nil {
+								log.Printf("Failed to update logs for workload %s: %v", workload.ID, err)
+							}
+						}
+						// Capture logs if container exists and status indicates it has run
+						if exists && (newStatus == "Running" || newStatus == "Exited" || newStatus == "Failed") {
+							logs, err := m.getContainerLogs(node, container.ID)
+							if err != nil {
+								log.Printf("Failed to get logs for container %s (workload %s): %v", container.ID, workload.ID, err)
+							} else if logs != "" {
+								if err := m.scheduler.UpdateWorkloadLogs(workload.ID, fmt.Sprintf("Status changed to %s. Container logs:\n%s", newStatus, logs)); err != nil {
+									log.Printf("Failed to update logs for workload %s: %v", workload.ID, err)
+								}
+							}
 						}
 					}
 				}
