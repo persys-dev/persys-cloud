@@ -4,3 +4,6 @@
 [submodule "compute-agent"]
 	path = compute-agent
 	url = https://github.com/persys-dev/compute-agent.git
+[submodule "persysctl"]
+	path = persysctl
+	url = https://github.com/persys-dev/persysctl.git
