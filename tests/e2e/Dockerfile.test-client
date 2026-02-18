@@ -3,12 +3,14 @@ FROM golang:1.24-alpine AS builder
 WORKDIR /src
 COPY persys-scheduler ./persys-scheduler
 RUN cd /src/persys-scheduler && go build -o /out/smoke-client ./cmd/smoke-client
+COPY tests/e2e ./tests/e2e
+RUN cd /src/tests/e2e && go build -o /out/test-runner ./test-runner.go
 
 FROM alpine:3.21
-RUN apk add --no-cache ca-certificates curl jq bash
+RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /out/smoke-client ./smoke-client
-COPY tests/e2e/test-suite.sh ./test-suite.sh
-RUN chmod +x ./smoke-client ./test-suite.sh
+COPY --from=builder /out/test-runner ./test-runner
+RUN chmod +x ./smoke-client ./test-runner
 
-CMD ["/bin/sh", "-c", "./test-suite.sh"]
+CMD ["./test-runner"]

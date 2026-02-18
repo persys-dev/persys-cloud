@@ -8,9 +8,8 @@ The tests cover:
 
 - Scheduler startup (`/health`, `/metrics`)
 - Compute-agent startup (`/health`)
-- Scheduler gRPC control API lifecycle through `cmd/smoke-client`
-  - `RegisterNode`
-  - `Heartbeat`
+- Scheduler gRPC control API lifecycle through Go runner + `cmd/smoke-client`
+  - retries apply until scheduler can place workload
   - `ApplyWorkload` (container)
   - `GetWorkload`
   - `ListWorkloads`
@@ -32,17 +31,16 @@ This starts:
 - `etcd`
 - `compute-agent` (real runtime node service from `compute-agent/`)
 - `persys-scheduler` (with `-insecure`)
-- `test-client` (runs `test-suite.sh`)
+- `test-client` (runs `test-runner`)
 
-### Script-only (against existing local scheduler)
+### Go runner only (against existing local scheduler)
 
 ```bash
 cd tests/e2e
 SCHEDULER_METRICS_URL=http://localhost:8084 \
 SCHEDULER_GRPC_ADDR=localhost:8085 \
 AGENT_METRICS_URL=http://localhost:8080 \
-TEST_NODE_ENDPOINT=localhost:50051 \
-./test-suite.sh
+go run test-runner.go
 ```
 
 ## Environment variables
@@ -50,8 +48,6 @@ TEST_NODE_ENDPOINT=localhost:50051 \
 - `SCHEDULER_METRICS_URL` (default `http://localhost:8084`)
 - `SCHEDULER_GRPC_ADDR` (default `localhost:8085`)
 - `AGENT_METRICS_URL` (default `http://compute-agent:8080`)
-- `TEST_NODE_ID` (default `e2e-node-1`)
-- `TEST_NODE_ENDPOINT` (default `compute-agent:50051`)
 - `TEST_WORKLOAD_ID` (default `e2e-workload-1`)
 - `RETRY_INTERVAL` (default `2`)
 - `MAX_RETRIES` (default `40`)

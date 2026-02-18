@@ -54,15 +54,13 @@ services:
       - SCHEDULER_METRICS_URL=http://persys-scheduler:8084
       - SCHEDULER_GRPC_ADDR=persys-scheduler:8085
       - AGENT_METRICS_URL=http://compute-agent:8080
-      - TEST_NODE_ID=e2e-node-1
-      - TEST_NODE_ENDPOINT=compute-agent:50051
       - TEST_WORKLOAD_ID=e2e-workload-1
     depends_on:
       - persys-scheduler
       - compute-agent
     networks:
       - persys-cloud-test
-    command: ["/bin/sh", "-c", "./test-suite.sh"]
+    command: ["./test-runner"]
 
 networks:
   persys-cloud-test:
