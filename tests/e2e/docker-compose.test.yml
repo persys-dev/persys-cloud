@@ -18,6 +18,7 @@ services:
       - PERSYS_RECONCILE_ENABLED=false
       - PERSYS_VM_ENABLED=false
       - PERSYS_SCHEDULER_INSECURE=true
+      - PERSYS_SCHEDULER_ADDR=persys-scheduler:8085
     user: "0:0"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
