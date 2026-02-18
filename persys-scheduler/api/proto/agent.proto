@@ -1,0 +1,216 @@
+syntax = "proto3";
+
+package persys.agent.v1;
+
+option go_package = "github.com/persys-dev/persys-cloud/persys-scheduler/internal/agentpb;agentpb";
+
+// AgentService defines the gRPC interface for workload management
+service AgentService {
+  // ApplyWorkload creates or updates a workload
+  rpc ApplyWorkload(ApplyWorkloadRequest) returns (ApplyWorkloadResponse);
+  
+  // DeleteWorkload removes a workload
+  rpc DeleteWorkload(DeleteWorkloadRequest) returns (DeleteWorkloadResponse);
+  
+  // GetWorkloadStatus retrieves current workload status
+  rpc GetWorkloadStatus(GetWorkloadStatusRequest) returns (GetWorkloadStatusResponse);
+  
+  // ListWorkloads returns all managed workloads
+  rpc ListWorkloads(ListWorkloadsRequest) returns (ListWorkloadsResponse);
+  
+  // HealthCheck returns agent health status
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // ListActions returns action/task history tracked by the agent since startup
+  rpc ListActions(ListActionsRequest) returns (ListActionsResponse);
+}
+
+message ApplyWorkloadRequest {
+  string id = 1;
+  WorkloadType type = 2;
+  string revision_id = 3;
+  DesiredState desired_state = 4;
+  WorkloadSpec spec = 5;
+}
+
+message ApplyWorkloadResponse {
+  bool applied = 1;
+  bool skipped = 2; // true if revision already applied
+  string message = 3;
+  WorkloadStatus status = 4;
+}
+
+message DeleteWorkloadRequest {
+  string id = 1;
+}
+
+message DeleteWorkloadResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetWorkloadStatusRequest {
+  string id = 1;
+}
+
+message GetWorkloadStatusResponse {
+  WorkloadStatus status = 1;
+}
+
+message ListWorkloadsRequest {
+  WorkloadType type = 1; // optional filter
+}
+
+message ListWorkloadsResponse {
+  repeated WorkloadStatus workloads = 1;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  string version = 2;
+  map<string, string> runtime_status = 3;
+  double memory_utilization = 4;  // Memory utilization percentage (0-100)
+  double cpu_utilization = 5;     // CPU utilization percentage (0-100)
+  double disk_utilization = 6;    // Disk utilization percentage for root mount (0-100)
+}
+
+message ListActionsRequest {
+  string workload_id = 1; // optional filter
+  string action_type = 2; // optional filter: apply_workload, delete_workload, ...
+  string status = 3; // optional filter: pending, running, completed, failed
+  int32 limit = 4; // optional max number of actions (0 = all)
+  bool newest_first = 5; // if true sorts by created_at descending
+}
+
+message AgentAction {
+  string task_id = 1;
+  string workload_id = 2;
+  string action_type = 3;
+  string status = 4;
+  string error = 5;
+  int64 created_at = 6;
+  int64 started_at = 7;
+  int64 ended_at = 8;
+}
+
+message ListActionsResponse {
+  repeated AgentAction actions = 1;
+}
+
+enum WorkloadType {
+  WORKLOAD_TYPE_UNSPECIFIED = 0;
+  WORKLOAD_TYPE_CONTAINER = 1;
+  WORKLOAD_TYPE_COMPOSE = 2;
+  WORKLOAD_TYPE_VM = 3;
+}
+
+enum DesiredState {
+  DESIRED_STATE_UNSPECIFIED = 0;
+  DESIRED_STATE_RUNNING = 1;
+  DESIRED_STATE_STOPPED = 2;
+}
+
+enum ActualState {
+  ACTUAL_STATE_UNSPECIFIED = 0;
+  ACTUAL_STATE_PENDING = 1;
+  ACTUAL_STATE_RUNNING = 2;
+  ACTUAL_STATE_STOPPED = 3;
+  ACTUAL_STATE_FAILED = 4;
+  ACTUAL_STATE_UNKNOWN = 5;
+}
+
+message WorkloadSpec {
+  oneof spec {
+    ContainerSpec container = 1;
+    ComposeSpec compose = 2;
+    VMSpec vm = 3;
+  }
+}
+
+message ContainerSpec {
+  string image = 1;
+  repeated string command = 2;
+  repeated string args = 3;
+  map<string, string> env = 4;
+  repeated VolumeMount volumes = 5;
+  repeated PortMapping ports = 6;
+  ResourceLimits resources = 7;
+  RestartPolicy restart_policy = 8;
+  map<string, string> labels = 9;
+}
+
+message ComposeSpec {
+  string project_name = 1;
+  string compose_yaml = 2; // base64 encoded docker-compose.yml
+  map<string, string> env = 3;
+}
+
+message VMSpec {
+  string name = 1;
+  int32 vcpus = 2;
+  int64 memory_mb = 3;
+  repeated DiskConfig disks = 4;
+  repeated NetworkConfig networks = 5;
+  string cloud_init = 6; // optional cloud-init user-data (YAML content)
+  map<string, string> metadata = 7;
+  CloudInitConfig cloud_init_config = 8; // advanced cloud-init settings
+}
+
+message CloudInitConfig {
+  string user_data = 1; // cloud-init user-data script
+  string meta_data = 2; // cloud-init meta-data (JSON)
+  string network_config = 3; // cloud-init network config (YAML)
+  string vendor_data = 4; // cloud-init vendor-data
+}
+
+message VolumeMount {
+  string host_path = 1;
+  string container_path = 2;
+  bool read_only = 3;
+}
+
+message PortMapping {
+  int32 host_port = 1;
+  int32 container_port = 2;
+  string protocol = 3; // tcp or udp
+}
+
+message ResourceLimits {
+  int64 cpu_shares = 1;
+  int64 memory_bytes = 2;
+  int64 memory_swap_bytes = 3;
+}
+
+message RestartPolicy {
+  string policy = 1; // no, always, on-failure, unless-stopped
+  int32 max_retry_count = 2;
+}
+
+message DiskConfig {
+  string path = 1; // path to disk image or ISO
+  string device = 2; // vda, vdb, etc.
+  string format = 3; // qcow2, raw, iso
+  int64 size_gb = 4;
+  string type = 5; // disk or cdrom (for ISO)
+  bool boot = 6; // true if this is the boot disk/ISO
+}
+
+message NetworkConfig {
+  string network = 1; // network name or bridge
+  string mac_address = 2;
+  string ip_address = 3; // optional static IP
+}
+
+message WorkloadStatus {
+  string id = 1;
+  WorkloadType type = 2;
+  string revision_id = 3;
+  DesiredState desired_state = 4;
+  ActualState actual_state = 5;
+  string message = 6;
+  int64 created_at = 7;
+  int64 updated_at = 8;
+  map<string, string> metadata = 9;
+}

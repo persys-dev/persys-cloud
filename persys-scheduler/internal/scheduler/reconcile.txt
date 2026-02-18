@@ -1,0 +1,11 @@
+1. Monitor detects state change
+   ↓
+2. Reconciler compares desired vs actual state
+   ↓
+3. If drift detected, determine action needed
+   ↓
+4. Execute reconciliation action (recreate/restart/stop)
+   ↓
+5. Update workload status and metadata
+   ↓
+6. Log results and statistics
