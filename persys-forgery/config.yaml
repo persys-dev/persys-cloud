@@ -1,0 +1,13 @@
+# Sample config.yaml for persys-forge
+port: 8087
+mysql_dsn: "forgery:password@tcp(localhost:3306)/forgery_db?parseTime=true"
+vault_addr: "http://localhost:8200"
+traefik_url: "http://traefik.local"
+nexus_url: "http://nexus.local:8081"
+nexus_user: "nexususer"
+nexus_password: "nexuspass"
+nexus_docker_repo: "nexus.local:8082/repository/docker-releases"
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0 

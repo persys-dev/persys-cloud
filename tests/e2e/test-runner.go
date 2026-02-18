@@ -2,480 +2,330 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 	"time"
 )
 
-// HTTPClient extends http.Client with JSON methods
-type HTTPClient struct {
-	*http.Client
-}
-
-// TestSuite represents the E2E test suite
-type TestSuite struct {
-	apiGatewayURL    string
-	prowSchedulerURL string
-	persysAgentURL   string
-	httpClient       *HTTPClient
-}
-
-// TestResult represents a test result
-type TestResult struct {
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	Duration  string    `json:"duration"`
-	Error     string    `json:"error,omitempty"`
-	Timestamp time.Time `json:"timestamp"`
-}
-
-// TestReport represents the overall test report
-type TestReport struct {
-	TestRunID   string       `json:"testRunId"`
-	Timestamp   time.Time    `json:"timestamp"`
-	Duration    string       `json:"duration"`
-	Results     []TestResult `json:"results"`
-	TotalTests  int          `json:"totalTests"`
-	PassedTests int          `json:"passedTests"`
-	FailedTests int          `json:"failedTests"`
-	Status      string       `json:"status"`
-}
-
 func main() {
-	// Get environment variables
-	apiGatewayURL := os.Getenv("API_GATEWAY_URL")
-	prowSchedulerURL := os.Getenv("PROW_SCHEDULER_URL")
-	persysAgentURL := os.Getenv("PERSYS_AGENT_URL")
+	cfg := loadConfig()
+	client := &http.Client{Timeout: 10 * time.Second}
 
-	if apiGatewayURL == "" || prowSchedulerURL == "" || persysAgentURL == "" {
-		log.Fatal("Missing required environment variables")
-	}
+	must(waitForHTTP(cfg.schedulerMetricsURL+"/health", client, cfg.maxRetries, cfg.retryInterval))
+	must(waitForHTTP(cfg.schedulerMetricsURL+"/metrics", client, cfg.maxRetries, cfg.retryInterval))
+	must(waitForHTTP(cfg.agentMetricsURL+"/health", client, cfg.maxRetries, cfg.retryInterval))
+	must(waitForRegisteredNode(cfg))
 
-	// Create test suite
-	testSuite := &TestSuite{
-		apiGatewayURL:    apiGatewayURL,
-		prowSchedulerURL: prowSchedulerURL,
-		persysAgentURL:   persysAgentURL,
-		httpClient: &HTTPClient{
-			Client: &http.Client{
-				Timeout: 30 * time.Second,
-			},
-		},
-	}
+	logStep("apply workload")
+	must(applyWorkloadWithRetry(cfg))
 
-	// Run tests
-	testSuite.RunAllTests()
-}
-
-// RunAllTests runs all E2E tests
-func (suite *TestSuite) RunAllTests() {
-	fmt.Println("🚀 Starting Persys Cloud E2E Tests...")
-
-	// Wait for services to be ready
-	suite.waitForServices()
-
-	// Run test scenarios
-	tests := []struct {
-		name string
-		fn   func() error
-	}{
-		{"Basic Workflow", suite.testBasicWorkflow},
-		{"Authentication Flow", suite.testAuthenticationFlow},
-		{"Service Discovery", suite.testServiceDiscovery},
-		{"Async Execution", suite.testAsyncExecution},
-		{"Reconciliation", suite.testReconciliation},
-		{"Error Handling", suite.testErrorHandling},
-	}
-
-	passed := 0
-	failed := 0
-
-	for _, test := range tests {
-		fmt.Printf("📋 Running %s Test...\n", test.name)
-		start := time.Now()
-
-		err := test.fn()
-		duration := time.Since(start)
-
+	var workload getWorkloadResponse
+	must(poll(cfg.maxRetries, cfg.retryInterval, func() (bool, error) {
+		out, err := runSmokeCapture(cfg.schedulerGRPCAddr, "-op", "get-workload", "-workload-id", cfg.testWorkloadID)
 		if err != nil {
-			fmt.Printf("❌ %s failed: %v (duration: %v)\n", test.name, err, duration)
-			failed++
-		} else {
-			fmt.Printf("✅ %s passed (duration: %v)\n", test.name, duration)
-			passed++
+			return false, nil
+		}
+		if err := unmarshalSmokeJSON(out, &workload); err != nil {
+			return false, nil
+		}
+		s := strings.ToLower(strings.TrimSpace(workload.Workload.Status))
+		return s == "running" || s == "pending" || s == "unknown", nil
+	}))
+
+	listOut, err := runSmokeCapture(cfg.schedulerGRPCAddr, "-op", "list-workloads")
+	must(err)
+	_ = listOut
+	must(waitForWorkloadInList(cfg))
+
+	summaryOut, err := runSmokeCapture(cfg.schedulerGRPCAddr, "-op", "cluster-summary")
+	if err != nil {
+		failf("cluster-summary failed: %v", err)
+	}
+	var summary clusterSummaryResponse
+	must(unmarshalSmokeJSON(summaryOut, &summary))
+	if summary.TotalWorkloads < 1 {
+		failf("cluster summary reported total_workloads=%d, want >=1", summary.TotalWorkloads)
+	}
+
+	logStep("delete workload")
+	must(runSmoke(cfg.schedulerGRPCAddr, "-op", "delete-workload", "-workload-id", cfg.testWorkloadID))
+	must(poll(cfg.maxRetries, cfg.retryInterval, func() (bool, error) {
+		out, err := runSmokeCapture(cfg.schedulerGRPCAddr, "-op", "get-workload", "-workload-id", cfg.testWorkloadID)
+		if err != nil {
+			return true, nil // NotFound is acceptable terminal state.
+		}
+		var r getWorkloadResponse
+		if err := unmarshalSmokeJSON(out, &r); err != nil {
+			return false, nil
+		}
+		s := strings.ToLower(strings.TrimSpace(r.Workload.Status))
+		return s == "deleting" || s == "deleted", nil
+	}))
+
+	body, err := getBody(cfg.schedulerMetricsURL+"/metrics", client)
+	must(err)
+	required := []string{
+		"persys_scheduler_grpc_server_requests_total",
+		"persys_scheduler_grpc_server_request_duration_seconds",
+		"persys_scheduler_agent_rpc_requests_total",
+		"persys_scheduler_agent_rpc_duration_seconds",
+		"persys_scheduler_nodes_status",
+		"persys_scheduler_workloads_status",
+		"persys_scheduler_reconciliation_results_total",
+	}
+	for _, metric := range required {
+		if !strings.Contains(body, metric) {
+			failf("expected metric %q not found", metric)
 		}
 	}
 
-	fmt.Printf("\n📊 Test Results: %d passed, %d failed\n", passed, failed)
-	fmt.Println("✅ E2E Tests completed!")
+	fmt.Println("E2E scheduler + compute-agent suite passed")
 }
 
-// Helper methods
+type config struct {
+	schedulerMetricsURL string
+	schedulerGRPCAddr   string
+	agentMetricsURL     string
+	testWorkloadID      string
+	retryInterval       time.Duration
+	maxRetries          int
+}
 
-func (suite *TestSuite) waitForServices() {
-	fmt.Println("⏳ Waiting for services to be ready...")
+type getWorkloadResponse struct {
+	Workload workloadView `json:"workload"`
+}
 
-	services := []struct {
-		name string
-		url  string
-	}{
-		{"API Gateway", suite.apiGatewayURL + "/metrics"},
-		{"Prow Scheduler", suite.prowSchedulerURL + "/metrics"},
-		{"Persys Agent", suite.persysAgentURL + "/metrics"},
-	}
+type listWorkloadsResponse struct {
+	Workloads []workloadView `json:"workloads"`
+}
 
-	for _, service := range services {
-		suite.waitForService(service.name, service.url)
+type workloadView struct {
+	WorkloadID string `json:"workload_id"`
+	Status     string `json:"status"`
+}
+
+type clusterSummaryResponse struct {
+	TotalWorkloads int32 `json:"total_workloads"`
+}
+
+func loadConfig() config {
+	return config{
+		schedulerMetricsURL: getenvDefault("SCHEDULER_METRICS_URL", "http://localhost:8084"),
+		schedulerGRPCAddr:   getenvDefault("SCHEDULER_GRPC_ADDR", "localhost:8085"),
+		agentMetricsURL:     getenvDefault("AGENT_METRICS_URL", "http://compute-agent:8080"),
+		testWorkloadID:      getenvDefault("TEST_WORKLOAD_ID", "e2e-workload-1"),
+		retryInterval:       getenvDurationDefault("RETRY_INTERVAL", 2*time.Second),
+		maxRetries:          getenvIntDefault("MAX_RETRIES", 40),
 	}
 }
 
-func (suite *TestSuite) waitForService(name, url string) {
-	maxRetries := 30
-	for i := 0; i < maxRetries; i++ {
-		resp, err := suite.httpClient.Get(url)
-		if err == nil && resp.StatusCode == 200 {
-			fmt.Printf("✅ %s is ready\n", name)
-			return
+func applyWorkloadWithRetry(cfg config) error {
+	return poll(cfg.maxRetries, cfg.retryInterval, func() (bool, error) {
+		out, err := runSmokeCapture(cfg.schedulerGRPCAddr,
+			"-op", "apply-container",
+			"-workload-id", cfg.testWorkloadID,
+			"-container-image", "busybox:latest",
+			"-container-cmd", "sh,-c,sleep 60",
+			"-w-cpu", "100",
+			"-w-mem", "128",
+			"-w-disk", "1",
+		)
+		if err != nil {
+			msg := strings.ToLower(err.Error())
+			if strings.Contains(msg, "no suitable node") || strings.Contains(msg, "cannot place workload") {
+				return false, nil
+			}
+			return false, err
 		}
-		time.Sleep(2 * time.Second)
-	}
-	log.Fatalf("❌ %s failed to start", name)
+		lower := strings.ToLower(out)
+		if strings.Contains(lower, "success=true") {
+			return true, nil
+		}
+		if strings.Contains(lower, "no suitable node") || strings.Contains(lower, "cannot place workload") {
+			return false, nil
+		}
+		return false, fmt.Errorf("apply-container did not report success: %s", out)
+	})
 }
 
-func (suite *TestSuite) testBasicWorkflow() error {
-	// Test 1: Verify services are accessible
-	if err := suite.testServiceAccessibility(); err != nil {
-		return fmt.Errorf("service accessibility: %w", err)
-	}
-
-	// Test 2: Create and execute a simple workload
-	if err := suite.testWorkloadCreation(); err != nil {
-		return fmt.Errorf("workload creation: %w", err)
-	}
-
-	// Test 3: Verify workload execution
-	if err := suite.testWorkloadExecution(); err != nil {
-		return fmt.Errorf("workload execution: %w", err)
-	}
-
-	// Test 4: Verify monitoring
-	if err := suite.testMonitoring(); err != nil {
-		return fmt.Errorf("monitoring: %w", err)
-	}
-
-	return nil
+func waitForRegisteredNode(cfg config) error {
+	logStep("wait for compute-agent node registration")
+	return poll(cfg.maxRetries, cfg.retryInterval, func() (bool, error) {
+		out, err := runSmokeCapture(cfg.schedulerGRPCAddr, "-op", "cluster-summary")
+		if err != nil {
+			return false, nil
+		}
+		var summary struct {
+			TotalNodes int32 `json:"total_nodes"`
+		}
+		if err := unmarshalSmokeJSON(out, &summary); err != nil {
+			return false, nil
+		}
+		return summary.TotalNodes >= 1, nil
+	})
 }
 
-func (suite *TestSuite) testAuthenticationFlow() error {
-	// Test mTLS authentication
-	if err := suite.testMTLSAuthentication(); err != nil {
-		return fmt.Errorf("mTLS authentication: %w", err)
-	}
-
-	// Test HMAC authentication
-	if err := suite.testHMACAuthentication(); err != nil {
-		return fmt.Errorf("HMAC authentication: %w", err)
-	}
-
-	// Test invalid authentication
-	if err := suite.testInvalidAuthentication(); err != nil {
-		return fmt.Errorf("invalid authentication: %w", err)
-	}
-
-	return nil
+func waitForWorkloadInList(cfg config) error {
+	return poll(cfg.maxRetries, cfg.retryInterval, func() (bool, error) {
+		out, err := runSmokeCapture(cfg.schedulerGRPCAddr, "-op", "list-workloads")
+		if err != nil {
+			return false, nil
+		}
+		var listResp listWorkloadsResponse
+		if err := unmarshalSmokeJSON(out, &listResp); err != nil {
+			return false, nil
+		}
+		if containsWorkload(listResp.Workloads, cfg.testWorkloadID) {
+			return true, nil
+		}
+		return false, nil
+	})
 }
 
-func (suite *TestSuite) testServiceDiscovery() error {
-	// Test scheduler discovery
-	if err := suite.testSchedulerDiscovery(); err != nil {
-		return fmt.Errorf("scheduler discovery: %w", err)
-	}
-
-	// Test discovery fallback
-	if err := suite.testDiscoveryFallback(); err != nil {
-		return fmt.Errorf("discovery fallback: %w", err)
-	}
-
-	return nil
+func runSmoke(schedulerAddr string, args ...string) error {
+	_, err := runSmokeCapture(schedulerAddr, args...)
+	return err
 }
 
-func (suite *TestSuite) testAsyncExecution() error {
-	// Test immediate response
-	if err := suite.testImmediateResponse(); err != nil {
-		return fmt.Errorf("immediate response: %w", err)
-	}
+func runSmokeCapture(schedulerAddr string, args ...string) (string, error) {
+	cmdArgs := append([]string{"-scheduler", schedulerAddr}, args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
-	// Test background execution
-	if err := suite.testBackgroundExecution(); err != nil {
-		return fmt.Errorf("background execution: %w", err)
-	}
-
-	return nil
-}
-
-func (suite *TestSuite) testReconciliation() error {
-	// Test container restart
-	if err := suite.testContainerRestart(); err != nil {
-		return fmt.Errorf("container restart: %w", err)
-	}
-
-	// Test reconciliation statistics
-	if err := suite.testReconciliationStats(); err != nil {
-		return fmt.Errorf("reconciliation stats: %w", err)
-	}
-
-	return nil
-}
-
-func (suite *TestSuite) testErrorHandling() error {
-	// Test invalid workload
-	if err := suite.testInvalidWorkload(); err != nil {
-		return fmt.Errorf("invalid workload: %w", err)
-	}
-
-	// Test network failures
-	if err := suite.testNetworkFailures(); err != nil {
-		return fmt.Errorf("network failures: %w", err)
-	}
-
-	return nil
-}
-
-func (suite *TestSuite) testServiceAccessibility() error {
-	// Test API Gateway
-	resp, err := suite.httpClient.Get(suite.apiGatewayURL + "/metrics")
+	cmd := exec.CommandContext(ctx, "./smoke-client", cmdArgs...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	out := strings.TrimSpace(stdout.String() + "\n" + stderr.String())
 	if err != nil {
-		return fmt.Errorf("API Gateway health check failed: %w", err)
+		return out, fmt.Errorf("smoke-client %v failed: %w\n%s", args, err, out)
 	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("API Gateway health check returned status %d", resp.StatusCode)
-	}
+	return out, nil
+}
 
-	// Test Prow Scheduler
-	resp, err = suite.httpClient.Get(suite.prowSchedulerURL + "/metrics")
+func waitForHTTP(url string, client *http.Client, retries int, interval time.Duration) error {
+	for i := 0; i < retries; i++ {
+		resp, err := client.Get(url)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			_ = resp.Body.Close()
+			return nil
+		}
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+		time.Sleep(interval)
+	}
+	return fmt.Errorf("timeout waiting for %s", url)
+}
+
+func getBody(url string, client *http.Client) (string, error) {
+	resp, err := client.Get(url)
 	if err != nil {
-		return fmt.Errorf("Prow Scheduler health check failed: %w", err)
+		return "", err
 	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("Prow Scheduler health check returned status %d", resp.StatusCode)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("status: %d", resp.StatusCode)
 	}
-
-	// Test Persys Agent
-	resp, err = suite.httpClient.Get(suite.persysAgentURL + "/metrics")
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("Persys Agent health check failed: %w", err)
+		return "", err
 	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("Persys Agent health check returned status %d", resp.StatusCode)
+	return string(b), nil
+}
+
+func poll(retries int, interval time.Duration, f func() (bool, error)) error {
+	for i := 0; i < retries; i++ {
+		ok, err := f()
+		if err != nil {
+			return err
+		}
+		if ok {
+			return nil
+		}
+		time.Sleep(interval)
 	}
-
-	return nil
+	return fmt.Errorf("timeout while polling condition")
 }
 
-func (suite *TestSuite) testWorkloadCreation() error {
-	// workload := map[string]interface{}{
-	// 	"name":  "test-nginx",
-	// 	"type":  "docker-container",
-	// 	"image": "nginx:alpine",
-	// 	"ports": []string{"8080:80"},
-	// }
-
-	// // Create workload via API Gateway
-	// resp, err := suite.httpClient.PostJSON(suite.apiGatewayURL+"/workloads/schedule", workload)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to create workload: %w", err)
-	// }
-	// if resp.StatusCode != 201 {
-	// 	return fmt.Errorf("workload creation returned status %d", resp.StatusCode)
-	// }
-
-	// var result map[string]interface{}
-	// err = json.NewDecoder(resp.Body).Decode(&result)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to decode response: %w", err)
-	// }
-	// if result["workloadId"] == "" {
-	// 	return fmt.Errorf("workload ID is empty")
-	// }
-
-	return nil
-}
-
-func (suite *TestSuite) testWorkloadExecution() error {
-	// // Wait for workload to be executed
-	// time.Sleep(10 * time.Second)
-
-	// // Check if container is running
-	// resp, err := suite.httpClient.Get(suite.persysAgentURL + "/api/v1/containers")
-	// if err != nil {
-	// 	return fmt.Errorf("failed to get containers: %w", err)
-	// }
-	// if resp.StatusCode != 200 {
-	// 	return fmt.Errorf("container list returned status %d", resp.StatusCode)
-	// }
-
-	// var containers []map[string]interface{}
-	// err = json.NewDecoder(resp.Body).Decode(&containers)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to decode containers: %w", err)
-	// }
-
-	// // Verify test container is running
-	// found := false
-	// for _, container := range containers {
-	// 	if name, ok := container["name"].(string); ok && name == "test-nginx" {
-	// 		found = true
-	// 		if container["status"] != "running" {
-	// 			return fmt.Errorf("test container status is %v, expected running", container["status"])
-	// 		}
-	// 		break
-	// 	}
-	// }
-	// if !found {
-	// 	return fmt.Errorf("test container not found")
-	// }
-
-	return nil
-}
-
-func (suite *TestSuite) testMonitoring() error {
-	// Check metrics endpoint
-	resp, err := suite.httpClient.Get(suite.apiGatewayURL + "/metrics")
+func unmarshalSmokeJSON(out string, target interface{}) error {
+	raw, err := extractJSONObject(out)
 	if err != nil {
-		return fmt.Errorf("metrics endpoint failed: %w", err)
+		return err
 	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("metrics endpoint returned status %d", resp.StatusCode)
+	return json.Unmarshal([]byte(raw), target)
+}
+
+func extractJSONObject(s string) (string, error) {
+	start := strings.Index(s, "{")
+	end := strings.LastIndex(s, "}")
+	if start == -1 || end == -1 || end <= start {
+		return "", fmt.Errorf("no JSON object found in output: %s", s)
 	}
-
-	// // Check workload status
-	// resp, err = suite.httpClient.Get(suite.apiGatewayURL + "/workloads")
-	// if err != nil {
-	// 	return fmt.Errorf("workload status failed: %w", err)
-	// }
-	// if resp.StatusCode != 200 {
-	// 	return fmt.Errorf("workload status returned status %d", resp.StatusCode)
-	// }
-
-	return nil
+	return s[start : end+1], nil
 }
 
-func (suite *TestSuite) testMTLSAuthentication() error {
-	// Test with valid mTLS certificates
-	// This would require proper certificate setup
-	fmt.Println("   Testing mTLS authentication...")
-	return nil
+func containsWorkload(workloads []workloadView, workloadID string) bool {
+	for _, w := range workloads {
+		if strings.TrimSpace(w.WorkloadID) == workloadID {
+			return true
+		}
+	}
+	return false
 }
 
-func (suite *TestSuite) testHMACAuthentication() error {
-	// Test HMAC between prow and persys-agent
-	fmt.Println("   Testing HMAC authentication...")
-	return nil
-}
-
-func (suite *TestSuite) testInvalidAuthentication() error {
-	// Test with invalid credentials
-	fmt.Println("   Testing invalid authentication...")
-	return nil
-}
-
-func (suite *TestSuite) testSchedulerDiscovery() error {
-	// Test CoreDNS-based discovery
-	fmt.Println("   Testing scheduler discovery...")
-	return nil
-}
-
-func (suite *TestSuite) testDiscoveryFallback() error {
-	// Test fallback to configured address
-	fmt.Println("   Testing discovery fallback...")
-	return nil
-}
-
-func (suite *TestSuite) testImmediateResponse() error {
-	// Test that workload creation returns immediately
-	// start := time.Now()
-
-	// workload := map[string]interface{}{
-	// 	"name":  "async-test",
-	// 	"type":  "docker-container",
-	// 	"image": "nginx:alpine",
-	// }
-
-	// resp, err := suite.httpClient.PostJSON(suite.apiGatewayURL+"/workloads", workload)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to create async workload: %w", err)
-	// }
-	// if resp.StatusCode != 201 {
-	// 	return fmt.Errorf("async workload creation returned status %d", resp.StatusCode)
-	// }
-
-	// duration := time.Since(start)
-	// if duration > 5*time.Second {
-	// 	return fmt.Errorf("response took %v, should be immediate", duration)
-	// }
-
-	return nil
-}
-
-func (suite *TestSuite) testBackgroundExecution() error {
-	// Test that workload executes in background
-	fmt.Println("   Testing background execution...")
-	return nil
-}
-
-func (suite *TestSuite) testContainerRestart() error {
-	// Test reconciliation by stopping container
-	fmt.Println("   Testing container restart...")
-	return nil
-}
-
-func (suite *TestSuite) testReconciliationStats() error {
-	// Check reconciliation statistics
-	// Test CoreDNS-based discovery
-	fmt.Println("   Testing reconciliation ...")
-	return nil
-
-}
-
-func (suite *TestSuite) testInvalidWorkload() error {
-	// // Test with invalid workload configuration
-	// invalidWorkload := map[string]interface{}{
-	// 	"name": "invalid",
-	// 	"type": "invalid-type",
-	// }
-
-	// resp, err := suite.httpClient.PostJSON(suite.apiGatewayURL+"/workloads/schedule", invalidWorkload)
-	// if err != nil {
-	// 	return fmt.Errorf("failed to submit invalid workload: %w", err)
-	// }
-	// if resp.StatusCode != 400 {
-	// 	return fmt.Errorf("invalid workload returned status %d, expected 400", resp.StatusCode)
-	// }
-
-	return nil
-}
-
-func (suite *TestSuite) testNetworkFailures() error {
-	// Test network failure scenarios
-	fmt.Println("   Testing network failures...")
-	return nil
-}
-
-// PostJSON sends a POST request with JSON data
-func (c *HTTPClient) PostJSON(url string, data interface{}) (*http.Response, error) {
-	jsonData, err := json.Marshal(data)
+func getenvIntDefault(key string, fallback int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
 	if err != nil {
-		return nil, err
+		return fallback
 	}
+	return n
+}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+func getenvDurationDefault(key string, fallback time.Duration) time.Duration {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return fallback
+	}
+	if d, err := time.ParseDuration(v); err == nil {
+		return d
+	}
+	if s, err := strconv.Atoi(v); err == nil {
+		return time.Duration(s) * time.Second
+	}
+	return fallback
+}
+
+func getenvDefault(key, fallback string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func logStep(msg string) {
+	log.Printf("==> %s", msg)
+}
+
+func must(err error) {
 	if err != nil {
-		return nil, err
+		failf("%v", err)
 	}
+}
 
-	req.Header.Set("Content-Type", "application/json")
-	return c.Do(req)
+func failf(format string, args ...interface{}) {
+	log.Fatalf(format, args...)
 }

@@ -1,29 +1,16 @@
 FROM golang:1.24-alpine AS builder
 
+WORKDIR /src
+COPY persys-scheduler ./persys-scheduler
+RUN cd /src/persys-scheduler && go build -o /out/smoke-client ./cmd/smoke-client
+COPY tests/e2e ./tests/e2e
+RUN cd /src/tests/e2e && go build -o /out/test-runner ./test-runner.go
+
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates
 WORKDIR /app
+COPY --from=builder /out/smoke-client ./smoke-client
+COPY --from=builder /out/test-runner ./test-runner
+RUN chmod +x ./smoke-client ./test-runner
 
-# Copy go mod files
-COPY go.mod ./
-RUN go mod download
-
-# Copy source code
-COPY test-runner.go ./
-
-# Build the test runner
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o test-runner .
-
-# Final stage
-FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates
-
-WORKDIR /root/
-
-# Copy the binary from builder stage
-COPY --from=builder /app/test-runner .
-
-# Make it executable
-RUN chmod +x test-runner
-
-# Run the test runner
-CMD ["./test-runner"] 
+CMD ["./test-runner"]

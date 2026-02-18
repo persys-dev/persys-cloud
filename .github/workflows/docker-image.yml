@@ -41,16 +41,20 @@ jobs:
         }
 
         # Check each service directory for changes
-        if echo "$CHANGED_FILES" | grep -q "^api-gateway/"; then
-          build_image "api-gateway" "api-gateway"
+        if echo "$CHANGED_FILES" | grep -q "^persys-gateway/"; then
+          build_image "api-gateway" "persys-gateway"
         fi
 
-        if echo "$CHANGED_FILES" | grep -q "^prow/"; then
-          build_image "prow" "prow"
+        if echo "$CHANGED_FILES" | grep -q "^persys-scheduler/"; then
+          build_image "persys-scheduler" "persys-scheduler"
         fi
 
-        if echo "$CHANGED_FILES" | grep -q "^cloud-mgmt/"; then
-          build_image "cloud-mgmt" "cloud-mgmt"
+        if echo "$CHANGED_FILES" | grep -q "^persys-federation/"; then
+          build_image "persys-federation" "persys-federation"
+        fi
+
+        if echo "$CHANGED_FILES" | grep -q "^persys-forgery/"; then
+          build_image "persys-forgery" "persys-forgery"
         fi
 
         if echo "$CHANGED_FILES" | grep -q "^persys-cfssl/"; then

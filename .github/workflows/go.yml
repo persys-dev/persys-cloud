@@ -22,19 +22,25 @@ jobs:
         go-version: 1.24
 
     - name: Build API Gateway
-      working-directory: ./api-gateway
+      working-directory: ./persys-gateway
       run: |
           go mod download
           cd cmd && go build -o main
 
-    - name: Build Prow
-      working-directory: ./prow
+    - name: Build Persys Scheduler
+      working-directory: ./persys-scheduler
       run: |
           go mod download
           cd cmd/scheduler && go build -o main
 
-    # - name: Build Cloud Mgmt
-    #   working-directory: ./cloud-mgmt
-    #   run: |
-    #       go mod download
-    #       cd cmd && go build -o main
+    - name: Build Persys Federation
+      working-directory: ./persys-federation
+      run: |
+          go mod download
+          cd cmd && go build -o main
+
+    - name: Build Persys Forgery
+      working-directory: ./persys-forgery
+      run: |
+          go mod download
+          cd cmd && go build -o main

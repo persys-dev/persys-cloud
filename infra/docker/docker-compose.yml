@@ -7,11 +7,11 @@
 
 services:
 
-  # --- API Gateway (Entry point for all API requests) ---
-  api-gateway:
-    build: ../../api-gateway
+  # --- Persys Gateway (Entry point for all API requests) ---
+  persys-gateway:
+    build: ../../persys-gateway
     volumes:
-      - certs:/etc/api-gateway/certs
+      - certs:/etc/persys-gateway/certs
     ports:
       - 8551:8551
     depends_on:
@@ -19,15 +19,15 @@ services:
       - coredns
       - jaeger
     environment:
-      - OTEL_EXPORTER_JAEGER_ENDPOINT=jaegar:4318
+      - OTEL_EXPORTER_JAEGER_ENDPOINT=jaeger:4318
     networks:
-      - milx-cloud-net
+      - persys-cloud-net
 
-  # --- Prow Scheduler (Workload scheduler and reconciler) ---
-  persys-prow:
-    build: ../../prow
+  # --- Persys Scheduler (Workload scheduler and reconciler) ---
+  persys-scheduler:
+    build: ../../persys-scheduler
     volumes:
-      - certs:/etc/prow/certs
+      - certs:/etc/persys-scheduler/certs
     ports:
       - 8084:8084   # Non-mTLS API
       - 8085:8085   # mTLS API
@@ -38,14 +38,14 @@ services:
       - jaeger
     environment:
       - ETCD_ENDPOINTS=etcd:2379
-      - OTEL_EXPORTER_JAEGER_ENDPOINT=jaegar:4318
-      - OTEL_SERVICE_NAME=prow-scheduler
-      - CA_FILE=/etc/prow/certs/ca.pem
+      - OTEL_EXPORTER_JAEGER_ENDPOINT=jaeger:4318
+      - OTEL_SERVICE_NAME=persys-scheduler
+      - CA_FILE=/etc/persys-scheduler/certs/ca.pem
       - CFSSL_API_URL=https://persys-cfssl:8888
-      - CERT_COMMON_NAME=prow-scheduler
+      - CERT_COMMON_NAME=persys-scheduler
       - CERT_ORGANIZATION=persys
     networks:
-      - milx-cloud-net
+      - persys-cloud-net
 
   # --- Certificate Authority (CFSSL) ---
   persys-cfssl:
@@ -55,7 +55,7 @@ services:
     ports:
       - 8888:8888
     networks:
-      - milx-cloud-net
+      - persys-cloud-net
 
   # --- CoreDNS (Service discovery) ---
   coredns:
@@ -86,7 +86,7 @@ services:
     ports:
       - "9090:9090"
     networks:
-      - milx-cloud-net
+      - persys-cloud-net
 
   # --- Grafana (Metrics visualization) ---
   grafana:
@@ -102,7 +102,7 @@ services:
     ports:
       - "3000:3000"
     networks:
-      - milx-cloud-net
+      - persys-cloud-net
     depends_on:
       - prometheus
 
@@ -123,7 +123,7 @@ services:
       - "4317:4317"
       - "4318:4318"
     networks:
-      - milx-cloud-net
+      - persys-cloud-net
 
   # --- Node Exporter (Host metrics for Prometheus) ---
   node_exporter:
@@ -133,7 +133,7 @@ services:
     ports:
       - '9100:9100'
     networks:
-      - milx-cloud-net
+      - persys-cloud-net
 
   # --- MongoDB (Database for API Gateway) ---
   mongodb:
@@ -142,13 +142,13 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: admin
-      MONGODB_DATABASE: api-gateway
+      MONGODB_DATABASE: persys-gateway
     ports:
       - 27017:27017
     volumes:
       - mongodb_data_container:/data/db
     networks:
-      - milx-cloud-net
+      - persys-cloud-net
 
   # --- etcd (Key-value store for Prow and CoreDNS) ---
   etcd:
@@ -157,7 +157,7 @@ services:
     ports:
       - "2379:2379"
     networks:
-      - milx-cloud-net
+      - persys-cloud-net
 
 # --- Volumes for persistent data and shared certs ---
 volumes:
