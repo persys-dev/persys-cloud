@@ -1,9 +1,9 @@
 package gapi
 
 import (
-	"github.com/persys-dev/persys-cloud/cloud-mgmt/config"
-	pb "github.com/persys-dev/persys-cloud/cloud-mgmt/proto"
-	"github.com/persys-dev/persys-cloud/cloud-mgmt/services"
+	"github.com/persys-dev/persys-cloud/persys-federation/config"
+	pb "github.com/persys-dev/persys-cloud/persys-federation/proto"
+	"github.com/persys-dev/persys-cloud/persys-federation/services"
 )
 
 type CloudServer struct {

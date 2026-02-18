@@ -2,7 +2,7 @@ package gapi
 
 import (
 	"context"
-	pb "github.com/persys-dev/persys-cloud/cloud-mgmt/proto"
+	pb "github.com/persys-dev/persys-cloud/persys-federation/proto"
 )
 
 func (cloud *CloudServer) kubeConfig(ctx context.Context, req *pb.ServicesRequest) (*pb.ServicesResponse, error) {

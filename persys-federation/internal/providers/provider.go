@@ -3,14 +3,10 @@ package providers
 import (
 	"context"
 	"fmt"
-	"github.com/persys-dev/persys-cloud/cloud-mgmt/config"
-	"github.com/redis/go-redis/v9"
+
 	"github.com/hashicorp/terraform-exec/tfexec"
-	capav1beta1 "sigs.k8s.io/cluster-api-provider-aws/v2/api/v1beta1"
-	capzv1beta1 "sigs.k8s.io/cluster-api-provider-azure/v2/api/v1beta1"
-	capgv1beta1 "sigs.k8s.io/cluster-api-provider-gcp/v2/api/v1beta1"
-	capvv1beta1 "sigs.k8s.io/cluster-api-provider-vsphere/apis/v1beta1"
-	capi "sigs.k8s.io/cluster-api/api/v1beta1"
+	"github.com/persys-dev/persys-cloud/persys-federation/config"
+	"github.com/redis/go-redis/v9"
 )
 
 type Provider interface {
@@ -20,24 +16,24 @@ type Provider interface {
 }
 
 type Manager struct {
-	config   *config.Config
-	redis    *redis.Client
-	aws      Provider
-	azure    Provider
-	gcp      Provider
-	vsphere  Provider
-	onprem   Provider
+	config  *config.Config
+	redis   *redis.Client
+	aws     Provider
+	azure   Provider
+	gcp     Provider
+	vsphere Provider
+	onprem  Provider
 }
 
 type EnvironmentSpec struct {
-	Provider     string            `json:"provider"`
-	ClusterName  string            `json:"cluster_name"`
-	Namespace    string            `json:"namespace"`
-	K8sVersion   string            `json:"k8s_version"`
-	NodeCount    int               `json:"node_count"`
-	Region       string            `json:"region"`
-	Credentials  map[string]string `json:"credentials"`
-	InfraConfig  map[string]string `json:"infra_config"`
+	Provider    string            `json:"provider"`
+	ClusterName string            `json:"cluster_name"`
+	Namespace   string            `json:"namespace"`
+	K8sVersion  string            `json:"k8s_version"`
+	NodeCount   int               `json:"node_count"`
+	Region      string            `json:"region"`
+	Credentials map[string]string `json:"credentials"`
+	InfraConfig map[string]string `json:"infra_config"`
 }
 
 func NewManager(config *config.Config, redis *redis.Client) *Manager {
@@ -79,15 +75,22 @@ func (p *AWSProvider) Provision(ctx context.Context, envID string, spec *Environ
 	if err != nil {
 		return err
 	}
+	_ = tf
 	// Apply Terraform for VPC, subnets, etc.
 	// Example: tf.Apply(ctx, tfexec.Dir("/path/to/aws_infra"))
 
-	// Create CAPI AWSCluster
-	cluster := &capav1beta1.AWSCluster{
-		// Populate spec with spec.Region, spec.Credentials, etc.
-	}
+	// TODO: wire concrete provider-specific CAPI resources.
+	cluster := map[string]interface{}{}
 	// Apply CAPI resources
 	return applyCAPICluster(ctx, cluster, spec)
+}
+
+func (p *AWSProvider) Update(ctx context.Context, envID string, spec *EnvironmentSpec) error {
+	return nil
+}
+
+func (p *AWSProvider) Delete(ctx context.Context, envID string) error {
+	return nil
 }
 
 type AzureProvider struct {
@@ -96,6 +99,62 @@ type AzureProvider struct {
 
 func (p *AzureProvider) Provision(ctx context.Context, envID string, spec *EnvironmentSpec) error {
 	// Similar logic for Azure using CAPZ
+	return nil
+}
+
+func (p *AzureProvider) Update(ctx context.Context, envID string, spec *EnvironmentSpec) error {
+	return nil
+}
+
+func (p *AzureProvider) Delete(ctx context.Context, envID string) error {
+	return nil
+}
+
+type GCPProvider struct {
+	config *config.Config
+}
+
+func (p *GCPProvider) Provision(ctx context.Context, envID string, spec *EnvironmentSpec) error {
+	return nil
+}
+
+func (p *GCPProvider) Update(ctx context.Context, envID string, spec *EnvironmentSpec) error {
+	return nil
+}
+
+func (p *GCPProvider) Delete(ctx context.Context, envID string) error {
+	return nil
+}
+
+type VSphereProvider struct {
+	config *config.Config
+}
+
+func (p *VSphereProvider) Provision(ctx context.Context, envID string, spec *EnvironmentSpec) error {
+	return nil
+}
+
+func (p *VSphereProvider) Update(ctx context.Context, envID string, spec *EnvironmentSpec) error {
+	return nil
+}
+
+func (p *VSphereProvider) Delete(ctx context.Context, envID string) error {
+	return nil
+}
+
+type OnPremProvider struct {
+	config *config.Config
+}
+
+func (p *OnPremProvider) Provision(ctx context.Context, envID string, spec *EnvironmentSpec) error {
+	return nil
+}
+
+func (p *OnPremProvider) Update(ctx context.Context, envID string, spec *EnvironmentSpec) error {
+	return nil
+}
+
+func (p *OnPremProvider) Delete(ctx context.Context, envID string) error {
 	return nil
 }
 

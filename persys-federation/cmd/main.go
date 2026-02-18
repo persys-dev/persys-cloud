@@ -2,26 +2,28 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
+	"os"
+	"strings"
 
-	"github.com/persys-dev/persys-cloud/cloud-mgmt/config"
-	"github.com/persys-dev/persys-cloud/cloud-mgmt/gapi"
-	"github.com/persys-dev/persys-cloud/cloud-mgmt/internal/providers"
-	"github.com/persys-dev/persys-cloud/cloud-mgmt/proto"
-	"github.com/persys-dev/persys-cloud/cloud-mgmt/services"
-	"github.com/persys-dev/persys-cloud/cloud-mgmt/utils"
+	"github.com/persys-dev/persys-cloud/persys-federation/config"
+	"github.com/persys-dev/persys-cloud/persys-federation/gapi"
+	"github.com/persys-dev/persys-cloud/persys-federation/internal/providers"
+	pb "github.com/persys-dev/persys-cloud/persys-federation/proto"
+	"github.com/persys-dev/persys-cloud/persys-federation/services"
+	"github.com/persys-dev/persys-cloud/persys-federation/utils"
 	"github.com/redis/go-redis/v9"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -29,14 +31,14 @@ var (
 	ctx         context.Context
 	mongoClient *mongo.Client
 	redisClient *redis.Client
-	cloudColl   *mongo.Collection
+	cloudDB     *mongo.Database
 	cloudSvc    services.CloudService
 )
 
 func init() {
 	config, err := config.ReadConfig()
 	if err != nil {
-		utils.AuditLog("Failed to load config: %v", err)
+		utils.AuditLog(fmt.Sprintf("Failed to load config: %v", err))
 		log.Fatal(err)
 	}
 
@@ -48,40 +50,49 @@ func init() {
 		SetRetryReads(true)
 	mongoClient, err = mongo.Connect(ctx, mongoConn)
 	if err != nil {
-		utils.AuditLog("MongoDB connection failed: %v", err)
+		utils.AuditLog(fmt.Sprintf("MongoDB connection failed: %v", err))
 		log.Fatal(err)
 	}
 	if err := mongoClient.Ping(ctx, readpref.Primary()); err != nil {
-		utils.AuditLog("MongoDB ping failed: %v", err)
+		utils.AuditLog(fmt.Sprintf("MongoDB ping failed: %v", err))
 		log.Fatal(err)
 	}
-	cloudColl = mongoClient.Database("cloud-mgmt").Collection("environments")
+	cloudDB = mongoClient.Database("persys-federation")
 
 	// Initialize Redis
 	redisClient = redis.NewClient(&redis.Options{
-		Addr:     config.RedisAddr,
-		Password: config.RedisPassword,
+		Addr:     getenvDefault("REDIS_ADDR", "localhost:6379"),
+		Password: getenvDefault("REDIS_PASSWORD", ""),
 	})
 	if _, err := redisClient.Ping(ctx).Result(); err != nil {
-		utils.AuditLog("Redis connection failed: %v", err)
+		utils.AuditLog(fmt.Sprintf("Redis connection failed: %v", err))
 		log.Fatal(err)
 	}
 
 	// Initialize Tracing
-	tp, err := initTracer(config.JaegerEndpoint)
+	tp, err := initTracer(getenvDefault("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4318"))
 	if err != nil {
-		utils.AuditLog("Tracer initialization failed: %v", err)
+		utils.AuditLog(fmt.Sprintf("Tracer initialization failed: %v", err))
 		log.Fatal(err)
 	}
 	otel.SetTracerProvider(tp)
 
 	// Initialize Cloud Service
 	providerMgr := providers.NewManager(config, redisClient)
-	cloudSvc = services.NewCloudService(cloudColl, ctx, providerMgr)
+	cloudSvc = services.NewCloudService(cloudDB, ctx, providerMgr)
 }
 
 func initTracer(endpoint string) (*trace.TracerProvider, error) {
-	exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(endpoint)))
+	opts := []otlptracehttp.Option{}
+	if strings.HasPrefix(endpoint, "http://") {
+		endpoint = strings.TrimPrefix(endpoint, "http://")
+		opts = append(opts, otlptracehttp.WithInsecure())
+	} else if strings.HasPrefix(endpoint, "https://") {
+		endpoint = strings.TrimPrefix(endpoint, "https://")
+	} else {
+		opts = append(opts, otlptracehttp.WithInsecure())
+	}
+	exporter, err := otlptracehttp.New(context.Background(), append(opts, otlptracehttp.WithEndpoint(endpoint))...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,33 +107,34 @@ func initTracer(endpoint string) (*trace.TracerProvider, error) {
 }
 
 func startGrpcServer(config *config.Config) {
-	creds, err := credentials.NewServerTLSFromFile(config.TLSCert, config.TLSKey)
+	grpcServer := grpc.NewServer()
+	cloudServer, err := gapi.NewGrpcCloudServer(*config, cloudSvc)
 	if err != nil {
-		utils.AuditLog("Failed to load TLS credentials: %v", err)
-		log.Fatal(err)
-	}
-
-	grpcServer := grpc.NewServer(grpc.Creds(creds))
-	cloudServer, err := gapi.NewGrpcCloudServer(config, cloudSvc)
-	if err != nil {
-		utils.AuditLog("Failed to create gRPC server: %v", err)
+		utils.AuditLog(fmt.Sprintf("Failed to create gRPC server: %v", err))
 		log.Fatal(err)
 	}
 
 	pb.RegisterCloudMgmtServiceServer(grpcServer, cloudServer)
 	reflection.Register(grpcServer)
 
-	listener, err := net.Listen("tcp", config.GrpcServerAddress)
+	listener, err := net.Listen("tcp", config.GrpcAddr)
 	if err != nil {
-		utils.AuditLog("Failed to start gRPC listener: %v", err)
+		utils.AuditLog(fmt.Sprintf("Failed to start gRPC listener: %v", err))
 		log.Fatal(err)
 	}
 
-	log.Printf("gRPC server started on %s", config.GrpcServerAddress)
+	log.Printf("gRPC server started on %s", config.GrpcAddr)
 	if err := grpcServer.Serve(listener); err != nil {
-		utils.AuditLog("gRPC server failed: %v", err)
+		utils.AuditLog(fmt.Sprintf("gRPC server failed: %v", err))
 		log.Fatal(err)
 	}
+}
+
+func getenvDefault(key, fallback string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return fallback
 }
 
 func main() {
