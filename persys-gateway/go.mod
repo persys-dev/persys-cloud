@@ -1,4 +1,4 @@
-module github.com/persys-dev/persys-cloud/api-gateway
+module github.com/persys-dev/persys-cloud/persys-gateway
 
 go 1.23.0
 

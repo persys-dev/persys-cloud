@@ -2,7 +2,7 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/persys-dev/persys-cloud/api-gateway/controllers"
+	"github.com/persys-dev/persys-cloud/persys-gateway/controllers"
 )
 
 type ProwRouteController struct {

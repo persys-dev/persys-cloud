@@ -3,9 +3,9 @@ package tests
 import (
 	"context"
 	"github.com/gin-gonic/gin"
-	"github.com/persys-dev/persys-cloud/api-gateway/controllers"
-	"github.com/persys-dev/persys-cloud/api-gateway/routes"
-	"github.com/persys-dev/persys-cloud/api-gateway/services"
+	"github.com/persys-dev/persys-cloud/persys-gateway/controllers"
+	"github.com/persys-dev/persys-cloud/persys-gateway/routes"
+	"github.com/persys-dev/persys-cloud/persys-gateway/services"
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"

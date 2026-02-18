@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/persys-dev/persys-cloud/api-gateway/config"
+	"github.com/persys-dev/persys-cloud/persys-gateway/config"
 	gootelhttp "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 )

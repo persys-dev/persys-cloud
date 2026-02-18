@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/persys-dev/persys-cloud/api-gateway/services"
+	"github.com/persys-dev/persys-cloud/persys-gateway/services"
 )
 
 type ProwController struct {

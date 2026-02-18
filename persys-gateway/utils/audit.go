@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/persys-dev/persys-cloud/api-gateway/config" // Adjust import based on actual config package
+	"github.com/persys-dev/persys-cloud/persys-gateway/config" // Adjust import based on actual config package
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"

@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"github.com/google/go-github/github"
-	"github.com/persys-dev/persys-cloud/api-gateway/models"
+	"github.com/persys-dev/persys-cloud/persys-gateway/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"time"
 

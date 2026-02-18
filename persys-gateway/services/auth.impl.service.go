@@ -9,7 +9,7 @@ import (
 	jwtlib "github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
 	"github.com/gin-gonic/gin"
-	"github.com/persys-dev/persys-cloud/api-gateway/models"
+	"github.com/persys-dev/persys-cloud/persys-gateway/models"
 
 	//"github.com/wpcodevo/golang-mongodb/utils"
 	"go.mongodb.org/mongo-driver/bson"
