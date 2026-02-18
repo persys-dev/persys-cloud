@@ -22,6 +22,7 @@ func main() {
 	must(waitForHTTP(cfg.schedulerMetricsURL+"/health", client, cfg.maxRetries, cfg.retryInterval))
 	must(waitForHTTP(cfg.schedulerMetricsURL+"/metrics", client, cfg.maxRetries, cfg.retryInterval))
 	must(waitForHTTP(cfg.agentMetricsURL+"/health", client, cfg.maxRetries, cfg.retryInterval))
+	must(waitForRegisteredNode(cfg))
 
 	logStep("apply workload")
 	must(applyWorkloadWithRetry(cfg))
@@ -41,11 +42,8 @@ func main() {
 
 	listOut, err := runSmokeCapture(cfg.schedulerGRPCAddr, "-op", "list-workloads")
 	must(err)
-	var listResp listWorkloadsResponse
-	must(unmarshalSmokeJSON(listOut, &listResp))
-	if !containsWorkload(listResp.Workloads, cfg.testWorkloadID) {
-		failf("workload %s missing from list-workloads", cfg.testWorkloadID)
-	}
+	_ = listOut
+	must(waitForWorkloadInList(cfg))
 
 	summaryOut, err := runSmokeCapture(cfg.schedulerGRPCAddr, "-op", "cluster-summary")
 	if err != nil {
@@ -131,7 +129,7 @@ func loadConfig() config {
 
 func applyWorkloadWithRetry(cfg config) error {
 	return poll(cfg.maxRetries, cfg.retryInterval, func() (bool, error) {
-		err := runSmoke(cfg.schedulerGRPCAddr,
+		out, err := runSmokeCapture(cfg.schedulerGRPCAddr,
 			"-op", "apply-container",
 			"-workload-id", cfg.testWorkloadID,
 			"-container-image", "busybox:latest",
@@ -147,7 +145,48 @@ func applyWorkloadWithRetry(cfg config) error {
 			}
 			return false, err
 		}
-		return true, nil
+		lower := strings.ToLower(out)
+		if strings.Contains(lower, "success=true") {
+			return true, nil
+		}
+		if strings.Contains(lower, "no suitable node") || strings.Contains(lower, "cannot place workload") {
+			return false, nil
+		}
+		return false, fmt.Errorf("apply-container did not report success: %s", out)
+	})
+}
+
+func waitForRegisteredNode(cfg config) error {
+	logStep("wait for compute-agent node registration")
+	return poll(cfg.maxRetries, cfg.retryInterval, func() (bool, error) {
+		out, err := runSmokeCapture(cfg.schedulerGRPCAddr, "-op", "cluster-summary")
+		if err != nil {
+			return false, nil
+		}
+		var summary struct {
+			TotalNodes int32 `json:"totalNodes"`
+		}
+		if err := unmarshalSmokeJSON(out, &summary); err != nil {
+			return false, nil
+		}
+		return summary.TotalNodes >= 1, nil
+	})
+}
+
+func waitForWorkloadInList(cfg config) error {
+	return poll(cfg.maxRetries, cfg.retryInterval, func() (bool, error) {
+		out, err := runSmokeCapture(cfg.schedulerGRPCAddr, "-op", "list-workloads")
+		if err != nil {
+			return false, nil
+		}
+		var listResp listWorkloadsResponse
+		if err := unmarshalSmokeJSON(out, &listResp); err != nil {
+			return false, nil
+		}
+		if containsWorkload(listResp.Workloads, cfg.testWorkloadID) {
+			return true, nil
+		}
+		return false, nil
 	})
 }
 
