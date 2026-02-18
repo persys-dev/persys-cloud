@@ -1,6 +1,6 @@
 # Sample config.yaml for persys-forge
-port: 8080
-mysql_dsn: "user:password@tcp(localhost:3306)/forgery_db?parseTime=true"
+port: 8087
+mysql_dsn: "forgery:password@tcp(localhost:3306)/forgery_db?parseTime=true"
 vault_addr: "http://localhost:8200"
 traefik_url: "http://traefik.local"
 nexus_url: "http://nexus.local:8081"

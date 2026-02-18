@@ -125,8 +125,6 @@ func main() {
 	// Project secrets (more specific first)
 	r.GET("/secrets/:project/:key", secretHandler.GetProjectSecret)
 	r.GET("/secrets/:project", secretHandler.ListProjectSecrets)
-	// Global secret (more general after)
-	r.GET("/secrets/:key", secretHandler.GetSecret)
 
 	// Start server
 	addr := fmt.Sprintf(":%d", cfg.Port)
