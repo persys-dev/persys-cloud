@@ -9,3 +9,4 @@ terraform.tfvars
 **/bin/
 api-gateway/config.toml
 prow/internal/scheduler/reconcile.txt
+certs/
