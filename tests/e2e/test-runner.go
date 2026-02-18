@@ -108,12 +108,12 @@ type listWorkloadsResponse struct {
 }
 
 type workloadView struct {
-	WorkloadID string `json:"workloadId"`
+	WorkloadID string `json:"workload_id"`
 	Status     string `json:"status"`
 }
 
 type clusterSummaryResponse struct {
-	TotalWorkloads int32 `json:"totalWorkloads"`
+	TotalWorkloads int32 `json:"total_workloads"`
 }
 
 func loadConfig() config {
@@ -164,7 +164,7 @@ func waitForRegisteredNode(cfg config) error {
 			return false, nil
 		}
 		var summary struct {
-			TotalNodes int32 `json:"totalNodes"`
+			TotalNodes int32 `json:"total_nodes"`
 		}
 		if err := unmarshalSmokeJSON(out, &summary); err != nil {
 			return false, nil
