@@ -120,7 +120,7 @@ func main() {
 	go func() {
 		time.Sleep(90 * time.Second)
 		if err := app.prowService.DiscoverSchedulers(cnf.CoreDNS.Addr); err != nil {
-			log.Printf("Warning: Failed to discover Prow schedulers: %v", err)
+			log.Printf("Warning: Failed to discover Persys schedulers: %v", err)
 		}
 	}()
 	
@@ -133,7 +133,7 @@ func main() {
 	corsConfig.AllowOrigins = []string{"*"}
 	corsConfig.AllowCredentials = true
 	app.server.Use(cors.New(corsConfig))
-	app.server.Use(middleware.ServiceIdentityHeader("api-gateway"))
+	app.server.Use(middleware.ServiceIdentityHeader("persys-gateway"))
 
 	// Create separate routers for mTLS and non-mTLS
 	mtlsRouter := gin.New()
@@ -142,16 +142,16 @@ func main() {
 	// Apply middleware to both routers
 	mtlsRouter.Use(gin.Logger())
 	mtlsRouter.Use(cors.New(corsConfig))
-	mtlsRouter.Use(gootelgin.Middleware("api-gateway-mtls"))
-	mtlsRouter.Use(middleware.ServiceIdentityHeader("api-gateway"))
+	mtlsRouter.Use(gootelgin.Middleware("persys-gateway-mtls"))
+	mtlsRouter.Use(middleware.ServiceIdentityHeader("persys-gateway"))
 
 	nonMTLSRouter.Use(gin.Logger())
 	nonMTLSRouter.Use(cors.New(corsConfig))
-	nonMTLSRouter.Use(gootelgin.Middleware("api-gateway-non-mtls"))
-	nonMTLSRouter.Use(middleware.ServiceIdentityHeader("api-gateway"))
+	nonMTLSRouter.Use(gootelgin.Middleware("persys-gateway-non-mtls"))
+	nonMTLSRouter.Use(middleware.ServiceIdentityHeader("persys-gateway"))
 
 	// Add Prometheus instrumentation to both routers
-	p := ginprometheus.NewPrometheus("api_gateway")
+	p := ginprometheus.NewPrometheus("persys_gateway")
 	p.Use(mtlsRouter)
 	p.Use(nonMTLSRouter)
 
