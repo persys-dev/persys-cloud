@@ -244,10 +244,10 @@ func (s *ProwService) queryCoreDNSForSchedulers(coreDNSAddr string) ([]string, e
 	}
 	service := s.config.Prow.DiscoveryService
 	if service == "" {
-		service = "_prow-scheduler"
+		service = "_persys-scheduler"
 	}
 
-	// Query for SRV records in the format _prow-scheduler.persys.local (no _tcp)
+	// Query for SRV records in the format _persys-scheduler.persys.local (no _tcp)
 	srvName := service + "." + domain
 	_, srvRecords, err := resolver.LookupSRV(context.Background(), "", "", srvName)
 	if err != nil {
@@ -278,10 +278,10 @@ func (s *ProwService) queryCoreDNSForSchedulers(coreDNSAddr string) ([]string, e
 
 	// If no SRV records found, try A record lookup
 	if len(schedulers) == 0 {
-		ips, err := resolver.LookupHost(context.Background(), "scheduler."+domain)
+		ips, err := resolver.LookupHost(context.Background(), "persys-scheduler."+domain)
 		if err != nil {
 			// Try alternative domain
-			ips, err = resolver.LookupHost(context.Background(), "scheduler.local")
+			ips, err = resolver.LookupHost(context.Background(), "persys-scheduler.local")
 			if err != nil {
 				return nil, fmt.Errorf("failed to lookup scheduler A records: %w", err)
 			}

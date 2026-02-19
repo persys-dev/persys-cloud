@@ -116,7 +116,7 @@ func main() {
 	app.githubService = services.NewGithubService(app.githubCollection, ctx)
 	app.prowService = services.NewProwService(cnf)
 
-	// Discover Prow schedulers in a go routine with a 90 second delay (wait for prows to come up and register)
+	// Discover Persys schedulers in a go routine with a 90 second delay (wait for prows to come up and register)
 	go func() {
 		time.Sleep(90 * time.Second)
 		if err := app.prowService.DiscoverSchedulers(cnf.CoreDNS.Addr); err != nil {
