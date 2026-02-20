@@ -509,6 +509,11 @@ func (s *Scheduler) GetWorkloads() ([]models.Workload, error) {
 		}
 		workloads = append(workloads, workload)
 	}
+	if s.currentMode() != ModeNormal && len(workloads) == 0 {
+		// In recovery mode etcd may be reachable but state still empty.
+		// Preserve and serve the frozen cache snapshot for operator visibility.
+		return s.getCachedWorkloads(), nil
+	}
 
 	s.withCacheLock(func() {
 		s.cacheWorkloads = map[string]models.Workload{}
