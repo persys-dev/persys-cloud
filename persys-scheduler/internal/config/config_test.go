@@ -21,6 +21,7 @@ func TestLoadDefaults(t *testing.T) {
 		"SCHEDULER_AGENT_STATUS_POLL_INTERVAL", "SCHEDULER_AGENT_APPLY_TIMEOUT",
 		"SCHEDULER_RECONCILE_INTERVAL",
 	)
+	t.Setenv("PERSYS_VAULT_ENABLED", "false")
 
 	cfg, err := Load(false)
 	if err != nil {
@@ -42,6 +43,7 @@ func TestLoadDefaults(t *testing.T) {
 }
 
 func TestLoadDurationSupportsSecondsInt(t *testing.T) {
+	t.Setenv("PERSYS_VAULT_ENABLED", "false")
 	t.Setenv("SCHEDULER_AGENT_RPC_TIMEOUT", "15")
 	cfg, err := Load(false)
 	if err != nil {
