@@ -340,6 +340,18 @@ func (s *Scheduler) remediateOrphanOnAgent(node models.Node, workloadID string, 
 
 	sw, known := expectedAll[workloadID]
 	if !known {
+		latest, err := s.GetWorkloadByID(workloadID)
+		if err == nil {
+			sw = latest
+			known = true
+			if expectedAll != nil {
+				expectedAll[workloadID] = latest
+			}
+		} else if !isWorkloadMissingError(err) {
+			return "operator_investigation", fmt.Errorf("failed to re-check unknown workload %s before delete: %w", workloadID, err)
+		}
+	}
+	if !known {
 		return "delete_orphan_on_agent", s.deleteOrphanFromNode(node, workloadID)
 	}
 
@@ -450,4 +462,12 @@ func isNodeLikelyUnavailable(node models.Node) bool {
 		return true
 	}
 	return time.Since(node.LastHeartbeat) > 3*time.Minute
+}
+
+func isWorkloadMissingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(msg, "workload") && strings.Contains(msg, "not found")
 }
