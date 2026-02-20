@@ -11,6 +11,9 @@ import (
 )
 
 func (s *Scheduler) CreateWorkload(workload models.Workload) (models.Workload, error) {
+	if err := s.requireWritable(); err != nil {
+		return models.Workload{}, err
+	}
 	if strings.TrimSpace(workload.ID) == "" {
 		workload.ID = uuid.NewString()
 	}
@@ -28,6 +31,9 @@ func (s *Scheduler) CreateWorkload(workload models.Workload) (models.Workload, e
 }
 
 func (s *Scheduler) UpdateWorkloadSpec(workloadID string, update models.Workload) (models.Workload, error) {
+	if err := s.requireWritable(); err != nil {
+		return models.Workload{}, err
+	}
 	current, err := s.GetWorkloadByID(workloadID)
 	if err != nil {
 		return models.Workload{}, err
@@ -50,6 +56,9 @@ func (s *Scheduler) UpdateWorkloadSpec(workloadID string, update models.Workload
 	}
 	if update.Command != "" {
 		current.Command = update.Command
+	}
+	if len(update.CommandList) > 0 {
+		current.CommandList = append([]string{}, update.CommandList...)
 	}
 	if update.Compose != "" {
 		current.Compose = update.Compose
@@ -94,6 +103,9 @@ func (s *Scheduler) UpdateWorkloadSpec(workloadID string, update models.Workload
 }
 
 func (s *Scheduler) MarkWorkloadDeleted(workloadID string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	workload, err := s.GetWorkloadByID(workloadID)
 	if err != nil {
 		return err
@@ -113,6 +125,9 @@ func (s *Scheduler) MarkWorkloadDeleted(workloadID string) error {
 }
 
 func (s *Scheduler) TriggerWorkloadRetry(workloadID string) (models.Workload, error) {
+	if err := s.requireWritable(); err != nil {
+		return models.Workload{}, err
+	}
 	workload, err := s.GetWorkloadByID(workloadID)
 	if err != nil {
 		return models.Workload{}, err
@@ -133,6 +148,9 @@ func (s *Scheduler) TriggerWorkloadRetry(workloadID string) (models.Workload, er
 }
 
 func (s *Scheduler) UpdateWorkloadRetryOnFailure(workloadID string, reason string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	workload, err := s.GetWorkloadByID(workloadID)
 	if err != nil {
 		return err
@@ -207,6 +225,9 @@ func (s *Scheduler) DumpWorkloadRecord(workloadID string) (map[string]interface{
 }
 
 func (s *Scheduler) EnsureWorkloadAssigned(workload *models.Workload) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	if workload.NodeID != "" {
 		return nil
 	}

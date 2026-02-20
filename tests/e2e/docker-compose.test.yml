@@ -12,6 +12,7 @@ services:
       context: ../../compute-agent
       dockerfile: Dockerfile
     environment:
+      - PERSYS_VAULT_ENABLED=false
       - PERSYS_TLS_ENABLED=false
       - PERSYS_GRPC_PORT=50051
       - PERSYS_LOG_LEVEL=info
@@ -34,6 +35,7 @@ services:
       dockerfile: Dockerfile
     command: ["./persys-scheduler", "-insecure"]
     environment:
+      - PERSYS_VAULT_ENABLED=false
       - ETCD_ENDPOINTS=etcd:2379
       - GRPC_PORT=8085
       - METRICS_PORT=8084

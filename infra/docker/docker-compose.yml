@@ -11,11 +11,12 @@ services:
   persys-gateway:
     build: ../../persys-gateway
     volumes:
-      - certs:/etc/persys-gateway/certs
+      - certs:/etc/persys/certs/persys-gateway
     ports:
       - 8551:8551
     depends_on:
-      - persys-cfssl
+      - mongodb
+      - vault
       - coredns
       - jaeger
     environment:
@@ -27,36 +28,81 @@ services:
   persys-scheduler:
     build: ../../persys-scheduler
     volumes:
-      - certs:/etc/persys-scheduler/certs
+      - certs:/etc/persys/certs/persys_scheduler
     ports:
-      - 8084:8084   # Non-mTLS API
-      - 8085:8085   # mTLS API
+      - 8084:8084   # HTTP Non-mTLS API
+      - 8085:8085   # gRPC + mTLS API
     depends_on:
       - etcd
-      - persys-cfssl
+      - vault
       - coredns
       - jaeger
     environment:
       - ETCD_ENDPOINTS=etcd:2379
-      - OTEL_EXPORTER_JAEGER_ENDPOINT=jaeger:4318
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4318
+      - OTEL_EXPORTER_OTLP_INSECURE=true
       - OTEL_SERVICE_NAME=persys-scheduler
-      - CA_FILE=/etc/persys-scheduler/certs/ca.pem
-      - CFSSL_API_URL=https://persys-cfssl:8888
       - CERT_COMMON_NAME=persys-scheduler
       - CERT_ORGANIZATION=persys
+      - SCHEDULER_AGENT_TLS_ENABLED=true
+      - PERSYS_EXTERNAL_IP={$PERSYS_EXTERNAL_IP}
+      - PERSYS_VAULT_ADDR=http://vault:8200
+      - PERSYS_VAULT_TOKEN=${PERSYS_VAULT_TOKEN}
     networks:
       - persys-cloud-net
-
-  # --- Certificate Authority (CFSSL) ---
-  persys-cfssl:
-    build: ../../persys-cfssl
+    
+  compute-agent:
+    build:
+      context: ../../compute-agent
+      dockerfile: Dockerfile
+    environment:
+      - PERSYS_VAULT_ADDR=http://vault:8200
+      - PERSYS_VAULT_TOKEN=${PERSYS_VAULT_TOKEN}
+      - PERSYS_TLS_ENABLED=true
+      - PERSYS_GRPC_PORT=50051
+      - PERSYS_LOG_LEVEL=info
+      - PERSYS_RECONCILE_ENABLED=true
+      - PERSYS_VM_ENABLED=false
+      - PERSYS_SCHEDULER_INSECURE=false
+      - PERSYS_SCHEDULER_ADDR=persys-scheduler:8085
+    user: "0:0"
     volumes:
-      - certs:/app/certs
+      - ${DOCKER_SOCK_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+      - ../../certs:/etc/persys/certs/agent
+    depends_on:
+      - vault
+      - persys-scheduler
     ports:
-      - 8888:8888
+      - "50051:50051"
+      - "8089:8080"
     networks:
       - persys-cloud-net
 
+  # persys-cfssl:
+  #   build: ../../persys-cfssl
+  #   volumes:
+  #     - certs:/app/certs
+  #   ports:
+  #     - 8888:8888
+  #   networks:
+  #     - persys-cloud-net
+
+
+  # --- Certificate Authority / Secret Manager ---
+  vault:
+    image: hashicorp/vault:1.16.2
+    container_name: vault
+    restart: unless-stopped
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_ADDR: "http://0.0.0.0:8200"
+      VAULT_API_ADDR: "http://vault:8200"
+    cap_add:
+      - IPC_LOCK
+    networks:
+      - persys-cloud-net
+      
   # --- CoreDNS (Service discovery) ---
   coredns:
     image: coredns/coredns:latest
@@ -64,13 +110,13 @@ services:
     volumes:
       - ./coredns:/etc/coredns
     ports:
-      - "53:53"
-      - "53:53/udp"
+      - "53531:53"
+      - "53531:53/udp"
       - "9153:9153/tcp"
     depends_on:
       - etcd
     networks:
-      - milx-cloud-net
+      - persys-cloud-net
 
   # --- Prometheus (Metrics collection) ---
   prometheus:
@@ -154,6 +200,7 @@ services:
   etcd:
     image: quay.io/coreos/etcd:v3.5.0
     command: etcd --advertise-client-urls http://etcd:2379 --listen-client-urls http://0.0.0.0:2379
+    restart: unless-stopped
     ports:
       - "2379:2379"
     networks:
@@ -169,6 +216,5 @@ volumes:
 
 # --- Shared overlay network for all services ---
 networks:
-  milx-cloud-net:
+  persys-cloud-net:
     driver: bridge
-

@@ -1,3 +1,4 @@
+.cache
 .idea
 *.log
 *.toml
@@ -10,3 +11,5 @@ terraform.tfvars
 api-gateway/config.toml
 prow/internal/scheduler/reconcile.txt
 certs/
+vault-mtls-mock/certs-runtime/
+vault-mtls-mock/

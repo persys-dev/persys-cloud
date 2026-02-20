@@ -57,6 +57,10 @@ func (s *Service) RegisterNode(ctx context.Context, in *controlv1.RegisterNodeRe
 		return nil, err
 	}
 
+	if !s.sched.IsWritable() {
+		return &controlv1.RegisterNodeResponse{Accepted: false, Reason: "scheduler degraded/recovery mode"}, nil
+	}
+
 	node := models.Node{
 		NodeID:                 in.GetNodeId(),
 		Status:                 "Ready",
@@ -128,6 +132,15 @@ func (s *Service) Heartbeat(ctx context.Context, in *controlv1.HeartbeatRequest)
 		return nil, err
 	}
 
+	if !s.sched.IsWritable() {
+		lease := time.Now().UTC().Add(30 * time.Second)
+		return &controlv1.HeartbeatResponse{
+			Acknowledged:   true,
+			DrainNode:      true,
+			LeaseExpiresAt: timestamppb.New(lease),
+		}, nil
+	}
+
 	currentNode, _ := s.sched.GetNodeByID(in.GetNodeId())
 
 	availableCPU := currentNode.AvailableCPU
@@ -169,6 +182,13 @@ func (s *Service) ApplyWorkload(ctx context.Context, in *controlv1.ApplyWorkload
 			attribute.String("scheduler.workload_desired_state", strings.TrimSpace(in.GetDesiredState())),
 		)
 	}
+	if !s.sched.IsWritable() {
+		return &controlv1.ApplyWorkloadResponse{
+			Success:       false,
+			FailureReason: controlv1.FailureReason_RUNTIME_ERROR,
+			ErrorMessage:  "scheduler degraded/recovery mode; control plane frozen",
+		}, nil
+	}
 	if in == nil || strings.TrimSpace(in.GetWorkloadId()) == "" {
 		err := status.Error(codes.InvalidArgument, "workload_id is required")
 		recordRPCError(ctx, err)
@@ -208,6 +228,9 @@ func (s *Service) DeleteWorkload(ctx context.Context, in *controlv1.DeleteWorklo
 	if in != nil {
 		annotateRPC(ctx, attribute.String("scheduler.workload_id", strings.TrimSpace(in.GetWorkloadId())))
 	}
+	if !s.sched.IsWritable() {
+		return &controlv1.DeleteWorkloadResponse{Success: false, ErrorMessage: "scheduler degraded/recovery mode; control plane frozen"}, nil
+	}
 	if in == nil || strings.TrimSpace(in.GetWorkloadId()) == "" {
 		err := status.Error(codes.InvalidArgument, "workload_id is required")
 		recordRPCError(ctx, err)
@@ -222,6 +245,9 @@ func (s *Service) DeleteWorkload(ctx context.Context, in *controlv1.DeleteWorklo
 func (s *Service) RetryWorkload(ctx context.Context, in *controlv1.RetryWorkloadRequest) (*controlv1.RetryWorkloadResponse, error) {
 	if in != nil {
 		annotateRPC(ctx, attribute.String("scheduler.workload_id", strings.TrimSpace(in.GetWorkloadId())))
+	}
+	if !s.sched.IsWritable() {
+		return &controlv1.RetryWorkloadResponse{Accepted: false}, nil
 	}
 	if in == nil || strings.TrimSpace(in.GetWorkloadId()) == "" {
 		err := status.Error(codes.InvalidArgument, "workload_id is required")
@@ -506,7 +532,8 @@ func controlApplyToModel(in *controlv1.ApplyWorkloadRequest) (models.Workload, e
 			return models.Workload{}, fmt.Errorf("container spec required")
 		}
 		w.Image = cs.GetImage()
-		w.Command = strings.Join(cs.GetCommand(), " ")
+		w.CommandList = append([]string{}, cs.GetCommand()...)
+		w.Command = strings.Join(w.CommandList, " ")
 		w.EnvVars = cs.GetEnv()
 		w.RestartPolicy = cs.GetRestartPolicy()
 		for _, p := range cs.GetPorts() {

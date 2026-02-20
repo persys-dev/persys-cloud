@@ -4,16 +4,20 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/auth"
+	cfgpkg "github.com/persys-dev/persys-cloud/persys-scheduler/internal/config"
 	controlv1 "github.com/persys-dev/persys-cloud/persys-scheduler/internal/controlv1"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/grpcapi"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/logging"
@@ -33,60 +37,69 @@ func main() {
 	insecure := flag.Bool("insecure", false, "run scheduler gRPC without mTLS (testing only)")
 	flag.Parse()
 
+	cfg, err := cfgpkg.Load(*insecure)
+	if err != nil {
+		logger.WithError(err).Fatal("failed to load scheduler configuration")
+	}
+
 	metricspkg.Register()
 
-	otelShutdown, err := telemetry.SetupOpenTelemetry(context.Background(), "persys-scheduler")
+	otelShutdown, err := telemetry.SetupOpenTelemetry(context.Background(), "persys-scheduler", cfg)
 	if err != nil {
 		logger.WithError(err).Fatal("failed to initialize OpenTelemetry")
 	}
 
-	caFile := os.Getenv("CA_FILE")
-	cfsslURL := os.Getenv("CFSSL_API_URL")
-	commonName := os.Getenv("CERT_COMMON_NAME")
-	organization := os.Getenv("CERT_ORGANIZATION")
-
-	if caFile == "" {
-		caFile = "/etc/prow/certs/ca.pem"
-	}
-	if cfsslURL == "" {
-		cfsslURL = "https://persys-cfssl:8888"
-	}
-	if commonName == "" {
-		commonName = "persys-scheduler"
-	}
-	if organization == "" {
-		organization = "persys"
-	}
-
 	var tlsConfig *tls.Config
-	if !*insecure {
-		certManager := auth.NewCertificateManager(caFile, cfsslURL, commonName, organization)
-		if err := certManager.EnsureCertificate(); err != nil {
-			logger.WithError(err).Fatal("failed to ensure certificate")
+	var certCancel context.CancelFunc
+	if !cfg.Insecure {
+		certCfg := auth.Config{
+			TLSEnabled:  cfg.TLSEnabled,
+			ExternalIP:  cfg.ExternalIP,
+			TLSCertPath: cfg.TLSCertPath,
+			TLSKeyPath:  cfg.TLSKeyPath,
+			TLSCAPath:   cfg.TLSCAPath,
+
+			VaultEnabled:       cfg.VaultEnabled,
+			VaultAddr:          cfg.VaultAddr,
+			VaultAuthMethod:    cfg.VaultAuthMethod,
+			VaultToken:         cfg.VaultToken,
+			VaultAppRoleID:     cfg.VaultAppRoleID,
+			VaultAppSecretID:   cfg.VaultAppSecretID,
+			VaultPKIMount:      cfg.VaultPKIMount,
+			VaultPKIRole:       cfg.VaultPKIRole,
+			VaultCertTTL:       cfg.VaultCertTTL,
+			VaultServiceName:   cfg.VaultServiceName,
+			VaultServiceDomain: cfg.VaultServiceDomain,
+			VaultRetryInterval: cfg.VaultRetryInterval,
+
+			BindHost: cfg.GRPCAddr,
 		}
-		cert, err := tls.LoadX509KeyPair(certManager.CertPath, certManager.KeyPath)
-		if err != nil {
-			logger.WithError(err).Fatal("failed to load certificate pair")
+		certMgr := auth.NewManager(certCfg, logger.Logger)
+		certCtx, cancel := context.WithCancel(context.Background())
+		certCancel = cancel
+		if err := certMgr.Start(certCtx); err != nil {
+			logger.WithError(err).Fatal("failed to initialize certificate manager")
 		}
-		caCert, err := os.ReadFile(caFile)
-		if err != nil {
-			logger.WithError(err).WithField("ca_file", caFile).Fatal("failed to read CA cert")
+
+		provider := &dynamicTLSProvider{
+			certPath: certCfg.TLSCertPath,
+			keyPath:  certCfg.TLSKeyPath,
+			caPath:   certCfg.TLSCAPath,
 		}
-		caCertPool := x509.NewCertPool()
-		if !caCertPool.AppendCertsFromPEM(caCert) {
-			logger.Fatal("failed to append CA cert to pool")
+		if _, err := provider.getConfig(); err != nil {
+			logger.WithError(err).Fatal("failed to load TLS config")
 		}
 		tlsConfig = &tls.Config{
-			Certificates: []tls.Certificate{cert},
-			ClientCAs:    caCertPool,
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-			MinVersion:   tls.VersionTLS12,
+			MinVersion: tls.VersionTLS12,
+			GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
+				return provider.getConfig()
+			},
 		}
 	} else {
 		logger.Warn("starting scheduler in insecure mode: mTLS disabled")
 	}
 
-	sched, err := scheduler.NewScheduler()
+	sched, err := scheduler.NewScheduler(cfg)
 	if err != nil {
 		logger.WithError(err).Fatal("failed to initialize scheduler")
 	}
@@ -101,11 +114,12 @@ func main() {
 	sched.StartMonitoring(ctx)
 	sched.StartReconciliation(ctx)
 
-	grpcPort := os.Getenv("GRPC_PORT")
-	if grpcPort == "" {
-		grpcPort = "8085"
+	grpcPort := strconv.Itoa(cfg.GRPCPort)
+	if err := sched.RegisterSchedulerSelfInCoreDNS(cfg.GRPCPort); err != nil {
+		logger.WithError(err).Warn("failed to self-register scheduler in CoreDNS")
 	}
-	lis, err := net.Listen("tcp", ":"+grpcPort)
+
+	lis, err := net.Listen("tcp", net.JoinHostPort(cfg.GRPCAddr, grpcPort))
 	if err != nil {
 		logger.WithError(err).WithField("port", grpcPort).Fatal("failed to listen on gRPC port")
 	}
@@ -116,7 +130,7 @@ func main() {
 		grpc.StreamInterceptor(metricspkg.GRPCStreamServerInterceptor()),
 	}
 	var grpcServer *grpc.Server
-	if *insecure {
+	if cfg.Insecure {
 		grpcServer = grpc.NewServer(grpcOpts...)
 	} else {
 		grpcServer = grpc.NewServer(append(grpcOpts, grpc.Creds(credentials.NewTLS(tlsConfig)))...)
@@ -124,17 +138,21 @@ func main() {
 	controlv1.RegisterAgentControlServer(grpcServer, grpcapi.NewService(sched))
 	reflection.Register(grpcServer)
 
-	metricsPort := os.Getenv("METRICS_PORT")
-	if metricsPort == "" {
-		metricsPort = "8084"
-	}
+	metricsPort := strconv.Itoa(cfg.MetricsPort)
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("/metrics", gootelhttp.NewHandler(promhttp.Handler(), "scheduler.metrics"))
 	metricsMux.Handle("/health", gootelhttp.NewHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("ok"))
+		mode, reason, changedAt := sched.ModeSnapshot()
+		payload, _ := json.Marshal(map[string]string{
+			"status":        "ok",
+			"mode":          string(mode),
+			"reason":        reason,
+			"modeChangedAt": changedAt.Format(time.RFC3339),
+		})
+		_, _ = w.Write(payload)
 	}), "scheduler.health"))
-	metricsServer := &http.Server{Addr: ":" + metricsPort, Handler: metricsMux}
+	metricsServer := &http.Server{Addr: net.JoinHostPort(cfg.GRPCAddr, metricsPort), Handler: metricsMux}
 
 	serverErrCh := make(chan error, 2)
 
@@ -180,6 +198,9 @@ func main() {
 	if err := metricsServer.Shutdown(shutdownCtx); err != nil {
 		logger.WithError(err).Error("metrics server shutdown error")
 	}
+	if certCancel != nil {
+		certCancel()
+	}
 	if err := otelShutdown(shutdownCtx); err != nil {
 		logger.WithError(err).Warn("OpenTelemetry shutdown error")
 	}
@@ -187,4 +208,77 @@ func main() {
 	if ok := sched.WaitForBackground(5 * time.Second); !ok {
 		logger.Warn("timed out waiting for scheduler background workers to stop")
 	}
+}
+
+type dynamicTLSProvider struct {
+	certPath string
+	keyPath  string
+	caPath   string
+
+	mu          sync.RWMutex
+	cached      *tls.Config
+	certModTime time.Time
+	keyModTime  time.Time
+	caModTime   time.Time
+}
+
+func (d *dynamicTLSProvider) getConfig() (*tls.Config, error) {
+	certInfo, err := os.Stat(d.certPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat server certificate: %w", err)
+	}
+	keyInfo, err := os.Stat(d.keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat server key: %w", err)
+	}
+	caInfo, err := os.Stat(d.caPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to stat CA certificate: %w", err)
+	}
+
+	d.mu.RLock()
+	cached := d.cached
+	certUnchanged := d.certModTime.Equal(certInfo.ModTime())
+	keyUnchanged := d.keyModTime.Equal(keyInfo.ModTime())
+	caUnchanged := d.caModTime.Equal(caInfo.ModTime())
+	d.mu.RUnlock()
+	if cached != nil && certUnchanged && keyUnchanged && caUnchanged {
+		return cached, nil
+	}
+
+	keyPair, err := tls.LoadX509KeyPair(d.certPath, d.keyPath)
+	if err != nil {
+		if cached != nil {
+			return cached, nil
+		}
+		return nil, fmt.Errorf("failed to load server certificate: %w", err)
+	}
+	caCert, err := os.ReadFile(d.caPath)
+	if err != nil {
+		if cached != nil {
+			return cached, nil
+		}
+		return nil, fmt.Errorf("failed to read CA certificate: %w", err)
+	}
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+		if cached != nil {
+			return cached, nil
+		}
+		return nil, fmt.Errorf("failed to parse CA certificate")
+	}
+	updated := &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		Certificates: []tls.Certificate{keyPair},
+		ClientCAs:    caCertPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+	}
+
+	d.mu.Lock()
+	d.cached = updated
+	d.certModTime = certInfo.ModTime()
+	d.keyModTime = keyInfo.ModTime()
+	d.caModTime = caInfo.ModTime()
+	d.mu.Unlock()
+	return updated, nil
 }

@@ -77,6 +77,7 @@ type Workload struct {
 	AssignedNode  string                 `json:"assignedNode,omitempty"`
 	Image         string                 `json:"image,omitempty"`       // For docker-container
 	Command       string                 `json:"command,omitempty"`     // For docker-container
+	CommandList   []string               `json:"commandList,omitempty"` // Preserves tokenized command/args for container workloads
 	Compose       string                 `json:"compose,omitempty"`     // Base64-encoded Compose content (optional)
 	ComposeYAML   string                 `json:"composeYaml,omitempty"` // Base64-encoded Compose YAML for compute-agent compose spec
 	ProjectName   string                 `json:"projectName,omitempty"` // Deterministic compose project name
@@ -137,6 +138,18 @@ type SchedulerEvent struct {
 	Reason     string                 `json:"reason,omitempty"`
 	Timestamp  time.Time              `json:"timestamp"`
 	Details    map[string]interface{} `json:"details,omitempty"`
+}
+
+type DriftRecord struct {
+	NodeID          string    `json:"nodeId"`
+	WorkloadID      string    `json:"workloadId"`
+	DriftType       string    `json:"driftType"`
+	DetectedAt      time.Time `json:"detectedAt"`
+	SchedulerStatus string    `json:"schedulerStatus,omitempty"`
+	AgentStatus     string    `json:"agentStatus,omitempty"`
+	Action          string    `json:"action,omitempty"`
+	Resolved        bool      `json:"resolved"`
+	LastError       string    `json:"lastError,omitempty"`
 }
 
 // VMSpec defines VM-specific fields for scheduler API and persistence.

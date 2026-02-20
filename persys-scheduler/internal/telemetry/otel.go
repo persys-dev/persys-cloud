@@ -3,9 +3,10 @@ package telemetry
 import (
 	"context"
 	"net/url"
-	"os"
 	"strings"
 
+	cfgpkg "github.com/persys-dev/persys-cloud/persys-scheduler/internal/config"
+	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/logging"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -14,13 +15,21 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 )
 
-func SetupOpenTelemetry(ctx context.Context, serviceName string) (func(context.Context) error, error) {
-	endpoint := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+func SetupOpenTelemetry(ctx context.Context, serviceName string, cfg *cfgpkg.Config) (func(context.Context) error, error) {
+	telemetryLogger := logging.C("telemetry.otel")
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		if err != nil {
+			telemetryLogger.WithError(err).Warn("OpenTelemetry runtime error")
+		}
+	}))
+
+	endpoint := strings.TrimSpace(cfg.OTLPEndpoint)
 	if endpoint == "" {
-		endpoint = strings.TrimSpace(os.Getenv("JAEGER_ENDPOINT"))
+		endpoint = strings.TrimSpace(cfg.JaegerEndpoint)
 	}
 	if endpoint == "" {
-		endpoint = "jaeger:4318"
+		telemetryLogger.Info("OpenTelemetry exporter disabled: OTEL endpoint not configured")
+		return func(context.Context) error { return nil }, nil
 	}
 
 	opts := make([]otlptracehttp.Option, 0, 3)
@@ -40,7 +49,7 @@ func SetupOpenTelemetry(ctx context.Context, serviceName string) (func(context.C
 		opts = append(opts, otlptracehttp.WithEndpoint(endpoint), otlptracehttp.WithInsecure())
 	}
 
-	if strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_INSECURE")), "true") {
+	if cfg.OTLPInsecure {
 		opts = append(opts, otlptracehttp.WithInsecure())
 	}
 

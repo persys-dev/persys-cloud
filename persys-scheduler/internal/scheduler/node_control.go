@@ -14,6 +14,9 @@ import (
 var nodeLogger = logging.C("scheduler.node_control")
 
 func (s *Scheduler) UpdateNodeHeartbeat(nodeID, status string, availableCPU float64, availableMemory int64) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	resp, err := s.RetryableEtcdGet("/nodes/" + nodeID)
 	if err != nil {
 		return fmt.Errorf("failed to get node %s from etcd: %w", nodeID, err)
@@ -61,6 +64,7 @@ func (s *Scheduler) UpdateNodeHeartbeat(nodeID, status string, availableCPU floa
 		return fmt.Errorf("failed to update node %s heartbeat: %w", nodeID, err)
 	}
 	_ = s.RetryableEtcdPut("/nodes/"+nodeID+"/status", node.Status)
+	s.cacheNode(node)
 	return nil
 }
 
@@ -69,6 +73,9 @@ func (s *Scheduler) MarkNodeNotReady(nodeID, reason string) error {
 }
 
 func (s *Scheduler) MarkNodeWorkloadTypeUnsupported(nodeID, workloadType, reason string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	resp, err := s.RetryableEtcdGet("/nodes/" + nodeID)
 	if err != nil {
 		return fmt.Errorf("failed to get node %s from etcd: %w", nodeID, err)
@@ -121,6 +128,7 @@ func (s *Scheduler) MarkNodeWorkloadTypeUnsupported(nodeID, workloadType, reason
 	if err := s.RetryableEtcdPut("/nodes/"+nodeID, string(payload)); err != nil {
 		return fmt.Errorf("failed to persist workload type capability update for node %s: %w", nodeID, err)
 	}
+	s.cacheNode(node)
 	nodeLogger.WithFields(logrus.Fields{
 		"node_id":    nodeID,
 		"capability": node.SupportedWorkloadTypes,
@@ -129,6 +137,9 @@ func (s *Scheduler) MarkNodeWorkloadTypeUnsupported(nodeID, workloadType, reason
 }
 
 func (s *Scheduler) markNodeNotReady(nodeID, reason, source string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	resp, err := s.RetryableEtcdGet("/nodes/" + nodeID)
 	if err != nil {
 		return fmt.Errorf("failed to get node %s from etcd: %w", nodeID, err)
@@ -166,6 +177,7 @@ func (s *Scheduler) markNodeNotReady(nodeID, reason, source string) error {
 			return fmt.Errorf("failed to persist NotReady metadata for node %s: %w", nodeID, err)
 		}
 		_ = s.RetryableEtcdPut("/nodes/"+nodeID+"/status", node.Status)
+		s.cacheNode(node)
 		return nil
 	}
 	node.Status = "NotReady"
@@ -183,6 +195,7 @@ func (s *Scheduler) markNodeNotReady(nodeID, reason, source string) error {
 		return fmt.Errorf("failed to persist NotReady for node %s: %w", nodeID, err)
 	}
 	_ = s.RetryableEtcdPut("/nodes/"+nodeID+"/status", node.Status)
+	s.cacheNode(node)
 	s.emitEvent("NodeLost", "", nodeID, reason, nil)
 	nodeLogger.WithFields(logrus.Fields{
 		"node_id": nodeID,

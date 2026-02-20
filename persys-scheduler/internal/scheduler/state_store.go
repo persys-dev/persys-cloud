@@ -17,6 +17,7 @@ const (
 	assignmentsPrefix    = "/assignments/"
 	reconciliationPrefix = "/reconciliation/"
 	retriesPrefix        = "/retries/"
+	driftsPrefix         = "/drifts/"
 	eventsPrefix         = "/events/"
 )
 
@@ -25,6 +26,15 @@ func assignmentKey(workloadID string) string     { return assignmentsPrefix + wo
 func reconciliationKey(workloadID string) string { return reconciliationPrefix + workloadID }
 func retryKey(workloadID string) string          { return retriesPrefix + workloadID }
 func eventKey(eventID string) string             { return eventsPrefix + eventID }
+func driftKey(nodeID, workloadID, driftType string) string {
+	nodeID = strings.ReplaceAll(strings.TrimSpace(nodeID), "/", "_")
+	workloadID = strings.ReplaceAll(strings.TrimSpace(workloadID), "/", "_")
+	driftType = strings.ReplaceAll(strings.TrimSpace(driftType), "/", "_")
+	if workloadID == "" {
+		workloadID = "_unknown"
+	}
+	return driftsPrefix + nodeID + "/" + workloadID + "/" + driftType
+}
 
 func defaultRetryState() models.RetryState {
 	return models.RetryState{
@@ -81,6 +91,7 @@ func (s *Scheduler) saveWorkload(workload models.Workload) error {
 	if err := s.RetryableEtcdPut(workloadKey(workload.ID), string(payload)); err != nil {
 		return err
 	}
+	s.cacheWorkload(workload)
 	retryPayload, err := json.Marshal(workload.Retry)
 	if err == nil {
 		_ = s.RetryableEtcdPut(retryKey(workload.ID), string(retryPayload))
@@ -99,7 +110,11 @@ func (s *Scheduler) writeAssignment(workloadID, nodeID, reason string) error {
 	if err != nil {
 		return err
 	}
-	return s.RetryableEtcdPut(assignmentKey(workloadID), string(payload))
+	if err := s.RetryableEtcdPut(assignmentKey(workloadID), string(payload)); err != nil {
+		return err
+	}
+	s.cacheAssignment(rec)
+	return nil
 }
 
 func (s *Scheduler) writeReconciliationRecord(workloadID, action string, success bool, reason string) {
@@ -132,6 +147,18 @@ func (s *Scheduler) emitEvent(eventType, workloadID, nodeID, reason string, deta
 		return
 	}
 	_ = s.RetryableEtcdPut(eventKey(event.ID), string(payload))
+}
+
+func (s *Scheduler) writeDriftRecord(record models.DriftRecord) {
+	payload, err := json.Marshal(record)
+	if err != nil {
+		return
+	}
+	_ = s.RetryableEtcdPut(driftKey(record.NodeID, record.WorkloadID, record.DriftType), string(payload))
+}
+
+func (s *Scheduler) clearDriftRecord(nodeID, workloadID, driftType string) {
+	_ = s.RetryableEtcdDelete(driftKey(nodeID, workloadID, driftType))
 }
 
 func (s *Scheduler) ListSchedulerEvents(limit int64) ([]models.SchedulerEvent, error) {

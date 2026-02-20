@@ -3,13 +3,13 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: 'api-gateway'
+  - job_name: 'persys-gateway'
     static_configs:
-      - targets: ['api-gateway:8085']
+      - targets: ['persys-gateway:8585']
 
-  - job_name: 'prow-scheduler'
+  - job_name: 'persys-scheduler'
     static_configs:
-      - targets: ['persys-prow:8084']
+      - targets: ['persys-scheduler:8084']
 
   - job_name: 'node-exporter'
     static_configs:

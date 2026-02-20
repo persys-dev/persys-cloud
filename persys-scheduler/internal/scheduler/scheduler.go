@@ -4,17 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	cfgpkg "github.com/persys-dev/persys-cloud/persys-scheduler/internal/config"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/logging"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/models"
 	"github.com/sirupsen/logrus"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.uber.org/zap"
 )
 
 // Constants
@@ -28,30 +29,35 @@ var schedulerLogger = logging.C("scheduler.core")
 
 // Scheduler holds the state and configuration for the cluster scheduler.
 type Scheduler struct {
-	etcdClient *clientv3.Client
-	domain     string
-	monitor    *Monitor
-	reconciler *Reconciler
-	bgWG       sync.WaitGroup
+	cfg              *cfgpkg.Config
+	etcdClient       *clientv3.Client
+	domain           string
+	agentsDomain     string
+	schedulerShard   string
+	monitor          *Monitor
+	reconciler       *Reconciler
+	bgWG             sync.WaitGroup
+	modeMu           sync.RWMutex
+	mode             OperatingMode
+	modeReasonText   string
+	modeChangedAt    time.Time
+	frozen           *FrozenState
+	cacheMu          sync.RWMutex
+	cacheNodes       map[string]models.Node
+	cacheWorkloads   map[string]models.Workload
+	cacheAssignments map[string]models.AssignmentRecord
 }
 
 // NewScheduler initializes the scheduler with an etcd client and configuration.
-func NewScheduler() (*Scheduler, error) {
-	// Get etcd endpoints from environment variable, with fallback
-	etcdEndpoints := os.Getenv("ETCD_ENDPOINTS")
-	if etcdEndpoints == "" {
-		etcdEndpoints = "localhost:2379"
-	}
-
-	// Get domain from environment variable, with fallback
-	domain := os.Getenv("DOMAIN")
-	if domain == "" {
-		domain = "persys.local"
+func NewScheduler(cfg *cfgpkg.Config) (*Scheduler, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("scheduler config cannot be nil")
 	}
 
 	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   strings.Split(etcdEndpoints, ","),
+		Endpoints:   cfg.EtcdEndpoints,
 		DialTimeout: etcdTimeout,
+		Logger:      zap.NewNop(),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create etcd client: %v", err)
@@ -65,7 +71,19 @@ func NewScheduler() (*Scheduler, error) {
 		return nil, fmt.Errorf("failed to connect to etcd: %v", err)
 	}
 
-	scheduler := &Scheduler{etcdClient: cli, domain: domain}
+	scheduler := &Scheduler{
+		cfg:              cfg,
+		etcdClient:       cli,
+		domain:           cfg.Domain,
+		agentsDomain:     cfg.AgentsDiscoveryDomain,
+		schedulerShard:   cfg.SchedulerShardKey,
+		mode:             ModeNormal,
+		modeReasonText:   "startup",
+		modeChangedAt:    time.Now().UTC(),
+		cacheNodes:       map[string]models.Node{},
+		cacheWorkloads:   map[string]models.Workload{},
+		cacheAssignments: map[string]models.AssignmentRecord{},
+	}
 
 	// Initialize monitor and reconciler
 	scheduler.monitor = NewMonitor(scheduler)
@@ -83,6 +101,9 @@ func (s *Scheduler) Close() error {
 }
 
 func (s *Scheduler) RegisterNode(node models.Node) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	if node.NodeID == "" || node.IPAddress == "" || node.AgentPort == 0 {
 		return fmt.Errorf("nodeID, IPAddress, and AgentPort are required")
 	}
@@ -107,11 +128,13 @@ func (s *Scheduler) RegisterNode(node models.Node) error {
 	if node.Labels == nil {
 		node.Labels = make(map[string]string)
 	}
+	node.Labels["scheduler_shard"] = s.schedulerShard
 
 	schedulerLogger.WithFields(logrus.Fields{
 		"node_id":          node.NodeID,
 		"endpoint":         node.AgentEndpoint,
 		"status":           node.Status,
+		"scheduler_shard":  s.cfg.SchedulerShardKey,
 		"supported_types":  node.SupportedWorkloadTypes,
 		"total_cpu":        node.TotalCPU,
 		"total_memory_mb":  node.TotalMemory,
@@ -131,7 +154,10 @@ func (s *Scheduler) RegisterNode(node models.Node) error {
 
 	if err := s.UpdateCoreDNS(node); err != nil {
 		schedulerLogger.WithError(err).WithField("node_id", node.NodeID).Warn("failed to update CoreDNS for node")
+	} else {
+		schedulerLogger.WithField("node_id", node.NodeID).Info("updated CoreDNS record for node")
 	}
+	s.cacheNode(node)
 
 	schedulerLogger.WithField("node_id", node.NodeID).Info("registered node")
 
@@ -207,6 +233,9 @@ func isNodeStatusSubKey(key string) bool {
 }
 
 func (s *Scheduler) selectNodeForWorkload(workload models.Workload) (models.Node, string, error) {
+	if !s.isWritable() {
+		return models.Node{}, "", errControlPlaneFrozen
+	}
 	resp, err := s.RetryableEtcdGet(nodesPrefix, clientv3.WithPrefix())
 	if err != nil {
 		return models.Node{}, "", fmt.Errorf("failed to get nodes for scheduling: %v", err)
@@ -276,6 +305,9 @@ func (s *Scheduler) selectNodeForWorkload(workload models.Workload) (models.Node
 }
 
 func (s *Scheduler) assignWorkload(workload *models.Workload, node models.Node, reason string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	if workload.Metadata == nil {
 		workload.Metadata = map[string]interface{}{}
 	}
@@ -299,6 +331,9 @@ func (s *Scheduler) assignWorkload(workload *models.Workload, node models.Node, 
 
 // ScheduleWorkload assigns a workload to a suitable node and sends a command via the agent API.
 func (s *Scheduler) ScheduleWorkload(workload models.Workload) (string, error) {
+	if err := s.requireWritable(); err != nil {
+		return "", err
+	}
 	if workload.ID == "" {
 		workload.ID = uuid.New().String()
 		schedulerLogger.WithField("workload_id", workload.ID).Debug("generated workload ID")
@@ -370,6 +405,9 @@ func (s *Scheduler) ScheduleWorkload(workload models.Workload) (string, error) {
 func (s *Scheduler) GetNodes() ([]models.Node, error) {
 	resp, err := s.RetryableEtcdGet("/nodes/", clientv3.WithPrefix())
 	if err != nil {
+		if s.currentMode() != ModeNormal {
+			return s.getCachedNodes(), nil
+		}
 		return nil, fmt.Errorf("failed to get nodes: %v", err)
 	}
 
@@ -390,6 +428,12 @@ func (s *Scheduler) GetNodes() ([]models.Node, error) {
 		nodes = append(nodes, node)
 	}
 
+	s.withCacheLock(func() {
+		s.cacheNodes = map[string]models.Node{}
+		for _, n := range nodes {
+			s.cacheNodes[n.NodeID] = n
+		}
+	})
 	return nodes, nil
 }
 
@@ -397,6 +441,11 @@ func (s *Scheduler) GetNodes() ([]models.Node, error) {
 func (s *Scheduler) GetNodeByID(nodeID string) (models.Node, error) {
 	resp, err := s.RetryableEtcdGet("/nodes/" + nodeID)
 	if err != nil {
+		if s.currentMode() != ModeNormal {
+			if node, ok := s.getCachedNode(nodeID); ok {
+				return node, nil
+			}
+		}
 		return models.Node{}, fmt.Errorf("failed to get node %s: %v", nodeID, err)
 	}
 
@@ -408,24 +457,28 @@ func (s *Scheduler) GetNodeByID(nodeID string) (models.Node, error) {
 	if err := json.Unmarshal(resp.Kvs[0].Value, &node); err != nil {
 		return models.Node{}, fmt.Errorf("failed to unmarshal node %s: %v", nodeID, err)
 	}
+	s.cacheNode(node)
 
 	return node, nil
 }
 
 // DeleteNode removes a node from etcd and CoreDNS.
 func (s *Scheduler) DeleteNode(nodeID string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), etcdTimeout)
-	defer cancel()
-	_, err := s.etcdClient.Delete(ctx, "/nodes/"+nodeID)
-	if err != nil {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+	if err := s.RetryableEtcdDelete("/nodes/" + nodeID); err != nil {
 		return fmt.Errorf("failed to delete node %s: %v", nodeID, err)
 	}
-	_, _ = s.etcdClient.Delete(ctx, "/nodes/"+nodeID+"/status")
+	_ = s.RetryableEtcdDelete("/nodes/" + nodeID + "/status")
 
 	// Remove from CoreDNS
-	key := fmt.Sprintf("/skydns/%s/%s", reverseDomain(s.domain), nodeID)
-	_, err = s.etcdClient.Delete(ctx, key)
-	if err != nil {
+	shard := strings.TrimSpace(s.schedulerShard)
+	if shard == "" {
+		shard = "default"
+	}
+	key := fmt.Sprintf("/skydns/%s/%s/%s", reverseDomain(s.agentsDomain), shard, nodeID)
+	if err := s.RetryableEtcdDelete(key); err != nil {
 		schedulerLogger.WithError(err).WithField("node_id", nodeID).Warn("failed to remove CoreDNS entry")
 	}
 
@@ -437,6 +490,9 @@ func (s *Scheduler) DeleteNode(nodeID string) error {
 func (s *Scheduler) GetWorkloads() ([]models.Workload, error) {
 	resp, err := s.RetryableEtcdGet("/workloads/", clientv3.WithPrefix())
 	if err != nil {
+		if s.currentMode() != ModeNormal {
+			return s.getCachedWorkloads(), nil
+		}
 		return nil, fmt.Errorf("failed to get workloads: %v", err)
 	}
 
@@ -453,7 +509,18 @@ func (s *Scheduler) GetWorkloads() ([]models.Workload, error) {
 		}
 		workloads = append(workloads, workload)
 	}
+	if s.currentMode() != ModeNormal && len(workloads) == 0 {
+		// In recovery mode etcd may be reachable but state still empty.
+		// Preserve and serve the frozen cache snapshot for operator visibility.
+		return s.getCachedWorkloads(), nil
+	}
 
+	s.withCacheLock(func() {
+		s.cacheWorkloads = map[string]models.Workload{}
+		for _, w := range workloads {
+			s.cacheWorkloads[w.ID] = w
+		}
+	})
 	return workloads, nil
 }
 
@@ -461,6 +528,11 @@ func (s *Scheduler) GetWorkloads() ([]models.Workload, error) {
 func (s *Scheduler) GetWorkloadByID(workloadID string) (models.Workload, error) {
 	resp, err := s.RetryableEtcdGet("/workloads/" + workloadID)
 	if err != nil {
+		if s.currentMode() != ModeNormal {
+			if workload, ok := s.getCachedWorkload(workloadID); ok {
+				return workload, nil
+			}
+		}
 		return models.Workload{}, fmt.Errorf("failed to get workload %s: %v", workloadID, err)
 	}
 
@@ -472,12 +544,16 @@ func (s *Scheduler) GetWorkloadByID(workloadID string) (models.Workload, error) 
 	if err := json.Unmarshal(resp.Kvs[0].Value, &workload); err != nil {
 		return models.Workload{}, fmt.Errorf("failed to unmarshal workload %s: %v", workloadID, err)
 	}
+	s.cacheWorkload(workload)
 
 	return workload, nil
 }
 
 // DeleteWorkload removes a workload from etcd.
 func (s *Scheduler) DeleteWorkloadWithContext(ctx context.Context, workloadID string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -503,16 +579,14 @@ func (s *Scheduler) DeleteWorkloadWithContext(ctx context.Context, workloadID st
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), etcdTimeout)
-	defer cancel()
-	_, err = s.etcdClient.Delete(ctx, "/workloads/"+workloadID)
-	if err != nil {
+	if err := s.RetryableEtcdDelete("/workloads/" + workloadID); err != nil {
 		return fmt.Errorf("failed to delete workload %s: %v", workloadID, err)
 	}
-	_, _ = s.etcdClient.Delete(ctx, assignmentKey(workloadID))
-	_, _ = s.etcdClient.Delete(ctx, retryKey(workloadID))
-	_, _ = s.etcdClient.Delete(ctx, reconciliationKey(workloadID))
+	_ = s.RetryableEtcdDelete(assignmentKey(workloadID))
+	_ = s.RetryableEtcdDelete(retryKey(workloadID))
+	_ = s.RetryableEtcdDelete(reconciliationKey(workloadID))
 	s.emitEvent("Rescheduled", workloadID, "", "Workload state removed", nil)
+	s.removeCachedWorkload(workloadID)
 	schedulerLogger.WithField("workload_id", workloadID).Info("deleted workload")
 	return nil
 }
@@ -524,6 +598,9 @@ func (s *Scheduler) DeleteWorkload(workloadID string) error {
 
 // UpdateWorkloadStatus updates the status of a workload.
 func (s *Scheduler) UpdateWorkloadStatus(workloadID, status string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	workload, err := s.GetWorkloadByID(workloadID)
 	if err != nil {
 		return err
@@ -551,6 +628,9 @@ func (s *Scheduler) UpdateWorkloadStatus(workloadID, status string) error {
 
 // UpdateWorkloadLogs updates the logs of a workload.
 func (s *Scheduler) UpdateWorkloadLogs(workloadID, logs string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
 	workload, err := s.GetWorkloadByID(workloadID)
 	if err != nil {
 		return err
@@ -601,6 +681,9 @@ func (s *Scheduler) MonitorNodes(ctx context.Context) {
 			schedulerLogger.Info("stopping node monitoring")
 			return
 		case <-ticker.C:
+			if !s.isWritable() {
+				continue
+			}
 			nodes, err := s.GetNodes()
 			if err != nil {
 				schedulerLogger.WithError(err).Error("node monitoring cycle failed")
@@ -620,6 +703,12 @@ func (s *Scheduler) MonitorNodes(ctx context.Context) {
 
 // StartMonitoring starts both node monitoring and workload monitoring
 func (s *Scheduler) StartMonitoring(ctx context.Context) {
+	s.bgWG.Add(1)
+	go func() {
+		defer s.bgWG.Done()
+		s.startModeSupervisor(ctx)
+	}()
+
 	// Start node monitoring
 	s.bgWG.Add(1)
 	go func() {
@@ -635,12 +724,19 @@ func (s *Scheduler) StartMonitoring(ctx context.Context) {
 			s.monitor.MonitorWorkloads(ctx, 60*time.Second)
 		}()
 	}
+
+	// Start drift detection loop (agent state vs scheduler state)
+	s.bgWG.Add(1)
+	go func() {
+		defer s.bgWG.Done()
+		s.StartDriftDetection(ctx, s.driftDetectInterval())
+	}()
 }
 
 // StartReconciliation starts the reconciliation loop
 func (s *Scheduler) StartReconciliation(ctx context.Context) {
 	if s.reconciler != nil {
-		interval := schedulerDurationEnv("SCHEDULER_RECONCILE_INTERVAL", 5*time.Second)
+		interval := s.cfg.SchedulerReconcileInterval
 		s.bgWG.Add(1)
 		go func() {
 			defer s.bgWG.Done()
