@@ -76,6 +76,9 @@ func (m *Monitor) MonitorWorkloads(ctx context.Context, interval time.Duration) 
 			monitorLogger.Info("stopping workload monitoring")
 			return
 		case <-ticker.C:
+			if !m.scheduler.isWritable() {
+				continue
+			}
 			workloads, err := m.scheduler.GetWorkloads()
 			if err != nil {
 				monitorLogger.WithError(err).Error("failed to get workloads for monitoring")
