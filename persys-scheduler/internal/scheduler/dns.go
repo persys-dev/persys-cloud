@@ -3,6 +3,7 @@ package scheduler
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/models"
@@ -12,7 +13,12 @@ func (s *Scheduler) UpdateCoreDNS(node models.Node) error {
 	if node.NodeID == "" || node.IPAddress == "" {
 		return fmt.Errorf("invalid node data: NodeID and IPAddress are required")
 	}
-	key := fmt.Sprintf("/skydns/%s/%s", reverseDomain(s.domain), node.NodeID)
+	shard := strings.TrimSpace(s.schedulerShard)
+	if shard == "" {
+		shard = "genesis"
+	}
+	// Agents are discoverable at <nodeID>.<shard>.agents.persys.cloud
+	key := fmt.Sprintf("/skydns/%s/%s/%s", reverseDomain(s.agentsDomain), shard, node.NodeID)
 	record := struct {
 		Host string `json:"host"`
 		TTL  int    `json:"ttl"`
@@ -32,14 +38,14 @@ func reverseDomain(domain string) string {
 	return strings.Join(parts, "/")
 }
 
-// RegisterSchedulerInCoreDNS registers the scheduler in CoreDNS for service discovery
+// RegisterSchedulerInCoreDNS registers the scheduler in CoreDNS for service discovery.
 func (s *Scheduler) RegisterSchedulerInCoreDNS(ipAddress string, port int) error {
 	if ipAddress == "" || port == 0 {
 		return fmt.Errorf("invalid scheduler data: IPAddress and Port are required")
 	}
 
-	// Register SRV record
-	srvKey := fmt.Sprintf("/skydns/%s/_prow-scheduler/_tcp", reverseDomain(s.domain))
+	// Register SRV record for _persys-scheduler.<domain>
+	srvKey := fmt.Sprintf("/skydns/%s/_persys-scheduler", reverseDomain(s.domain))
 	srvRecord := struct {
 		Host string `json:"host"`
 		Port int    `json:"port"`
@@ -58,7 +64,7 @@ func (s *Scheduler) RegisterSchedulerInCoreDNS(ipAddress string, port int) error
 	}
 
 	// Also register A record for direct IP lookup
-	aKey := fmt.Sprintf("/skydns/%s/scheduler", reverseDomain(s.domain))
+	aKey := fmt.Sprintf("/skydns/%s/persys-scheduler", reverseDomain(s.domain))
 	aRecord := struct {
 		Host string `json:"host"`
 		TTL  int    `json:"ttl"`
@@ -75,4 +81,67 @@ func (s *Scheduler) RegisterSchedulerInCoreDNS(ipAddress string, port int) error
 	}
 
 	return nil
+}
+
+// RegisterSchedulerSelfInCoreDNS registers this scheduler instance into CoreDNS.
+// It resolves advertise IP/port from env with sane defaults.
+func (s *Scheduler) RegisterSchedulerSelfInCoreDNS(defaultPort int) error {
+	ipAddress := strings.TrimSpace(s.cfg.SchedulerAdvertiseIP)
+	if ipAddress == "" {
+		resolved, err := firstNonLoopbackIPv4()
+		if err != nil {
+			return fmt.Errorf("resolve scheduler advertise IP: %w", err)
+		}
+		ipAddress = resolved
+	}
+
+	port := s.cfg.SchedulerAdvertisePort
+	if port <= 0 {
+		port = defaultPort
+	}
+
+	if err := s.RegisterSchedulerInCoreDNS(ipAddress, port); err != nil {
+		return err
+	}
+	schedulerLogger.WithFields(map[string]interface{}{
+		"ip":             ipAddress,
+		"port":           port,
+		"scheduler_name": "persys-scheduler",
+		"domain":         s.domain,
+	}).Info("registered scheduler in CoreDNS")
+	return nil
+}
+
+func firstNonLoopbackIPv4() (string, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, a := range addrs {
+			var ip net.IP
+			switch v := a.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil {
+				continue
+			}
+			ip = ip.To4()
+			if ip == nil || ip.IsLoopback() {
+				continue
+			}
+			return ip.String(), nil
+		}
+	}
+	return "", fmt.Errorf("no non-loopback IPv4 address found")
 }
