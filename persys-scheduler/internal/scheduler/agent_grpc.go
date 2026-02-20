@@ -14,10 +14,8 @@ import (
 	"time"
 
 	agentpb "github.com/persys-dev/persys-cloud/persys-scheduler/internal/agentpb"
-	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/logging"
 	metricspkg "github.com/persys-dev/persys-cloud/persys-scheduler/internal/metrics"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/models"
-	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -33,45 +31,38 @@ const (
 	defaultRPCTimeout     = 10 * time.Second
 )
 
-var agentLogger = logging.C("scheduler.agent_grpc")
-
-func schedulerDurationEnv(key string, fallback time.Duration) time.Duration {
-	raw := strings.TrimSpace(os.Getenv(key))
-	if raw == "" {
-		return fallback
-	}
-	d, err := time.ParseDuration(raw)
-	if err == nil {
-		return d
-	}
-	if n, err := strconv.Atoi(raw); err == nil {
-		return time.Duration(n) * time.Second
-	}
-	agentLogger.WithFields(logrus.Fields{
-		"key":      key,
-		"value":    raw,
-		"fallback": fallback.String(),
-	}).Warn("invalid duration env value; using fallback")
-	return fallback
-}
-
 func (s *Scheduler) agentPollInterval() time.Duration {
-	return schedulerDurationEnv("SCHEDULER_AGENT_STATUS_POLL_INTERVAL", defaultPollInterval)
+	if s.cfg != nil && s.cfg.SchedulerAgentStatusPollInterval > 0 {
+		return s.cfg.SchedulerAgentStatusPollInterval
+	}
+	return defaultPollInterval
 }
 
 func (s *Scheduler) applyTimeoutFor(workload models.Workload) time.Duration {
 	if strings.EqualFold(workload.Type, "vm") {
-		return schedulerDurationEnv("SCHEDULER_AGENT_VM_APPLY_TIMEOUT", defaultVMApplyTimeout)
+		if s.cfg != nil && s.cfg.SchedulerAgentVMApplyTimeout > 0 {
+			return s.cfg.SchedulerAgentVMApplyTimeout
+		}
+		return defaultVMApplyTimeout
 	}
-	return schedulerDurationEnv("SCHEDULER_AGENT_APPLY_TIMEOUT", defaultApplyTimeout)
+	if s.cfg != nil && s.cfg.SchedulerAgentApplyTimeout > 0 {
+		return s.cfg.SchedulerAgentApplyTimeout
+	}
+	return defaultApplyTimeout
 }
 
 func (s *Scheduler) deleteTimeout() time.Duration {
-	return schedulerDurationEnv("SCHEDULER_AGENT_DELETE_TIMEOUT", defaultDeleteTimeout)
+	if s.cfg != nil && s.cfg.SchedulerAgentDeleteTimeout > 0 {
+		return s.cfg.SchedulerAgentDeleteTimeout
+	}
+	return defaultDeleteTimeout
 }
 
 func (s *Scheduler) rpcTimeout() time.Duration {
-	return schedulerDurationEnv("SCHEDULER_AGENT_RPC_TIMEOUT", defaultRPCTimeout)
+	if s.cfg != nil && s.cfg.SchedulerAgentRPCTimeout > 0 {
+		return s.cfg.SchedulerAgentRPCTimeout
+	}
+	return defaultRPCTimeout
 }
 
 func (s *Scheduler) grpcAddressForNode(node models.Node) string {
@@ -85,10 +76,10 @@ func (s *Scheduler) grpcAddressForNode(node models.Node) string {
 	return fmt.Sprintf("%s:%d", node.IPAddress, port)
 }
 
-func loadClientTLSConfigFromEnv() (*tls.Config, error) {
-	caPath := strings.TrimSpace(os.Getenv("PERSYS_TLS_CA"))
-	certPath := strings.TrimSpace(os.Getenv("PERSYS_TLS_CERT"))
-	keyPath := strings.TrimSpace(os.Getenv("PERSYS_TLS_KEY"))
+func (s *Scheduler) loadClientTLSConfig() (*tls.Config, error) {
+	caPath := strings.TrimSpace(s.cfg.TLSCAPath)
+	certPath := strings.TrimSpace(s.cfg.TLSCertPath)
+	keyPath := strings.TrimSpace(s.cfg.TLSKeyPath)
 
 	if caPath == "" {
 		return nil, fmt.Errorf("PERSYS_TLS_CA must be set when PERSYS_TLS_ENABLED=true")
@@ -120,8 +111,8 @@ func (s *Scheduler) newAgentClient(node models.Node) (agentpb.AgentServiceClient
 	}
 
 	var dialOpts []grpc.DialOption
-	if strings.EqualFold(os.Getenv("PERSYS_TLS_ENABLED"), "true") {
-		tlsCfg, err := loadClientTLSConfigFromEnv()
+	if s.schedulerAgentTLSEnabled() {
+		tlsCfg, err := s.loadClientTLSConfig()
 		if err != nil {
 			return nil, nil, err
 		}
@@ -130,6 +121,7 @@ func (s *Scheduler) newAgentClient(node models.Node) (agentpb.AgentServiceClient
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	dialOpts = append(dialOpts, grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
+	dialOpts = append(dialOpts, grpc.WithBlock())
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.rpcTimeout())
 	defer cancel()
@@ -138,6 +130,13 @@ func (s *Scheduler) newAgentClient(node models.Node) (agentpb.AgentServiceClient
 		return nil, nil, fmt.Errorf("dial agent %s (%s): %w", node.NodeID, addr, err)
 	}
 	return agentpb.NewAgentServiceClient(conn), conn, nil
+}
+
+func (s *Scheduler) schedulerAgentTLSEnabled() bool {
+	if s.cfg != nil {
+		return s.cfg.SchedulerAgentTLSEnabled
+	}
+	return true
 }
 
 func normalizeDesiredState(v string) agentpb.DesiredState {
@@ -250,8 +249,24 @@ func (s *Scheduler) buildApplyWorkloadRequest(workload models.Workload) (*agentp
 				Policy: workload.RestartPolicy,
 			},
 		}
-		if cmd := strings.TrimSpace(workload.Command); cmd != "" {
+		if len(workload.CommandList) > 0 {
+			containerSpec.Command = append([]string{}, workload.CommandList...)
+		} else if cmd := strings.TrimSpace(workload.Command); cmd != "" {
 			containerSpec.Command = strings.Fields(cmd)
+		}
+		if len(containerSpec.Labels) == 0 && workload.Metadata != nil {
+			containerSpec.Labels = make(map[string]string)
+			for k, v := range workload.Metadata {
+				if vs, ok := v.(string); ok && strings.TrimSpace(vs) != "" {
+					containerSpec.Labels[k] = vs
+				}
+			}
+		}
+		if workload.Resources.CPUUsage > 0 || workload.Resources.MemoryUsage > 0 {
+			containerSpec.Resources = &agentpb.ResourceLimits{
+				CpuShares:   int64(workload.Resources.CPUUsage * 1000.0),
+				MemoryBytes: int64(workload.Resources.MemoryUsage) * 1024 * 1024,
+			}
 		}
 		for _, port := range workload.Ports {
 			pm, err := parsePortMapping(port)
@@ -386,6 +401,30 @@ func (s *Scheduler) getWorkloadStatusFromNode(ctx context.Context, node models.N
 	}
 	resp = statusResp.GetStatus()
 	return resp, nil
+}
+
+func (s *Scheduler) listWorkloadsFromNode(ctx context.Context, node models.Node) (workloads []*agentpb.WorkloadStatus, err error) {
+	start := time.Now()
+	defer func() {
+		metricspkg.ObserveAgentRPC("ListWorkloads", err, time.Since(start))
+	}()
+
+	client, conn, err := s.newAgentClient(node)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, s.rpcTimeout())
+	defer cancel()
+	resp, err := client.ListWorkloads(ctx, &agentpb.ListWorkloadsRequest{Type: agentpb.WorkloadType_WORKLOAD_TYPE_UNSPECIFIED})
+	if err != nil {
+		return nil, err
+	}
+	return resp.GetWorkloads(), nil
 }
 
 func (s *Scheduler) getWorkloadActionsFromNode(ctx context.Context, node models.Node, workloadID string, limit int32) (actions []*agentpb.AgentAction, err error) {
