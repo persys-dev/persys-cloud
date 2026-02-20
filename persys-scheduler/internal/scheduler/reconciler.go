@@ -16,6 +16,8 @@ import (
 
 const defaultMissingGracePeriod = 15 * time.Second
 const defaultNodeUnavailableGrace = 3 * time.Minute
+const workloadReapplyTimestampKey = "lastApplyRequestAt"
+const workloadReapplyRevisionKey = "lastApplyRevision"
 
 var reconcilerLogger = logging.C("scheduler.reconciler")
 
@@ -44,6 +46,16 @@ func NewReconciler(scheduler *Scheduler, monitor *Monitor) *Reconciler {
 
 // ReconcileWorkload reconciles a single workload to its desired state.
 func (r *Reconciler) ReconcileWorkload(ctx context.Context, workload models.Workload) (*ReconciliationResult, error) {
+	if !r.scheduler.isWritable() {
+		return &ReconciliationResult{
+			WorkloadID:   workload.ID,
+			DesiredState: workload.DesiredState,
+			Action:       "Frozen",
+			Success:      false,
+			ErrorMessage: errControlPlaneFrozen.Error(),
+			LastAttempt:  time.Now(),
+		}, errControlPlaneFrozen
+	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -241,7 +253,10 @@ func (r *Reconciler) handleUnavailableAssignedNode(workload *models.Workload) (b
 		return false, nil
 	}
 
-	unavailableGrace := schedulerDurationEnv("SCHEDULER_NODE_UNAVAILABLE_GRACE", defaultNodeUnavailableGrace)
+	unavailableGrace := defaultNodeUnavailableGrace
+	if r.scheduler.cfg != nil && r.scheduler.cfg.SchedulerNodeUnavailableGrace > 0 {
+		unavailableGrace = r.scheduler.cfg.SchedulerNodeUnavailableGrace
+	}
 	nodeUnavailable := (!strings.EqualFold(node.Status, "Ready") && !strings.EqualFold(node.Status, "Active")) ||
 		time.Since(node.LastHeartbeat) > unavailableGrace
 	if !nodeUnavailable {
@@ -321,21 +336,9 @@ func (r *Reconciler) needsReconciliation(workload models.Workload, actualState s
 		desiredState = "Running"
 	}
 
-	if actualState == "Missing" || actualState == "Pending" {
-		if workload.Metadata != nil {
-			if lastLaunchRaw, ok := workload.Metadata["lastLaunchTime"]; ok {
-				grace := schedulerDurationEnv("SCHEDULER_MISSING_GRACE_PERIOD", defaultMissingGracePeriod)
-				switch v := lastLaunchRaw.(type) {
-				case string:
-					if t, err := time.Parse(time.RFC3339, v); err == nil && time.Since(t) < grace {
-						return false
-					}
-				case time.Time:
-					if time.Since(v) < grace {
-						return false
-					}
-				}
-			}
+	if actualState == "Missing" || actualState == "Pending" || actualState == "Unknown" {
+		if r.reapplyStillGuarded(workload) {
+			return false
 		}
 	}
 
@@ -405,14 +408,82 @@ func (r *Reconciler) applyDesiredState(ctx context.Context, workload models.Work
 	if workload.Metadata == nil {
 		workload.Metadata = make(map[string]interface{})
 	}
-	workload.Metadata["lastLaunchTime"] = time.Now().Format(time.RFC3339)
+	now := time.Now().UTC().Format(time.RFC3339)
+	workload.Metadata[workloadReapplyTimestampKey] = now
+	workload.Metadata[workloadReapplyRevisionKey] = strings.TrimSpace(workload.RevisionID)
+	workload.Metadata["lastLaunchTime"] = now
 
 	workloadJSON, marshalErr := json.Marshal(workload)
 	if marshalErr == nil {
-		_ = r.scheduler.RetryableEtcdPut("/workloads/"+workload.ID, string(workloadJSON))
+		if err := r.scheduler.RetryableEtcdPut("/workloads/"+workload.ID, string(workloadJSON)); err != nil {
+			return action, fmt.Errorf("persist apply metadata: %w", err)
+		}
 	}
 
 	return action, nil
+}
+
+func (r *Reconciler) reapplyStillGuarded(workload models.Workload) bool {
+	guard := r.scheduler.applyTimeoutFor(workload)
+	if r.scheduler.cfg != nil && r.scheduler.cfg.SchedulerReapplyGuard > 0 {
+		guard = r.scheduler.cfg.SchedulerReapplyGuard
+	}
+	if guard < defaultMissingGracePeriod {
+		guard = defaultMissingGracePeriod
+	}
+
+	currentRevision := strings.TrimSpace(workload.RevisionID)
+	lastRevision, hasRevision := metadataString(workload.Metadata, workloadReapplyRevisionKey)
+	if hasRevision && currentRevision != "" && !strings.EqualFold(strings.TrimSpace(lastRevision), currentRevision) {
+		return false
+	}
+
+	if t, ok := metadataTimestamp(workload.Metadata, workloadReapplyTimestampKey); ok && time.Since(t) < guard {
+		return true
+	}
+	// Backward compatibility with older metadata key.
+	if t, ok := metadataTimestamp(workload.Metadata, "lastLaunchTime"); ok && time.Since(t) < guard {
+		return true
+	}
+	return false
+}
+
+func metadataTimestamp(metadata map[string]interface{}, key string) (time.Time, bool) {
+	if metadata == nil {
+		return time.Time{}, false
+	}
+	raw, ok := metadata[key]
+	if !ok {
+		return time.Time{}, false
+	}
+	switch v := raw.(type) {
+	case string:
+		t, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return time.Time{}, false
+		}
+		return t, true
+	case time.Time:
+		return v, true
+	default:
+		return time.Time{}, false
+	}
+}
+
+func metadataString(metadata map[string]interface{}, key string) (string, bool) {
+	if metadata == nil {
+		return "", false
+	}
+	raw, ok := metadata[key]
+	if !ok {
+		return "", false
+	}
+	switch v := raw.(type) {
+	case string:
+		return v, true
+	default:
+		return "", false
+	}
 }
 
 func (r *Reconciler) deleteDesiredWorkload(ctx context.Context, workload models.Workload) (string, error) {
@@ -494,6 +565,9 @@ func (r *Reconciler) StartReconciliationLoop(ctx context.Context, interval time.
 			reconcilerLogger.Info("stopping reconciliation loop")
 			return
 		case <-ticker.C:
+			if !r.scheduler.isWritable() {
+				continue
+			}
 			cycleStart := time.Now()
 			results, err := r.ReconcileAllWorkloads(ctx)
 			metricspkg.ObserveReconciliationCycle(time.Since(cycleStart), err)
