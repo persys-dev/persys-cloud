@@ -1,0 +1,12 @@
+scheduler:
+
+  default_cluster_id: "persys-genesis"
+  repository_cluster_map: {}
+  clusters:
+    - id: "persys-genesis-a"
+      name: "Primary Cluster"
+      routing_strategy: "leader-only"
+      schedulers:
+        - id: "scheduler-a-1"
+          address: "persys-scheduler:8085"
+          is_leader: true

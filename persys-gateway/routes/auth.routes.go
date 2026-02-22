@@ -13,21 +13,21 @@ var (
 		"user",
 		// You have to select your own scope from here -> https://developer.github.com/v3/oauth/#scopes
 	}
-	redirectUri = "http://localhost:8551/auth"
 )
 
 type AuthRouteController struct {
 	authController controllers.AuthController
+	redirectURI    string
 }
 
-func NewAuthRouteController(authController controllers.AuthController) AuthRouteController {
-	return AuthRouteController{authController}
+func NewAuthRouteController(authController controllers.AuthController, redirectURI string) AuthRouteController {
+	return AuthRouteController{authController: authController, redirectURI: redirectURI}
 }
 
 func (rc *AuthRouteController) AuthRoute(rg *gin.RouterGroup) {
 	router := rg.Group("/auth")
 
-	rc.authController.Setup(redirectUri, scopes)
+	rc.authController.Setup(rc.redirectURI, scopes)
 
 	router.GET("/login", rc.authController.LoginHandler())
 	router.POST("/cli", rc.authController.Cli())

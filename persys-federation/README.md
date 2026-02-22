@@ -1,16 +1,16 @@
-## cloud management service
+# persys-federation
 
-#### this service handles kubernetes clusters for clients using automation and is the heart of the project.
+`persys-federation` is the future multi-cloud/federation layer.
 
-### Providers
-we currently support the following cloud providers:
-* Amazon Web Services
-* Microsoft Azure
-* Google Cloud platform
-* PerSys Cloud
+## Current Status
 
-### automating infrastructure installation / configuration
+- Present in repository.
+- Not part of the main local runtime path in `infra/docker/docker-compose.yml`.
+- Intended to coordinate external provider capacity and cross-cluster federation.
 
-this uses an ansible play book to automate configuring vmware vCenter and then installing the Cluster-API CRD.
+## Build
 
-play book is located at : /IaC/ansible/setup-vsphere-provider.
+```bash
+cd persys-federation
+go build ./cmd/main.go
+```

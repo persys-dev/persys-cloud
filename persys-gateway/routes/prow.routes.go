@@ -16,35 +16,50 @@ func NewProwRouteController(prowController *controllers.ProwController) ProwRout
 func (rc *ProwRouteController) ProwRoute(rg *gin.RouterGroup) {
 	router := rg.Group("")
 
-	// Health check endpoint
 	router.GET("/health", rc.prowController.HealthCheckHandler())
-
-	// Legacy endpoints for backward compatibility
 	router.GET("/list", rc.prowController.ListHandler())
+	router.GET("/clusters", rc.prowController.ListClustersHandler())
+	router.GET("/clusters/:cluster_id", rc.prowController.GetClusterHandler())
 
-	// Workload management endpoints
 	workloads := router.Group("/workloads")
 	{
 		workloads.POST("/schedule", rc.prowController.ScheduleWorkloadHandler())
 		workloads.GET("", rc.prowController.ListWorkloadsHandler())
 		workloads.GET("/:id", rc.prowController.GetWorkloadHandler())
+		workloads.DELETE("/:id", rc.prowController.DeleteWorkloadHandler())
+		workloads.POST("/:id/retry", rc.prowController.RetryWorkloadHandler())
 	}
 
-	// Node management endpoints
+	forgery := router.Group("/forgery")
+	{
+		forgery.POST("/projects/upsert", rc.prowController.UpsertProjectHandler())
+		forgery.POST("/builds/trigger", rc.prowController.TriggerBuildHandler())
+		forgery.POST("/webhooks/test", rc.prowController.TestWebhookHandler())
+	}
+
 	nodes := router.Group("/nodes")
 	{
-		nodes.POST("/register", rc.prowController.RegisterNodeHandler())
-		nodes.POST("/heartbeat", rc.prowController.NodeHeartbeatHandler())
 		nodes.GET("", rc.prowController.ListNodesHandler())
+		nodes.GET("/:id", rc.prowController.GetNodeHandler())
 	}
 
-	// Cluster management endpoints
 	cluster := router.Group("/cluster")
 	{
 		cluster.GET("/metrics", rc.prowController.ClusterMetricsHandler())
 	}
 
-	// Universal proxy handler for any other prow endpoints
-	// This must be the last route registered to avoid conflicts
-	router.Any("/proxy/*path", rc.prowController.ProxyHandler())
+	clusters := router.Group("/clusters/:cluster_id")
+	{
+		clusters.POST("/workloads/schedule", rc.prowController.ScheduleWorkloadHandler())
+		clusters.GET("/workloads", rc.prowController.ListWorkloadsHandler())
+		clusters.GET("/workloads/:id", rc.prowController.GetWorkloadHandler())
+		clusters.DELETE("/workloads/:id", rc.prowController.DeleteWorkloadHandler())
+		clusters.POST("/workloads/:id/retry", rc.prowController.RetryWorkloadHandler())
+		clusters.GET("/nodes", rc.prowController.ListNodesHandler())
+		clusters.GET("/nodes/:id", rc.prowController.GetNodeHandler())
+		clusters.GET("/cluster/metrics", rc.prowController.ClusterMetricsHandler())
+		clusters.POST("/forgery/projects/upsert", rc.prowController.UpsertProjectHandler())
+		clusters.POST("/forgery/builds/trigger", rc.prowController.TriggerBuildHandler())
+		clusters.POST("/forgery/webhooks/test", rc.prowController.TestWebhookHandler())
+	}
 }

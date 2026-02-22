@@ -51,7 +51,7 @@ func NewLogger(cfg *config.Config) (*Logger, error) {
 
 	// Optional: Loki sink (if configured)
 	if cfg.Log.LokiEndpoint != "" {
-		lokiSink, err := newLokiSink(cfg.Log.LokiEndpoint, "api-gateway")
+		lokiSink, err := newLokiSink(cfg.Log.LokiEndpoint, "persys-gateway")
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Loki sink: %w", err)
 		}
@@ -68,7 +68,7 @@ func NewLogger(cfg *config.Config) (*Logger, error) {
 	logger := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel))
 
 	// Add service field
-	logger = logger.With(zap.String("service", "api-gateway"))
+	logger = logger.With(zap.String("service", "persys-gateway"))
 
 	return &Logger{
 		logger: logger,

@@ -35,7 +35,7 @@ func (m *Monitor) syncWorkloadStatus(workloadID string) error {
 	if err != nil {
 		return fmt.Errorf("resolve node %s: %w", workload.NodeID, err)
 	}
-	if !strings.EqualFold(node.Status, "active") {
+	if !strings.EqualFold(node.Status, "active") && !strings.EqualFold(node.Status, "ready") {
 		return nil
 	}
 
@@ -61,6 +61,9 @@ func (m *Monitor) syncWorkloadStatus(workloadID string) error {
 	}
 	if msg := strings.TrimSpace(statusResp.GetMessage()); msg != "" {
 		_ = m.scheduler.UpdateWorkloadLogs(workload.ID, msg)
+	}
+	if len(statusResp.GetMetadata()) > 0 {
+		_ = m.scheduler.UpdateWorkloadMetadata(workload.ID, statusResp.GetMetadata())
 	}
 	return nil
 }

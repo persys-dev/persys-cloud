@@ -16,10 +16,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/persys-dev/persys-cloud/persys-gateway/config"
 	"github.com/persys-dev/persys-cloud/persys-gateway/controllers"
+	"github.com/persys-dev/persys-cloud/persys-gateway/internal/certmanager"
 	"github.com/persys-dev/persys-cloud/persys-gateway/internal/middleware"
 	"github.com/persys-dev/persys-cloud/persys-gateway/routes"
 	"github.com/persys-dev/persys-cloud/persys-gateway/services"
+	"github.com/sirupsen/logrus"
 	ginprometheus "github.com/zsais/go-gin-prometheus"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/mongo/readpref"
@@ -32,26 +35,31 @@ import (
 )
 
 type App struct {
-	server           *gin.Engine
-	authCollection   *mongo.Collection
-	githubCollection *mongo.Collection
-	prowCollection   *mongo.Collection
-	authService      services.AuthService
-	githubService    services.GithubService
-	prowService      *services.ProwService
-	authController   controllers.AuthController
-	githubController controllers.GithubController
-	prowController   *controllers.ProwController
+	server            *gin.Engine
+	authCollection    *mongo.Collection
+	sessionCollection *mongo.Collection
+	clusterCollection *mongo.Collection
+	githubCollection  *mongo.Collection
+	prowCollection    *mongo.Collection
+	webhookCollection *mongo.Collection
+	authService       services.AuthService
+	githubService     services.GithubService
+	prowService       *services.ProwService
+	webhookService    services.WebhookService
+	authController    controllers.AuthController
+	githubController  controllers.GithubController
+	prowController    *controllers.ProwController
+	webhookController *controllers.WebhookController
 }
 
-// Tracing setup function (call this at the start of main)
-func setupTracer() func() {
-	exporter, err := otlptracehttp.New(context.Background(),
-		otlptracehttp.WithEndpoint("jaeger:4318"),
-		otlptracehttp.WithInsecure(),
-	)
+func setupTracer(endpoint string, serviceName string) func() {
+	opts := []otlptracehttp.Option{otlptracehttp.WithInsecure()}
+	if endpoint != "" {
+		opts = append(opts, otlptracehttp.WithEndpoint(endpoint))
+	}
+	exporter, err := otlptracehttp.New(context.Background(), opts...)
 	if err != nil {
-		log.Printf("Failed to create OTLP exporter: %v", err)
+		log.Printf("failed to create OTLP exporter: %v", err)
 		return func() {}
 	}
 
@@ -59,7 +67,7 @@ func setupTracer() func() {
 		trace.WithBatcher(exporter),
 		trace.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceNameKey.String("persys-api-gateway"),
+			semconv.ServiceNameKey.String(serviceName),
 		)),
 	)
 	otel.SetTracerProvider(tp)
@@ -70,76 +78,68 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Setup tracing
-	shutdown := setupTracer()
-	defer shutdown()
-
-	// Read config
 	cnf, err := config.LoadConfig()
 	if err != nil {
-		log.Fatalf("Failed to read config: %v", err)
+		log.Fatalf("failed to read config: %v", err)
 	}
 
-	log.Printf("bootstrapping api-gateway ...")
+	shutdown := setupTracer(cnf.Telemetry.OTLPEndpoint, cnf.ServiceName)
+	defer shutdown()
 
-	time.Sleep(10 * time.Second)
+	log.Printf("bootstrapping %s", cnf.ServiceName)
 
-	// --- Certificate Bootstrapping ---
-	certManager := services.NewCertificateManager(
-		cnf.TLS.CAPath,
-		cnf.TLS.CertPath,
-		cnf.TLS.KeyPath,
-		cnf.CFSSL.APIURL,
-		"api-gateway", // Common name
-		"Persys",      // Organization
-	)
-	if err := certManager.EnsureCertificate(); err != nil {
-		log.Fatalf("Failed to ensure certificate: %v", err)
+	vaultCertManager, err := certmanager.NewFromConfig(cnf, logrus.New())
+	if err != nil {
+		log.Fatalf("failed to initialize vault cert manager: %v", err)
+	}
+	if err := vaultCertManager.Start(ctx); err != nil {
+		log.Fatalf("failed to start vault cert manager: %v", err)
 	}
 
-	// Setup MongoDB
 	mongoclient, err := setupMongoDB(ctx, cnf.Database.MongoURI)
 	if err != nil {
-		log.Fatalf("Failed to setup MongoDB: %v", err)
+		log.Fatalf("failed to setup MongoDB: %v", err)
 	}
 	defer mongoclient.Disconnect(ctx)
 
-	// Initialize application
 	app := &App{
-		server:           gin.Default(),
-		authCollection:   mongoclient.Database(cnf.Database.Name).Collection("users"),
-		githubCollection: mongoclient.Database(cnf.Database.Name).Collection("repos"),
-		prowCollection:   mongoclient.Database(cnf.Database.Name).Collection("prow"),
+		server:            gin.Default(),
+		authCollection:    mongoclient.Database(cnf.Database.Name).Collection("users"),
+		sessionCollection: mongoclient.Database(cnf.Database.Name).Collection("sessions"),
+		clusterCollection: mongoclient.Database(cnf.Database.Name).Collection("cluster_state"),
+		githubCollection:  mongoclient.Database(cnf.Database.Name).Collection("repos"),
+		prowCollection:    mongoclient.Database(cnf.Database.Name).Collection("prow"),
+		webhookCollection: mongoclient.Database(cnf.Database.Name).Collection("webhooks"),
 	}
-	// app.server.Use(gin.LoggerWithWriter(logFile))
-	app.authService = services.NewAuthService(app.authCollection, ctx)
-	app.githubService = services.NewGithubService(app.githubCollection, ctx)
-	app.prowService = services.NewProwService(cnf)
 
-	// Discover Persys schedulers in a go routine with a 90 second delay (wait for prows to come up and register)
-	go func() {
-		time.Sleep(90 * time.Second)
-		if err := app.prowService.DiscoverSchedulers(cnf.CoreDNS.Addr); err != nil {
-			log.Printf("Warning: Failed to discover Persys schedulers: %v", err)
-		}
-	}()
-	
-	app.authController = controllers.NewAuthController(app.authService, ctx, app.githubService, app.authCollection)
+	webhookTLS, err := buildMTLSClientConfig(cnf)
+	if err != nil {
+		log.Fatalf("failed to initialize webhook forwarding TLS: %v", err)
+	}
+
+	app.authService = services.NewAuthService(app.authCollection, ctx)
+	app.githubService = services.NewGithubService(app.githubCollection, ctx, cnf, webhookTLS)
+	app.prowService = services.NewProwService(cnf)
+	app.prowService.Start(ctx)
+	go persistClusterSnapshots(ctx, app.clusterCollection, app.prowService)
+	app.webhookService, err = services.NewWebhookService(cnf, webhookTLS, app.webhookCollection)
+	if err != nil {
+		log.Fatalf("failed to initialize webhook service: %v", err)
+	}
+	app.webhookService.Start(ctx)
+
+	app.authController = controllers.NewAuthController(app.authService, ctx, app.githubService, app.authCollection, app.sessionCollection)
 	app.githubController = controllers.NewGithubController(app.authService, ctx, app.githubService, app.githubCollection, cnf)
 	app.prowController = controllers.NewProwController(app.prowService, app.authService, ctx)
+	app.webhookController = controllers.NewWebhookController(app.webhookService)
 
-	// Setup CORS
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowOrigins = []string{"*"}
 	corsConfig.AllowCredentials = true
-	app.server.Use(cors.New(corsConfig))
-	app.server.Use(middleware.ServiceIdentityHeader("persys-gateway"))
 
-	// Create separate routers for mTLS and non-mTLS
 	mtlsRouter := gin.New()
 	nonMTLSRouter := gin.New()
 
-	// Apply middleware to both routers
 	mtlsRouter.Use(gin.Logger())
 	mtlsRouter.Use(cors.New(corsConfig))
 	mtlsRouter.Use(gootelgin.Middleware("persys-gateway-mtls"))
@@ -147,112 +147,152 @@ func main() {
 
 	nonMTLSRouter.Use(gin.Logger())
 	nonMTLSRouter.Use(cors.New(corsConfig))
-	nonMTLSRouter.Use(gootelgin.Middleware("persys-gateway-non-mtls"))
+	nonMTLSRouter.Use(gootelgin.Middleware("persys-gateway-public"))
 	nonMTLSRouter.Use(middleware.ServiceIdentityHeader("persys-gateway"))
 
-	// Add Prometheus instrumentation to both routers
 	p := ginprometheus.NewPrometheus("persys_gateway")
 	p.Use(mtlsRouter)
 	p.Use(nonMTLSRouter)
 
-	// Setup routes
 	mtlsGroup := mtlsRouter.Group("")
 	nonMTLSGroup := nonMTLSRouter.Group("")
 
-	// Non-mTLS routes
 	nonMTLSGroup.GET("/", func(ctx *gin.Context) {
-		ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "Persys API Gateway running", "version": "1.0.0"})
+		ctx.JSON(http.StatusOK, gin.H{"status": "success", "message": "Persys Gateway running", "version": "1.0.0"})
 	})
 
-	// Setup route controllers
-	authRouteController := routes.NewAuthRouteController(app.authController)
+	authRouteController := routes.NewAuthRouteController(app.authController, cnf.App.OAuthRedirectURL)
 	githubRouteController := routes.NewGithubRouteController(app.githubController)
 	prowRouteController := routes.NewProwRouteController(app.prowController)
+	webhookRouteController := routes.NewWebhookRouteController(app.webhookController)
 
-	// Apply routes to appropriate routers
 	authRouteController.AuthRoute(mtlsGroup)
 	githubRouteController.GithubRoute(mtlsGroup)
 	prowRouteController.ProwRoute(mtlsGroup)
+	webhookRouteController.WebhookRoute(nonMTLSGroup, cnf.Webhook.PublicPath)
 
-	// --- mTLS Server Setup ---
 	caCert, err := os.ReadFile(cnf.TLS.CAPath)
 	if err != nil {
-		log.Fatalf("Failed to read CA cert: %v", err)
+		log.Fatalf("failed to read CA cert: %v", err)
 	}
 	caCertPool := x509.NewCertPool()
 	if !caCertPool.AppendCertsFromPEM(caCert) {
-		log.Fatalf("Failed to append CA cert")
+		log.Fatalf("failed to append CA cert")
 	}
 	cert, err := tls.LoadX509KeyPair(cnf.TLS.CertPath, cnf.TLS.KeyPath)
 	if err != nil {
-		log.Fatalf("Failed to load server cert/key: %v", err)
+		log.Fatalf("failed to load server cert/key: %v", err)
 	}
 
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 		ClientCAs:    caCertPool,
-		ClientAuth:   tls.RequireAndVerifyClientCert,
+	}
+	if cnf.TLS.RequireClientCert {
+		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
 	}
 
-	// Create mTLS server
-	mtlsServer := &http.Server{
-		Addr:      cnf.App.HTTPAddr,
-		Handler:   mtlsRouter,
-		TLSConfig: tlsConfig,
-	}
+	mtlsServer := &http.Server{Addr: cnf.App.HTTPAddr, Handler: mtlsRouter, TLSConfig: tlsConfig}
+	nonMTLSServer := &http.Server{Addr: cnf.App.HTTPAddrPublic, Handler: nonMTLSRouter}
 
-	// Create non-mTLS server
-	nonMTLSPort := cnf.App.HTTPAddrNonMTLS
-	nonMTLSServer := &http.Server{
-		Addr:    ":" + nonMTLSPort,
-		Handler: nonMTLSRouter,
-	}
-
-	// Start mTLS server
 	go func() {
-		log.Printf("Starting mTLS server on %s", cnf.App.HTTPAddr)
+		log.Printf("starting mTLS server on %s", cnf.App.HTTPAddr)
 		if err := mtlsServer.ListenAndServeTLS(cnf.TLS.CertPath, cnf.TLS.KeyPath); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("mTLS server failed: %v", err)
 		}
 	}()
 
-	// Start non-mTLS server
 	go func() {
-		log.Printf("Starting non-mTLS server on port %s", nonMTLSPort)
+		log.Printf("starting public server on %s", cnf.App.HTTPAddrPublic)
 		if err := nonMTLSServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("non-mTLS server failed: %v", err)
+			log.Fatalf("public server failed: %v", err)
 		}
 	}()
 
-	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down servers...")
+	log.Println("shutting down servers")
 
-	// Perform graceful shutdown
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := mtlsServer.Shutdown(ctx); err != nil {
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := mtlsServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("mTLS server shutdown failed: %v", err)
 	}
-	if err := nonMTLSServer.Shutdown(ctx); err != nil {
-		log.Printf("non-mTLS server shutdown failed: %v", err)
+	if err := nonMTLSServer.Shutdown(shutdownCtx); err != nil {
+		log.Printf("public server shutdown failed: %v", err)
 	}
-	log.Println("Servers exited gracefully")
+	log.Println("servers exited gracefully")
 }
 
 func setupMongoDB(ctx context.Context, uri string) (*mongo.Client, error) {
-	client, err := mongo.Connect(ctx, options.Client().
-		ApplyURI(uri).
-		SetMaxPoolSize(50).
-		SetMinPoolSize(5))
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri).SetMaxPoolSize(50).SetMinPoolSize(5))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to MongoDB: %w", err)
 	}
 	if err := client.Ping(ctx, readpref.Primary()); err != nil {
 		return nil, fmt.Errorf("failed to ping MongoDB: %w", err)
 	}
-	fmt.Println("MongoDB successfully connected...")
+	fmt.Println("MongoDB successfully connected")
 	return client, nil
+}
+
+func buildMTLSClientConfig(cfg *config.Config) (*tls.Config, error) {
+	cert, err := tls.LoadX509KeyPair(cfg.TLS.CertPath, cfg.TLS.KeyPath)
+	if err != nil {
+		return nil, err
+	}
+	caCert, err := os.ReadFile(cfg.TLS.CAPath)
+	if err != nil {
+		return nil, err
+	}
+	caPool := x509.NewCertPool()
+	if !caPool.AppendCertsFromPEM(caCert) {
+		return nil, fmt.Errorf("invalid CA bundle")
+	}
+	return &tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caPool}, nil
+}
+
+func persistClusterSnapshots(ctx context.Context, collection *mongo.Collection, prowService *services.ProwService) {
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+
+	persist := func() {
+		for _, cluster := range prowService.SnapshotClusters() {
+			schedulers := make([]bson.M, 0, len(cluster.Schedulers))
+			for _, sch := range cluster.Schedulers {
+				schedulers = append(schedulers, bson.M{
+					"id":        sch.ID,
+					"address":   sch.Address,
+					"is_leader": sch.IsLeader,
+					"healthy":   sch.Healthy,
+					"last_seen": sch.LastSeen,
+				})
+			}
+			_, err := collection.UpdateOne(ctx,
+				bson.M{"cluster_id": cluster.ID},
+				bson.M{"$set": bson.M{
+					"cluster_id":       cluster.ID,
+					"name":             cluster.Name,
+					"routing_strategy": string(cluster.RoutingStrategy),
+					"schedulers":       schedulers,
+					"updated_at":       time.Now().UTC(),
+				}},
+				options.Update().SetUpsert(true),
+			)
+			if err != nil {
+				log.Printf("failed to persist cluster snapshot cluster=%s err=%v", cluster.ID, err)
+			}
+		}
+	}
+
+	persist()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			persist()
+		}
+	}
 }

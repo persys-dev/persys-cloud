@@ -1,0 +1,77 @@
+service_name: persys-gateway
+
+app:
+  http_addr: ":8551"
+  http_addr_public: ":8585"
+  grpc_addr: ":8661"
+  storage: mongodb
+  oauth_redirect_url: "http://localhost:8585/auth"
+  metadata:
+    name: persys-gateway
+
+database:
+  mongo_uri: "mongodb://admin:admin@localhost:27017/persys-gateway?authSource=admin"
+  collections: ["events", "repos", "users"]
+  name: persys-gateway
+
+tls:
+  enabled: true
+  cert_path: "/etc/persys/certs/persys-gateway/tls.crt"
+  key_path: "/etc/persys/certs/persys-gateway/tls.key"
+  ca_path: "/etc/persys/certs/persys-gateway/ca.pem"
+  require_client_cert: true
+
+vault:
+  enabled: true
+  addr: "http://localhost:8200"
+  auth_method: "approle"
+  token: ""
+  approle_id: ""
+  approle_secret_id: ""
+  pki_mount: "pki"
+  pki_role: "persys-gateway"
+  cert_ttl: "24h"
+  retry_interval: "30s"
+  service_name: "persys-gateway"
+  service_domain: "persys.local"
+  bind_host: ""
+
+core_dns:
+  addr: "coredns:53"
+
+prow:
+  scheduler_addr: "persys-scheduler:8085"
+  enable_proxy: true
+  discovery_domain: "persys.local"
+  discovery_service: "_persys-scheduler"
+
+scheduler:
+  health_path: "/health"
+  health_check_interval: "15s"
+  discovery_interval: "30s"
+  request_timeout: "10s"
+
+github:
+  webhook_url: "http://persys.eastus.cloudapp.azure.com/webhooks/github"
+  default_secret: ""
+  auth:
+    client_id: ""
+    client_secret: ""
+
+webhook:
+  public_path: "/webhooks/github"
+  replay_ttl: "5m"
+  forward_retries: 5
+  forward_base_backoff: "1s"
+  repository_secrets: {}
+
+forgery:
+  grpc_addr: "persys-forgery:8087"
+  webhook_forward_url: "https://persys-forgery:8080/internal/webhooks/github"
+
+log:
+  loki_endpoint: "http://loki:3301"
+  level: "debug"
+
+telemetry:
+  otlp_endpoint: "jaeger:4318"

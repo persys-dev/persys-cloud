@@ -11,6 +11,7 @@ import (
 
 	"github.com/persys-dev/persys-cloud/persys-forgery/internal/models"
 	"github.com/persys-dev/persys-cloud/persys-forgery/internal/operator"
+	"github.com/persys-dev/persys-cloud/persys-forgery/internal/pipeline"
 )
 
 type OperatorClient interface {
@@ -144,6 +145,10 @@ func (o *Orchestrator) executeLocalBuild(ctx context.Context, req models.BuildRe
 
 	// Update request with workspace path
 	req.Metadata["workspace"] = workspace
+
+	if req.Type == models.BuildTypePipeline {
+		return pipeline.RunPipeline(ctx, req, o.Docker)
+	}
 
 	return o.Docker.Build(ctx, req)
 }

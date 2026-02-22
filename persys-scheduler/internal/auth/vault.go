@@ -403,7 +403,49 @@ func (m *Manager) loadExistingCertMeta() (certMeta, bool) {
 	if now.Before(leaf.NotBefore) || !now.Before(leaf.NotAfter) {
 		return certMeta{}, false
 	}
+	if !m.certMatchesExpectedIdentity(leaf) {
+		return certMeta{}, false
+	}
 	return certMeta{notBefore: leaf.NotBefore, notAfter: leaf.NotAfter}, true
+}
+
+func (m *Manager) certMatchesExpectedIdentity(leaf *x509.Certificate) bool {
+	expected := make([]string, 0, 3)
+	serviceName := strings.TrimSpace(m.cfg.VaultServiceName)
+	serviceDomain := strings.TrimSpace(m.cfg.VaultServiceDomain)
+	bindHost := strings.TrimSpace(m.cfg.BindHost)
+
+	if bindHost != "" {
+		expected = append(expected, strings.ToLower(bindHost))
+	}
+	if serviceName != "" {
+		expected = append(expected, strings.ToLower(serviceName))
+	}
+	if serviceName != "" && serviceDomain != "" {
+		expected = append(expected, strings.ToLower(serviceName+"."+serviceDomain))
+	}
+	if len(expected) == 0 {
+		return true
+	}
+
+	candidates := make([]string, 0, len(leaf.DNSNames)+1)
+	if cn := strings.ToLower(strings.TrimSpace(leaf.Subject.CommonName)); cn != "" {
+		candidates = append(candidates, cn)
+	}
+	for _, dns := range leaf.DNSNames {
+		if s := strings.ToLower(strings.TrimSpace(dns)); s != "" {
+			candidates = append(candidates, s)
+		}
+	}
+
+	for _, want := range expected {
+		for _, got := range candidates {
+			if got == want {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (m *Manager) nextRenewAt() time.Time {

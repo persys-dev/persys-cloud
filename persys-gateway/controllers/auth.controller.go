@@ -14,6 +14,7 @@ import (
 	"github.com/persys-dev/persys-cloud/persys-gateway/models"
 	"github.com/persys-dev/persys-cloud/persys-gateway/services"
 	"github.com/persys-dev/persys-cloud/persys-gateway/utils"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/oauth2"
 	oauth2gh "golang.org/x/oauth2/github"
@@ -37,12 +38,19 @@ type AuthController struct {
 	authService   services.AuthService
 	githubService services.GithubService
 	//userService services.UserService
-	ctx        context.Context
-	collection *mongo.Collection
+	ctx               context.Context
+	collection        *mongo.Collection
+	sessionCollection *mongo.Collection
 }
 
-func NewAuthController(authService services.AuthService, ctx context.Context, githubService services.GithubService, collection *mongo.Collection) AuthController {
-	return AuthController{authService: authService, githubService: githubService, ctx: ctx}
+func NewAuthController(authService services.AuthService, ctx context.Context, githubService services.GithubService, collection *mongo.Collection, sessionCollection *mongo.Collection) AuthController {
+	return AuthController{
+		authService:       authService,
+		githubService:     githubService,
+		ctx:               ctx,
+		collection:        collection,
+		sessionCollection: sessionCollection,
+	}
 }
 
 func (ac *AuthController) Cli() gin.HandlerFunc {
@@ -84,6 +92,11 @@ func (ac *AuthController) Auth() gin.HandlerFunc {
 		}
 
 		if gitCode != "" {
+			if err := ac.validateAndConsumeState(idempotencyID); err != nil {
+				ctx.AbortWithError(http.StatusUnauthorized, fmt.Errorf("invalid oauth state: %v", err))
+				return
+			}
+
 			tok, err := conf.Exchange(context.Background(), ctx.Query("code"))
 			if err != nil {
 				ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("Failed to do exchange: %v", err))
@@ -111,7 +124,11 @@ func (ac *AuthController) Auth() gin.HandlerFunc {
 				CreatedAt:   time.Now().String(),
 			}
 
-			ac.githubService.GetRepos(client, &data)
+			_ = ac.githubService.SetAccessToken(&models.DBResponse{
+				Login:       data.Login,
+				GithubToken: data.GithubToken,
+				UserID:      data.UserID,
+			})
 
 			status, _ := ac.authService.SignInUser(&data)
 
@@ -124,10 +141,47 @@ func (ac *AuthController) LoginHandler() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		state = utils.RandToken()
+		ac.storeOAuthState(state)
 		c.JSON(http.StatusOK, gin.H{"URL": GetLoginURL(state)})
 	}
 	//ac.authService.SignInUser()
 
+}
+
+func (ac *AuthController) storeOAuthState(state string) {
+	if ac.sessionCollection == nil {
+		return
+	}
+	now := time.Now().UTC()
+	_, _ = ac.sessionCollection.UpdateOne(ac.ctx,
+		bson.M{"state": state},
+		bson.M{"$set": bson.M{
+			"state":      state,
+			"created_at": now,
+			"expires_at": now.Add(10 * time.Minute),
+			"consumed":   false,
+		}},
+	)
+}
+
+func (ac *AuthController) validateAndConsumeState(state string) error {
+	if ac.sessionCollection == nil {
+		return nil
+	}
+	if state == "" {
+		return fmt.Errorf("empty state")
+	}
+	filter := bson.M{
+		"state":      state,
+		"consumed":   false,
+		"expires_at": bson.M{"$gt": time.Now().UTC()},
+	}
+	update := bson.M{"$set": bson.M{"consumed": true}}
+	res := ac.sessionCollection.FindOneAndUpdate(ac.ctx, filter, update)
+	if res.Err() != nil {
+		return res.Err()
+	}
+	return nil
 }
 
 func (ac *AuthController) Setup(redirectURL string, scopes []string) {

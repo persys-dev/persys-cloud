@@ -1,0 +1,133 @@
+syntax = "proto3";
+
+package persys.forgery.v1;
+
+option go_package = "github.com/persys-dev/persys-cloud/persys-forgery/internal/forgeryv1;forgeryv1";
+
+service ForgeryControl {
+  rpc ForwardWebhook(ForwardWebhookRequest) returns (ForwardWebhookResponse);
+  rpc UpsertProject(UpsertProjectRequest) returns (ProjectResponse);
+  rpc GetProject(GetProjectRequest) returns (ProjectResponse);
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse);
+  rpc DeleteProject(DeleteProjectRequest) returns (OperationStatus);
+  rpc StoreGitHubCredential(StoreGitHubCredentialRequest) returns (OperationStatus);
+  rpc ListUserRepositories(ListUserRepositoriesRequest) returns (ListUserRepositoriesResponse);
+  rpc RegisterWebhook(RegisterWebhookRequest) returns (OperationStatus);
+  rpc TriggerBuild(TriggerBuildRequest) returns (OperationStatus);
+}
+
+message ForwardWebhookRequest {
+  string delivery_id = 1;
+  string event_type = 2;
+  string repository = 3;
+  string cluster_id = 4;
+  string sender = 5;
+  string ref = 6;
+  string before = 7;
+  string after = 8;
+  string payload_json = 9;
+  bool verified = 10;
+}
+
+message ForwardWebhookResponse {
+  bool accepted = 1;
+  string message = 2;
+}
+
+message UpsertProjectRequest {
+  string name = 1;
+  string repo_url = 2;
+  string default_branch = 3;
+  string cluster_id = 4;
+  string build_type = 5;
+  string build_mode = 6;
+  string strategy = 7;
+  string nexus_repo = 8;
+  string pipeline_yaml = 9;
+  bool auto_deploy = 10;
+  string image_name = 11;
+}
+
+message GetProjectRequest {
+  string name = 1;
+}
+
+message ListProjectsRequest {}
+
+message DeleteProjectRequest {
+  string name = 1;
+}
+
+message Project {
+  string name = 1;
+  string repo_url = 2;
+  string default_branch = 3;
+  string cluster_id = 4;
+  string build_type = 5;
+  string build_mode = 6;
+  string strategy = 7;
+  string nexus_repo = 8;
+  string pipeline_yaml = 9;
+  bool auto_deploy = 10;
+  string image_name = 11;
+}
+
+message ProjectResponse {
+  bool ok = 1;
+  string message = 2;
+  Project project = 3;
+}
+
+message ListProjectsResponse {
+  repeated Project projects = 1;
+}
+
+message StoreGitHubCredentialRequest {
+  string user_id = 1;
+  string user_login = 2;
+  string access_token = 3;
+  repeated string scopes = 4;
+}
+
+message ListUserRepositoriesRequest {
+  string user_id = 1;
+  string user_login = 2;
+}
+
+message Repository {
+  string full_name = 1;
+  string owner = 2;
+  string name = 3;
+  string clone_url = 4;
+  bool private = 5;
+}
+
+message ListUserRepositoriesResponse {
+  bool ok = 1;
+  string message = 2;
+  repeated Repository repositories = 3;
+}
+
+message RegisterWebhookRequest {
+  string user_id = 1;
+  string user_login = 2;
+  string repository = 3;
+  string webhook_url = 4;
+  string webhook_secret = 5;
+}
+
+message TriggerBuildRequest {
+  string project_name = 1;
+  string repository = 2;
+  string cluster_id = 3;
+  string ref = 4;
+  string commit_sha = 5;
+  string sender = 6;
+  string mode = 7;
+  string event_type = 8;
+}
+
+message OperationStatus {
+  bool ok = 1;
+  string message = 2;
+}

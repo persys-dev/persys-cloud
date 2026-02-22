@@ -1,13 +1,9 @@
 package services
 
-import (
-	"github.com/google/go-github/github"
-	"github.com/persys-dev/persys-cloud/persys-gateway/models"
-	"go.mongodb.org/mongo-driver/bson"
-)
+import "github.com/persys-dev/persys-cloud/persys-gateway/models"
 
 type GithubService interface {
-	GetRepos(client *github.Client, user *models.UserInput) error
-	SetAccessToken()
-	ListRepos(user *models.DBResponse) (*bson.M, error)
+	SetAccessToken(user *models.DBResponse) error
+	ListRepos(user *models.DBResponse) ([]map[string]interface{}, error)
+	SetWebhook(user *models.DBResponse, repository string) error
 }
