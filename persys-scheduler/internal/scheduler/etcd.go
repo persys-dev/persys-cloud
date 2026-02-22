@@ -17,11 +17,11 @@ func (s *Scheduler) RetryableEtcdPut(key, value string) error {
 	if err := s.requireWritable(); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), etcdTimeout)
-	defer cancel()
 	var err error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), etcdTimeout)
 		_, err = s.etcdClient.Put(ctx, key, value)
+		cancel()
 		if err == nil {
 			return nil
 		}
@@ -39,11 +39,11 @@ func (s *Scheduler) RetryableEtcdPut(key, value string) error {
 
 // RetryableEtcdGet performs a get operation with retries.
 func (s *Scheduler) RetryableEtcdGet(key string, opts ...clientv3.OpOption) (*clientv3.GetResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), etcdTimeout)
-	defer cancel()
 	var err error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), etcdTimeout)
 		resp, err := s.etcdClient.Get(ctx, key, opts...)
+		cancel()
 		if err == nil {
 			return resp, nil
 		}
@@ -64,11 +64,11 @@ func (s *Scheduler) RetryableEtcdDelete(key string, opts ...clientv3.OpOption) e
 	if err := s.requireWritable(); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), etcdTimeout)
-	defer cancel()
 	var err error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), etcdTimeout)
 		_, err = s.etcdClient.Delete(ctx, key, opts...)
+		cancel()
 		if err == nil {
 			return nil
 		}
