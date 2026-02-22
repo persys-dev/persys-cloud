@@ -10,8 +10,6 @@ services:
   # --- Persys Gateway (Entry point for all API requests) ---
   persys-gateway:
     build: ../../persys-gateway
-    volumes:
-      - certs:/etc/persys/certs/persys-gateway
     ports:
       - 8551:8551
     depends_on:
@@ -20,15 +18,53 @@ services:
       - coredns
       - jaeger
     environment:
-      - OTEL_EXPORTER_JAEGER_ENDPOINT=jaeger:4318
+      - OTEL_EXPORTER_JAEGER_ENDPOINT=${OTEL_EXPORTER_JAEGER_ENDPOINT:-jaeger:4318}
+      - PERSYS_VAULT_ADDR=${PERSYS_GATEWAY_VAULT_ADDR:-http://vault:8200}
+      - PERSYS_VAULT_AUTH_METHOD=${PERSYS_GATEWAY_VAULT_AUTH_METHOD:-approle}
+      - PERSYS_VAULT_TOKEN=${PERSYS_GATEWAY_VAULT_TOKEN:-}
+      - PERSYS_GATEWAY_VAULT_ADDR=${PERSYS_GATEWAY_VAULT_ADDR:-http://vault:8200}
+      - PERSYS_GATEWAY_VAULT_ROLE_ID=${PERSYS_GATEWAY_VAULT_ROLE_ID:-}
+      - PERSYS_GATEWAY_VAULT_SECRET_ID=${PERSYS_GATEWAY_VAULT_SECRET_ID:-}
+      - PERSYS_GATEWAY_MONGO_URI=${PERSYS_GATEWAY_MONGO_URI:-mongodb://admin:admin@mongodb:27017/persys-gateway?authSource=admin}
+      - PERSYS_GATEWAY_GITHUB_WEBHOOK_SECRET=${PERSYS_GATEWAY_GITHUB_WEBHOOK_SECRET:-}
+      - PERSYS_GATEWAY_GITHUB_WEBHOOK_SECRET_FILE=${PERSYS_GATEWAY_GITHUB_WEBHOOK_SECRET_FILE:-}
+      - PERSYS_GATEWAY_GITHUB_CLIENT_ID=${PERSYS_GATEWAY_GITHUB_CLIENT_ID:-}
+      - PERSYS_GATEWAY_GITHUB_CLIENT_ID_FILE=${PERSYS_GATEWAY_GITHUB_CLIENT_ID_FILE:-}
+      - PERSYS_GATEWAY_GITHUB_CLIENT_SECRET=${PERSYS_GATEWAY_GITHUB_CLIENT_SECRET:-}
+      - PERSYS_GATEWAY_GITHUB_CLIENT_SECRET_FILE=${PERSYS_GATEWAY_GITHUB_CLIENT_SECRET_FILE:-}
+      - PERSYS_GATEWAY_FORGERY_GRPC_ADDR=${PERSYS_GATEWAY_FORGERY_GRPC_ADDR:-persys-forgery:8087}
+      - PERSYS_GATEWAY_FORGERY_GRPC_SERVER_NAME=${PERSYS_GATEWAY_FORGERY_GRPC_SERVER_NAME:-persys-forgery.persys.local}
+    networks:
+      - persys-cloud-net
+
+  # --- Persys Forgery (Internal build orchestration only) ---
+  persys-forgery:
+    build: ../../persys-forgery
+    ports:
+      - 8087:8087
+    depends_on:
+      - vault
+      - mysql
+      - redis
+    environment:
+      - PERSYS_FORGERY_MYSQL_DSN=${PERSYS_FORGERY_MYSQL_DSN:-forgery:password@tcp(mysql:3306)/forgery_db?parseTime=true}
+      - PERSYS_FORGERY_REDIS_ADDR=${PERSYS_FORGERY_REDIS_ADDR:-redis:6379}
+      - PERSYS_FORGERY_REDIS_PASSWORD=${PERSYS_FORGERY_REDIS_PASSWORD:-}
+      - PERSYS_FORGERY_REDIS_PASSWORD_FILE=${PERSYS_FORGERY_REDIS_PASSWORD_FILE:-}
+      - PERSYS_FORGERY_VAULT_ADDR=${PERSYS_FORGERY_VAULT_ADDR:-http://vault:8200}
+      - PERSYS_FORGERY_VAULT_AUTH_METHOD=${PERSYS_FORGERY_VAULT_AUTH_METHOD:-approle}
+      - PERSYS_FORGERY_VAULT_TOKEN=${PERSYS_FORGERY_VAULT_TOKEN:-}
+      - PERSYS_FORGERY_VAULT_TOKEN_FILE=${PERSYS_FORGERY_VAULT_TOKEN_FILE:-}
+      - PERSYS_FORGERY_VAULT_ROLE_ID=${PERSYS_FORGERY_VAULT_ROLE_ID:-}
+      - PERSYS_FORGERY_VAULT_SECRET_ID=${PERSYS_FORGERY_VAULT_SECRET_ID:-}
+      - PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET=${PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET:-}
+      - PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET_FILE=${PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET_FILE:-}
     networks:
       - persys-cloud-net
 
   # --- Persys Scheduler (Workload scheduler and reconciler) ---
   persys-scheduler:
     build: ../../persys-scheduler
-    volumes:
-      - certs:/etc/persys/certs/persys_scheduler
     ports:
       - 8084:8084   # HTTP Non-mTLS API
       - 8085:8085   # gRPC + mTLS API
@@ -38,16 +74,20 @@ services:
       - coredns
       - jaeger
     environment:
-      - ETCD_ENDPOINTS=etcd:2379
-      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4318
-      - OTEL_EXPORTER_OTLP_INSECURE=true
-      - OTEL_SERVICE_NAME=persys-scheduler
-      - CERT_COMMON_NAME=persys-scheduler
-      - CERT_ORGANIZATION=persys
-      - SCHEDULER_AGENT_TLS_ENABLED=true
-      - PERSYS_EXTERNAL_IP={$PERSYS_EXTERNAL_IP}
-      - PERSYS_VAULT_ADDR=http://vault:8200
-      - PERSYS_VAULT_TOKEN=${PERSYS_VAULT_TOKEN}
+      - ETCD_ENDPOINTS=${ETCD_ENDPOINTS:-etcd:2379}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
+      - OTEL_EXPORTER_OTLP_INSECURE=${OTEL_EXPORTER_OTLP_INSECURE:-true}
+      - OTEL_SERVICE_NAME=${OTEL_SERVICE_NAME:-persys-scheduler}
+      - CERT_COMMON_NAME=${CERT_COMMON_NAME:-persys-scheduler}
+      - CERT_ORGANIZATION=${CERT_ORGANIZATION:-persys}
+      - SCHEDULER_AGENT_TLS_ENABLED=${SCHEDULER_AGENT_TLS_ENABLED:-true}
+      - PERSYS_EXTERNAL_IP=${PERSYS_EXTERNAL_IP}
+      - PERSYS_VAULT_ADDR=${PERSYS_SCHEDULER_VAULT_ADDR:-http://vault:8200}
+      - PERSYS_VAULT_AUTH_METHOD=${PERSYS_SCHEDULER_VAULT_AUTH_METHOD:-approle}
+      - PERSYS_VAULT_TOKEN=${PERSYS_SCHEDULER_VAULT_TOKEN}
+      - PERSYS_VAULT_APPROLE_ROLE_ID=${PERSYS_SCHEDULER_VAULT_ROLE_ID}
+      - PERSYS_VAULT_APPROLE_SECRET_ID=${PERSYS_SCHEDULER_VAULT_SECRET_ID}
+      - PERSYS_VAULT_PKI_MOUNT=${PERSYS_VAULT_PKI_MOUNT:-pki}
     networks:
       - persys-cloud-net
     
@@ -56,15 +96,18 @@ services:
       context: ../../compute-agent
       dockerfile: Dockerfile
     environment:
-      - PERSYS_VAULT_ADDR=http://vault:8200
-      - PERSYS_VAULT_TOKEN=${PERSYS_VAULT_TOKEN}
-      - PERSYS_TLS_ENABLED=true
-      - PERSYS_GRPC_PORT=50051
-      - PERSYS_LOG_LEVEL=info
-      - PERSYS_RECONCILE_ENABLED=true
-      - PERSYS_VM_ENABLED=false
-      - PERSYS_SCHEDULER_INSECURE=false
-      - PERSYS_SCHEDULER_ADDR=persys-scheduler:8085
+      - PERSYS_VAULT_ADDR=${COMPUTE_AGENT_VAULT_ADDR:-http://vault:8200}
+      - PERSYS_VAULT_AUTH_METHOD=${COMPUTE_AGENT_VAULT_AUTH_METHOD:-approle}
+      - PERSYS_VAULT_TOKEN=${COMPUTE_AGENT_VAULT_TOKEN:-}
+      - PERSYS_VAULT_ROLE_ID=${COMPUTE_AGENT_VAULT_ROLE_ID:-}
+      - PERSYS_VAULT_SECRET_ID=${COMPUTE_AGENT_VAULT_SECRET_ID:-}
+      - PERSYS_TLS_ENABLED=${PERSYS_TLS_ENABLED:-true}
+      - PERSYS_GRPC_PORT=${PERSYS_GRPC_PORT:-50051}
+      - PERSYS_LOG_LEVEL=${PERSYS_LOG_LEVEL:-info}
+      - PERSYS_RECONCILE_ENABLED=${PERSYS_RECONCILE_ENABLED:-true}
+      - PERSYS_VM_ENABLED=${PERSYS_VM_ENABLED:-false}
+      - PERSYS_SCHEDULER_INSECURE=${PERSYS_SCHEDULER_INSECURE:-false}
+      - PERSYS_SCHEDULER_ADDR=${PERSYS_SCHEDULER_ADDR:-persys-scheduler:8085}
     user: "0:0"
     volumes:
       - ${DOCKER_SOCK_PATH:-/var/run/docker.sock}:/var/run/docker.sock
@@ -78,16 +121,6 @@ services:
     networks:
       - persys-cloud-net
 
-  # persys-cfssl:
-  #   build: ../../persys-cfssl
-  #   volumes:
-  #     - certs:/app/certs
-  #   ports:
-  #     - 8888:8888
-  #   networks:
-  #     - persys-cloud-net
-
-
   # --- Certificate Authority / Secret Manager ---
   vault:
     image: hashicorp/vault:1.16.2
@@ -95,14 +128,32 @@ services:
     restart: unless-stopped
     ports:
       - "8200:8200"
-    environment:
-      VAULT_ADDR: "http://0.0.0.0:8200"
-      VAULT_API_ADDR: "http://vault:8200"
     cap_add:
       - IPC_LOCK
+    environment:
+      VAULT_ADDR: "${VAULT_ADDR:-http://vault:8200}"
+      VAULT_API_ADDR: "${VAULT_API_ADDR:-http://vault:8200}"
+    command: ["vault", "server", "-config=/vault/config/vault.hcl"]
+    volumes:
+      - ./vault:/vault/config
+      - vault_data:/vault/file
     networks:
       - persys-cloud-net
       
+  # --- Vault Bootstrap (runs once to initialize/provision Vault) ---
+  vault-manager-setup:
+    build: ../../vault-manager
+    container_name: vault-manager-setup
+    restart: "no"
+    profiles: ["setup"]
+    depends_on:
+      - vault
+    environment:
+      - VAULT_ROOT_TOKEN=${VAULT_ROOT_TOKEN:-}
+    command: ["--vault-addr=${PERSYS_VAULT_ADDR:-http://vault:8200}"]
+    networks:
+      - persys-cloud-net
+
   # --- CoreDNS (Service discovery) ---
   coredns:
     image: coredns/coredns:latest
@@ -142,9 +193,9 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=${GF_USERS_ALLOW_SIGN_UP:-false}
     ports:
       - "3000:3000"
     networks:
@@ -156,7 +207,7 @@ services:
   jaeger:
     image: jaegertracing/all-in-one:latest
     environment:
-      - COLLECTOR_OTLP_ENABLED=true
+      - COLLECTOR_OTLP_ENABLED=${COLLECTOR_OTLP_ENABLED:-true}
     ports:
       - "5775:5775/udp"
       - "6831:6831/udp"
@@ -180,15 +231,42 @@ services:
       - '9100:9100'
     networks:
       - persys-cloud-net
+# --- MySQL (Forgery persistence) ---
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-forgery_db}
+      - MYSQL_USER=${MYSQL_USER:-forgery}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-password}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - persys-cloud-net
+
+  # --- Redis (Forgery internal queues) ---
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - persys-cloud-net
 
   # --- MongoDB (Database for API Gateway) ---
   mongodb:
     image: mongo:latest
     restart: always
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: admin
-      MONGODB_DATABASE: persys-gateway
+      MONGO_INITDB_ROOT_USERNAME: "${MONGO_INITDB_ROOT_USERNAME:-admin}"
+      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_INITDB_ROOT_PASSWORD:-admin}"
+      MONGODB_DATABASE: "${MONGODB_DATABASE:-persys-gateway}"
     ports:
       - 27017:27017
     volumes:
@@ -201,18 +279,24 @@ services:
     image: quay.io/coreos/etcd:v3.5.0
     command: etcd --advertise-client-urls http://etcd:2379 --listen-client-urls http://0.0.0.0:2379
     restart: unless-stopped
+    volumes:
+      - etcd_data:/etcd-data
+    environment:
+      - ETCD_DATA_DIR=/etcd-data
     ports:
       - "2379:2379"
     networks:
       - persys-cloud-net
 
-# --- Volumes for persistent data and shared certs ---
+# --- Volumes for persistent data ---
 volumes:
   mongodb_data_container:
-  postgres_data:
-  certs:
+  mysql_data:
+  redis_data:
   prometheus_data:
   grafana_data:
+  vault_data:
+  etcd_data:
 
 # --- Shared overlay network for all services ---
 networks:
