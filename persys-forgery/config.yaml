@@ -1,13 +1,42 @@
-# Sample config.yaml for persys-forge
-port: 8087
 mysql_dsn: "forgery:password@tcp(localhost:3306)/forgery_db?parseTime=true"
-vault_addr: "http://localhost:8200"
-traefik_url: "http://traefik.local"
-nexus_url: "http://nexus.local:8081"
-nexus_user: "nexususer"
-nexus_password: "nexuspass"
-nexus_docker_repo: "nexus.local:8082/repository/docker-releases"
+
 redis:
   addr: "localhost:6379"
   password: ""
-  db: 0 
+  db: 0
+  build_queue_key: "forge:builds"
+  webhook_queue_key: "forge:webhooks"
+  pipeline_status_queue: "forge:pipeline-status"
+
+build:
+  workspace: "/tmp/forge-builds"
+
+grpc:
+  addr: ":8087"
+
+tls:
+  enabled: true
+  cert_path: "/etc/persys/certs/persys-forgery/tls.crt"
+  key_path: "/etc/persys/certs/persys-forgery/tls.key"
+  ca_path: "/etc/persys/certs/persys-forgery/ca.pem"
+  require_client_cert: true
+
+vault:
+  enabled: true
+  addr: "http://localhost:8200"
+  auth_method: "approle"
+  token: ""
+  approle_id: ""
+  approle_secret_id: ""
+  pki_mount: "pki"
+  pki_role: "persys-forgery"
+  cert_ttl: "24h"
+  retry_interval: "30s"
+  service_name: "persys-forgery"
+  service_domain: "persys.local"
+  bind_host: "persys-forgery.persys.local"
+  kv_path_prefix: "secret/data/persys/forgery/github"
+
+github:
+  webhook_url: "https://gateway.example.com/webhooks/github"
+  default_secret: ""

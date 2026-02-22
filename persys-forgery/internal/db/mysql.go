@@ -16,7 +16,7 @@ func InitMySQL(dsn string) error {
 	if err != nil {
 		return err
 	}
-	if err := db.AutoMigrate(&models.Project{}, &models.Job{}, &models.ProjectSecret{}); err != nil {
+	if err := db.AutoMigrate(&models.Project{}, &models.Job{}, &models.ProjectSecret{}, &models.GitHubCredential{}); err != nil {
 		return err
 	}
 	DB = db
