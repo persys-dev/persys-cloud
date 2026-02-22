@@ -13,3 +13,4 @@ certs/
 vault-mtls-mock/certs-runtime/
 vault-mtls-mock/
 .env
+persys-automation/DESIGN_SPEC.md
