@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -324,6 +325,7 @@ func (s *Scheduler) buildApplyWorkloadRequest(workload models.Workload) (*agentp
 			}
 		}
 		for _, disk := range workload.VM.Disks {
+			disk = normalizeVMDiskForAgent(workload.ID, disk)
 			vmSpec.Disks = append(vmSpec.Disks, &agentpb.DiskConfig{
 				Path:   disk.Path,
 				Device: disk.Device,
@@ -347,6 +349,30 @@ func (s *Scheduler) buildApplyWorkloadRequest(workload models.Workload) (*agentp
 	}
 
 	return req, nil
+}
+
+func normalizeVMDiskForAgent(workloadID string, disk models.VMDiskConfig) models.VMDiskConfig {
+	if strings.TrimSpace(disk.Device) == "" {
+		disk.Device = "vda"
+	}
+	if strings.TrimSpace(disk.Format) == "" {
+		disk.Format = "qcow2"
+	}
+	if strings.TrimSpace(disk.Type) == "" {
+		disk.Type = "disk"
+	}
+	if disk.SizeGB <= 0 {
+		disk.SizeGB = 20
+	}
+	if strings.TrimSpace(disk.Path) == "" {
+		ext := ".qcow2"
+		if strings.EqualFold(disk.Format, "raw") {
+			ext = ".img"
+		}
+		safeDevice := strings.ToLower(strings.TrimSpace(disk.Device))
+		disk.Path = filepath.Join("/var/lib/libvirt/images", fmt.Sprintf("%s-%s%s", strings.TrimSpace(workloadID), safeDevice, ext))
+	}
+	return disk
 }
 
 func (s *Scheduler) applyWorkloadOnNode(ctx context.Context, node models.Node, workload models.Workload) (resp *agentpb.ApplyWorkloadResponse, err error) {
@@ -537,15 +563,27 @@ func (s *Scheduler) waitForWorkloadTerminalStatus(ctx context.Context, node mode
 		ctx = context.Background()
 	}
 	deadline := time.Now().Add(timeout)
+	missingObservedAt := time.Time{}
 	for {
 		statusResp, err := s.getWorkloadStatusFromNode(ctx, node, workload.ID)
 		if err == nil {
+			missingObservedAt = time.Time{}
 			if statusResp != nil && isTerminalActualState(statusResp.GetActualState()) {
 				return statusResp, nil, nil
 			}
 		} else {
 			if isWorkloadStatusNotFound(err) {
-				return nil, nil, err
+				if missingObservedAt.IsZero() {
+					missingObservedAt = time.Now()
+				}
+				if time.Since(missingObservedAt) > defaultMissingGracePeriod {
+					return nil, nil, err
+				}
+			} else if isNodeUnreachableError(err) {
+				// Transient node reachability blips should be retried until timeout.
+				if time.Now().After(deadline) {
+					return nil, nil, err
+				}
 			}
 		}
 

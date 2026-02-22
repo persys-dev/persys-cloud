@@ -2,6 +2,8 @@ package grpcapi
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -141,7 +143,12 @@ func (s *Service) Heartbeat(ctx context.Context, in *controlv1.HeartbeatRequest)
 		}, nil
 	}
 
-	currentNode, _ := s.sched.GetNodeByID(in.GetNodeId())
+	currentNode, err := s.sched.GetNodeByID(in.GetNodeId())
+	if err != nil {
+		rpcErr := status.Errorf(codes.NotFound, "node %q not registered", in.GetNodeId())
+		recordRPCError(ctx, rpcErr)
+		return nil, rpcErr
+	}
 
 	availableCPU := currentNode.AvailableCPU
 	availableMemory := currentNode.AvailableMemory
@@ -193,6 +200,20 @@ func (s *Service) ApplyWorkload(ctx context.Context, in *controlv1.ApplyWorkload
 		err := status.Error(codes.InvalidArgument, "workload_id is required")
 		recordRPCError(ctx, err)
 		return nil, err
+	}
+	if in.GetSpec() == nil {
+		desired := normalizeDesiredStateString(in.GetDesiredState())
+		if desired == "" {
+			desired = "Running"
+		}
+		updated, err := s.sched.UpdateWorkloadSpec(in.GetWorkloadId(), models.Workload{DesiredState: desired})
+		if err != nil {
+			return &controlv1.ApplyWorkloadResponse{Success: false, FailureReason: controlv1.FailureReason_RUNTIME_ERROR, ErrorMessage: err.Error()}, nil
+		}
+		if _, err := s.sched.ReconcileWorkloadWithContext(ctx, updated); err != nil {
+			return &controlv1.ApplyWorkloadResponse{Success: false, FailureReason: controlv1.FailureReason_RUNTIME_ERROR, ErrorMessage: err.Error()}, nil
+		}
+		return &controlv1.ApplyWorkloadResponse{Success: true}, nil
 	}
 	workload, err := controlApplyToModel(in)
 	if err != nil {
@@ -424,7 +445,7 @@ func workloadToView(workload models.Workload) *controlv1.WorkloadView {
 		WorkloadId:       workload.ID,
 		Type:             workload.Type,
 		DesiredState:     workload.DesiredState,
-		Status:           workload.Status,
+		Status:           workloadStatusForView(workload),
 		AssignedNodeId:   assignedNodeID(workload),
 		RevisionId:       workload.RevisionID,
 		RetryAttempts:    int32(workload.Retry.Attempts),
@@ -433,6 +454,23 @@ func workloadToView(workload models.Workload) *controlv1.WorkloadView {
 		FailureReason:    workload.StatusInfo.FailureReason,
 		LastUpdated:      workloadLastUpdated(workload),
 	}
+}
+
+func workloadStatusForView(workload models.Workload) string {
+	status := strings.TrimSpace(workload.Status)
+	if status == "" {
+		status = "Unknown"
+	}
+	if !strings.EqualFold(strings.TrimSpace(workload.Type), "vm") {
+		return status
+	}
+	if ip, ok := workload.Metadata["vm.primary_ip"]; ok {
+		ipStr := strings.TrimSpace(fmt.Sprintf("%v", ip))
+		if ipStr != "" {
+			return fmt.Sprintf("%s (ip=%s)", status, ipStr)
+		}
+	}
+	return status
 }
 
 func assignedNodeID(workload models.Workload) string {
@@ -564,6 +602,11 @@ func controlApplyToModel(in *controlv1.ApplyWorkloadRequest) (models.Workload, e
 			w.ComposeYAML = cp.GetInlineYaml()
 		}
 	case "vm":
+		if embeddedVM, ok := parseEmbeddedVMSpec(w.Metadata); ok {
+			w.VM = embeddedVM
+			delete(w.Metadata, "persys.vm_spec_b64")
+			break
+		}
 		vm := in.GetSpec().GetVm()
 		if vm == nil {
 			return models.Workload{}, fmt.Errorf("vm spec required")
@@ -581,7 +624,16 @@ func controlApplyToModel(in *controlv1.ApplyWorkloadRequest) (models.Workload, e
 			}
 		}
 		for _, d := range vm.GetDisks() {
-			w.VM.Disks = append(w.VM.Disks, models.VMDiskConfig{Type: d.GetPoolName(), SizeGB: d.GetSizeGb(), Device: d.GetMountPoint()})
+			device := strings.TrimSpace(d.GetMountPoint())
+			if device == "" {
+				device = "vda"
+			}
+			w.VM.Disks = append(w.VM.Disks, models.VMDiskConfig{
+				Type:   "disk",
+				SizeGB: d.GetSizeGb(),
+				Device: device,
+				Format: "qcow2",
+			})
 		}
 		for _, n := range vm.GetNetworks() {
 			w.VM.Networks = append(w.VM.Networks, models.VMNetworkConfig{Network: n.GetBridge(), IPAddress: n.GetStaticIp()})
@@ -591,6 +643,85 @@ func controlApplyToModel(in *controlv1.ApplyWorkloadRequest) (models.Workload, e
 	}
 
 	return w, nil
+}
+
+func parseEmbeddedVMSpec(metadata map[string]interface{}) (*models.VMSpec, bool) {
+	rawVal, ok := metadata["persys.vm_spec_b64"]
+	if !ok {
+		return nil, false
+	}
+	raw := strings.TrimSpace(fmt.Sprintf("%v", rawVal))
+	if raw == "" {
+		return nil, false
+	}
+	payload, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, false
+	}
+
+	var spec struct {
+		Name     string `json:"name"`
+		VCPUs    int32  `json:"vcpus"`
+		MemoryMB int64  `json:"memory_mb"`
+		Disks    []struct {
+			Path   string `json:"path"`
+			Device string `json:"device"`
+			Format string `json:"format"`
+			SizeGB int64  `json:"size_gb"`
+			Type   string `json:"type"`
+			Boot   bool   `json:"boot"`
+		} `json:"disks"`
+		Networks []struct {
+			Network   string `json:"network"`
+			MAC       string `json:"mac_address"`
+			IPAddress string `json:"ip_address"`
+		} `json:"networks"`
+		CloudInit       string            `json:"cloud_init"`
+		Metadata        map[string]string `json:"metadata"`
+		CloudInitConfig *struct {
+			UserData      string `json:"user_data"`
+			MetaData      string `json:"meta_data"`
+			NetworkConfig string `json:"network_config"`
+			VendorData    string `json:"vendor_data"`
+		} `json:"cloud_init_config"`
+	}
+	if err := json.Unmarshal(payload, &spec); err != nil {
+		return nil, false
+	}
+
+	out := &models.VMSpec{
+		Name:      spec.Name,
+		VCPUs:     spec.VCPUs,
+		MemoryMB:  spec.MemoryMB,
+		CloudInit: spec.CloudInit,
+		Metadata:  spec.Metadata,
+	}
+	if spec.CloudInitConfig != nil {
+		out.CloudInitConfig = &models.CloudInitConfig{
+			UserData:      spec.CloudInitConfig.UserData,
+			MetaData:      spec.CloudInitConfig.MetaData,
+			NetworkConfig: spec.CloudInitConfig.NetworkConfig,
+			VendorData:    spec.CloudInitConfig.VendorData,
+		}
+	}
+	for _, d := range spec.Disks {
+		out.Disks = append(out.Disks, models.VMDiskConfig{
+			Path:   d.Path,
+			Device: d.Device,
+			Format: d.Format,
+			SizeGB: d.SizeGB,
+			Type:   d.Type,
+			Boot:   d.Boot,
+		})
+	}
+	for _, n := range spec.Networks {
+		out.Networks = append(out.Networks, models.VMNetworkConfig{
+			Network:   n.Network,
+			MAC:       n.MAC,
+			IPAddress: n.IPAddress,
+		})
+	}
+	return out, true
 }
 
 func normalizeDesiredStateString(v string) string {
