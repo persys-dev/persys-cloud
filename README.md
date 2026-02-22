@@ -25,7 +25,7 @@ name is **Persys Compute**.
 
 ------------------------------------------------------------------------
 
-# Vision
+## Vision
 
 Persys Compute is not just a container orchestrator.
 
@@ -45,11 +45,11 @@ overengineering.
 
 ------------------------------------------------------------------------
 
-# Core Architecture
+## Core Architecture
 
 Persys Compute follows a strict control-plane model.
 
-## Northbound (User → Control Plane)
+### Northbound (User → Control Plane)
 
 User → Gateway (HTTP + mTLS) → Scheduler
 
@@ -58,7 +58,7 @@ User → Gateway (HTTP + mTLS) → Scheduler
 - Workload submission
 - Administrative operations
 
-## Southbound (Control Plane → Nodes)
+### Southbound (Control Plane → Nodes)
 
 Scheduler ⇄ Agent (gRPC + mTLS)
 
@@ -72,9 +72,9 @@ decisions.
 
 ------------------------------------------------------------------------
 
-# Control Plane Components
+## Control Plane Components
 
-## persys-scheduler
+### persys-scheduler
 
 Authoritative cluster brain.
 
@@ -89,7 +89,7 @@ Responsibilities:
 - Event emission
 - Health & metrics endpoints
 
-## persys-gateway
+### persys-gateway
 
 Platform entrypoint.
 
@@ -101,7 +101,7 @@ Responsibilities:
 - Webhook ingestion (future use)
 - Platform-level authorization
 
-## persys-cfssl
+### vault
 
 Certificate authority bootstrap.
 
@@ -109,7 +109,7 @@ Certificate authority bootstrap.
 - mTLS trust chain
 - Agent certificate provisioning
 
-## persys-federation
+### persys-federation
 
 Future hybrid/multi-cloud integration layer.
 
@@ -117,7 +117,7 @@ Future hybrid/multi-cloud integration layer.
 - Offload workloads
 - Aggregate compute resources
 
-## persys-agent (runtime node agent)
+### persys-agent (runtime node agent)
 
 Responsibilities:
 
@@ -133,7 +133,7 @@ Agent is intentionally simple and execution-focused.
 
 ------------------------------------------------------------------------
 
-# Scheduling Model
+## Scheduling Model
 
 1. Agent boots
 2. Agent registers with scheduler via gRPC
@@ -153,9 +153,9 @@ Agent is intentionally simple and execution-focused.
 
 ------------------------------------------------------------------------
 
-# Supported Workload Types
+## Supported Workload Types
 
-## Containers
+### Containers
 
 - Image-based
 - Resource limits
@@ -165,7 +165,7 @@ Agent is intentionally simple and execution-focused.
 - Restart policies
 - Privileged mode (optional)
 
-## Docker Compose
+### Docker Compose
 
 - Git-based deployments
 - Inline YAML support
@@ -173,7 +173,7 @@ Agent is intentionally simple and execution-focused.
 - Secret injection (future: Vault integration)
 - Mixed public/private images
 
-## Virtual Machines
+### Virtual Machines
 
 - vCPU & memory specification
 - Disk provisioning via storage pools
@@ -184,7 +184,7 @@ Agent is intentionally simple and execution-focused.
 
 ------------------------------------------------------------------------
 
-# Cluster State Model (etcd)
+### Cluster State Model (etcd)
 
 Scheduler persists:
 
@@ -205,7 +205,7 @@ This enables:
 
 ------------------------------------------------------------------------
 
-# Resource Enforcement
+## Resource Enforcement
 
 Agent enforces:
 
@@ -220,7 +220,7 @@ Workloads are rejected early if capacity is insufficient.
 
 ------------------------------------------------------------------------
 
-# Reliability Model
+## Reliability Model
 
 Persys Compute uses:
 
@@ -236,7 +236,7 @@ No ghost workloads. No silent failures. No hidden retries.
 
 ------------------------------------------------------------------------
 
-# Observability
+## Observability
 
 Each component exposes:
 
@@ -255,36 +255,36 @@ Metrics include:
 
 ------------------------------------------------------------------------
 
-# Local Development
+## Local Development
 
-Prerequisites:
+### 1. Start full stack
 
-- Go 1.24+
-- Docker
-
-Start etcd:
-
-``` bash
-./hack/start-etcd-docker.sh
+```bash
+cd infra/docker
+docker compose up -d --build
 ```
 
-Run scheduler (dev mode):
+### 2. Build CLI
 
-``` bash
-cd persys-scheduler
-go run ./cmd/scheduler -insecure
+```bash
+cd persysctl
+go build -o ./bin/persysctl
 ```
 
-Build services:
+### 3. Quick smoke commands
 
-``` bash
-cd persys-scheduler && go build ./cmd/scheduler
-cd persys-gateway && go build ./cmd/main.go
+```bash
+# Cluster view from gateway
+./bin/persysctl --transport http cluster list
+
+# List nodes/workloads routed through gateway
+./bin/persysctl --transport http node list
+./bin/persysctl --transport http workload list
 ```
 
 ------------------------------------------------------------------------
 
-# Project Philosophy
+## Project Philosophy
 
 Persys Compute is built around:
 
@@ -301,7 +301,7 @@ system when adding more nodes.
 
 ------------------------------------------------------------------------
 
-# Roadmap Highlights
+## Roadmap Highlights
 
 - Storage pool full implementation
 - VM network introspection & IP reporting
@@ -313,6 +313,6 @@ system when adding more nodes.
 
 ------------------------------------------------------------------------
 
-# License
+## License
 
 MIT
