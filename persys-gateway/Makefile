@@ -1,10 +1,10 @@
 # Makefile for Go project
 
 # Variables
-BINARY_NAME = persys-api
+BINARY_NAME = persys-gateway
 BINARY_DIR = bin
 BINARY_PATH = $(BINARY_DIR)/$(BINARY_NAME)
-IMAGE_NAME=persys-api
+IMAGE_NAME=persys-gateway
 IMAGE_TAG=latest
 GO = go
 GOFLAGS = -v

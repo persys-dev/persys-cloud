@@ -2,7 +2,9 @@ package tests
 
 import (
 	"context"
+	"crypto/tls"
 	"github.com/gin-gonic/gin"
+	"github.com/persys-dev/persys-cloud/persys-gateway/config"
 	"github.com/persys-dev/persys-cloud/persys-gateway/controllers"
 	"github.com/persys-dev/persys-cloud/persys-gateway/routes"
 	"github.com/persys-dev/persys-cloud/persys-gateway/services"
@@ -38,15 +40,15 @@ func TestAuthRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	GithubCollection = mongoclient.Database("api-gateway").Collection("repos")
-	AuthCollection = mongoclient.Database("api-gateway").Collection("users")
+	GithubCollection = mongoclient.Database("persys-gateway").Collection("repos")
+	AuthCollection = mongoclient.Database("persys-gateway").Collection("users")
 
 	gin.SetMode(gin.TestMode)
 
-	githubService := services.NewGithubService(GithubCollection, ctx)
+	githubService := services.NewGithubService(GithubCollection, ctx, &config.Config{}, &tls.Config{})
 	authService := services.NewAuthService(AuthCollection, ctx)
-	authController := controllers.NewAuthController(authService, ctx, githubService, AuthCollection)
-	AuthRouteController = routes.NewAuthRouteController(authController)
+	authController := controllers.NewAuthController(authService, ctx, githubService, AuthCollection, AuthCollection)
+	AuthRouteController = routes.NewAuthRouteController(authController, redirectUri)
 
 	router := gin.Default()
 	router.Use(gin.Logger())

@@ -17,8 +17,6 @@ func NewGithubRouteController(githubController controllers.GithubController) Git
 func (rc *GithubRouteController) GithubRoute(rg *gin.RouterGroup) {
 	router := rg.Group("")
 
-	router.POST("/webhook", rc.githubController.WebhookHandler())
-
 	private := router.Group("github")
 
 	private.Use(rc.authController.Auth())

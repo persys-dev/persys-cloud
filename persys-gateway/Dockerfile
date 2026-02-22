@@ -11,11 +11,12 @@ COPY . .
 
 RUN cd cmd && go build -o main
 
-FROM alpine:latest AS server
+FROM alpine:3.19 AS server
 
 WORKDIR /app
 
-COPY --from=build /app/config.toml .
+COPY --from=build /app/config.yaml .
+COPY --from=build /app/cluster.yaml .
 
 COPY --from=build /app/cmd/main .
 
