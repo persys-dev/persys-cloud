@@ -367,7 +367,7 @@ func (r *Reconciler) performReconciliation(ctx context.Context, workload models.
 	switch {
 	case strings.EqualFold(desiredState, "Deleted"):
 		return r.deleteDesiredWorkload(ctx, workload)
-	case strings.EqualFold(desiredState, "Running") && (strings.EqualFold(actualState, "Missing") || strings.EqualFold(actualState, "Stopped") || strings.EqualFold(actualState, "Failed") || strings.EqualFold(actualState, "Unknown")):
+	case strings.EqualFold(desiredState, "Running") && (strings.EqualFold(actualState, "Missing") || strings.EqualFold(actualState, "Stopped") || strings.EqualFold(actualState, "Failed")):
 		return r.applyDesiredState(ctx, workload, agentpb.DesiredState_DESIRED_STATE_RUNNING, "ReapplyRunning")
 	case strings.EqualFold(desiredState, "Stopped") && (strings.EqualFold(actualState, "Running") || strings.EqualFold(actualState, "Pending") || strings.EqualFold(actualState, "Unknown")):
 		return r.applyDesiredState(ctx, workload, agentpb.DesiredState_DESIRED_STATE_STOPPED, "ApplyStopped")
@@ -380,6 +380,30 @@ func (r *Reconciler) applyDesiredState(ctx context.Context, workload models.Work
 	node, err := r.scheduler.GetNodeByID(workload.NodeID)
 	if err != nil {
 		return action, fmt.Errorf("failed to get node: %v", err)
+	}
+
+	// Confirm current runtime state before issuing an apply to avoid hammering
+	// long-running operations (e.g. VM install/boot) after transient control-plane issues.
+	statusResp, statusErr := r.scheduler.getWorkloadStatusFromNode(ctx, node, workload.ID)
+	if statusErr != nil && !isWorkloadStatusNotFound(statusErr) {
+		return action, fmt.Errorf("pre-apply status check failed: %v", statusErr)
+	}
+	if statusResp != nil {
+		current := mapActualStateToSchedulerStatus(statusResp.GetActualState())
+		if desired == agentpb.DesiredState_DESIRED_STATE_RUNNING && strings.EqualFold(current, "Running") {
+			_ = r.scheduler.UpdateWorkloadStatus(workload.ID, current)
+			if len(statusResp.GetMetadata()) > 0 {
+				_ = r.scheduler.UpdateWorkloadMetadata(workload.ID, statusResp.GetMetadata())
+			}
+			return "NoAction", nil
+		}
+		if desired == agentpb.DesiredState_DESIRED_STATE_STOPPED && strings.EqualFold(current, "Stopped") {
+			_ = r.scheduler.UpdateWorkloadStatus(workload.ID, current)
+			if len(statusResp.GetMetadata()) > 0 {
+				_ = r.scheduler.UpdateWorkloadMetadata(workload.ID, statusResp.GetMetadata())
+			}
+			return "NoAction", nil
+		}
 	}
 
 	if desired == agentpb.DesiredState_DESIRED_STATE_STOPPED {
@@ -401,6 +425,9 @@ func (r *Reconciler) applyDesiredState(ctx context.Context, workload models.Work
 
 	if resp.Status != nil {
 		_ = r.scheduler.UpdateWorkloadStatus(workload.ID, mapActualStateToSchedulerStatus(resp.Status.ActualState))
+		if len(resp.Status.GetMetadata()) > 0 {
+			_ = r.scheduler.UpdateWorkloadMetadata(workload.ID, resp.Status.GetMetadata())
+		}
 	}
 	_ = r.scheduler.UpdateWorkloadLogs(workload.ID, fmt.Sprintf("Reconciler action %s at %s", action, time.Now().Format(time.RFC3339)))
 	r.scheduler.emitEvent("WorkloadScheduled", workload.ID, workload.NodeID, action, nil)
