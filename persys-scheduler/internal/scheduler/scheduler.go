@@ -375,29 +375,32 @@ func (s *Scheduler) ScheduleWorkload(workload models.Workload) (string, error) {
 	if applyResp != nil {
 		_ = s.UpdateWorkloadLogs(workload.ID, fmt.Sprintf("Apply response: applied=%t skipped=%t message=%s", applyResp.Applied, applyResp.Skipped, applyResp.Message))
 	}
-
-	terminalStatus, actions, waitErr := s.waitForWorkloadTerminalStatus(context.Background(), selectedNode, workload, s.applyTimeoutFor(workload))
-	if waitErr != nil {
-		_ = s.UpdateWorkloadStatus(workload.ID, "Unknown")
-		_ = s.UpdateWorkloadLogs(workload.ID, fmt.Sprintf("Timed out waiting for terminal state: %v", waitErr))
-		if len(actions) > 0 {
-			_ = s.UpdateWorkloadLogs(workload.ID, fmt.Sprintf("Recent actions: %d action(s) captured", len(actions)))
-		}
-		return "", waitErr
+	// Agent apply is async by design. Persist tracking metadata and return quickly.
+	if workload.Metadata == nil {
+		workload.Metadata = map[string]interface{}{}
 	}
-
-	if terminalStatus != nil {
-		_ = s.UpdateWorkloadStatus(workload.ID, mapActualStateToSchedulerStatus(terminalStatus.GetActualState()))
-		if terminalStatus.GetMessage() != "" {
-			_ = s.UpdateWorkloadLogs(workload.ID, terminalStatus.GetMessage())
+	now := time.Now().UTC().Format(time.RFC3339)
+	workload.Metadata[workloadReapplyTimestampKey] = now
+	workload.Metadata[workloadReapplyRevisionKey] = strings.TrimSpace(workload.RevisionID)
+	workload.Metadata["lastLaunchTime"] = now
+	workload.Metadata["last_action"] = "ApplyAcceptedAsync"
+	if applyResp != nil && applyResp.Status != nil && len(applyResp.Status.GetMetadata()) > 0 {
+		for k, v := range applyResp.Status.GetMetadata() {
+			workload.Metadata[k] = strings.TrimSpace(v)
+		}
+		if taskID := strings.TrimSpace(applyResp.Status.GetMetadata()["task_id"]); taskID != "" {
+			_ = s.UpdateWorkloadLogs(workload.ID, fmt.Sprintf("Tracking async apply task: %s", taskID))
 		}
 	}
-	s.writeReconciliationRecord(workload.ID, "Apply", true, "Converged")
+	if err := s.saveWorkload(workload); err != nil {
+		return "", fmt.Errorf("persist async apply guard metadata: %w", err)
+	}
+	s.writeReconciliationRecord(workload.ID, "Apply", true, "Apply accepted by agent (async tracking)")
 
 	schedulerLogger.WithFields(logrus.Fields{
 		"workload_id": workload.ID,
 		"node_id":     selectedNode.NodeID,
-	}).Info("workload converged")
+	}).Info("workload apply accepted")
 	return selectedNode.NodeID, nil
 }
 
@@ -562,7 +565,11 @@ func (s *Scheduler) DeleteWorkloadWithContext(ctx context.Context, workloadID st
 		node, nodeErr := s.GetNodeByID(workload.NodeID)
 		if nodeErr == nil {
 			if _, delErr := s.deleteWorkloadFromNode(ctx, node, workloadID); delErr != nil {
-				return fmt.Errorf("delete workload on node %s: %v", node.NodeID, delErr)
+				if isNodeUnreachableError(delErr) || isWorkloadStatusNotFound(delErr) {
+					_ = s.UpdateWorkloadLogs(workloadID, fmt.Sprintf("best-effort delete: node %s unreachable, removing scheduler state", node.NodeID))
+				} else {
+					return fmt.Errorf("delete workload on node %s: %v", node.NodeID, delErr)
+				}
 			}
 
 			deadline := time.Now().Add(s.deleteTimeout())
@@ -571,8 +578,13 @@ func (s *Scheduler) DeleteWorkloadWithContext(ctx context.Context, workloadID st
 				if stErr != nil && isWorkloadStatusNotFound(stErr) {
 					break
 				}
+				if stErr != nil && isNodeUnreachableError(stErr) {
+					_ = s.UpdateWorkloadLogs(workloadID, fmt.Sprintf("delete verification skipped: node %s unreachable", node.NodeID))
+					break
+				}
 				if time.Now().After(deadline) {
-					return fmt.Errorf("timeout waiting for workload %s deletion on node %s", workloadID, node.NodeID)
+					_ = s.UpdateWorkloadLogs(workloadID, fmt.Sprintf("delete verification timed out on node %s; removing scheduler state", node.NodeID))
+					break
 				}
 				time.Sleep(s.agentPollInterval())
 			}
@@ -651,6 +663,35 @@ func (s *Scheduler) UpdateWorkloadLogs(workloadID, logs string) error {
 	}
 
 	schedulerLogger.WithField("workload_id", workloadID).Debug("updated workload logs")
+	return nil
+}
+
+// UpdateWorkloadMetadata merges runtime metadata into the workload record.
+func (s *Scheduler) UpdateWorkloadMetadata(workloadID string, metadata map[string]string) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+	if len(metadata) == 0 {
+		return nil
+	}
+	workload, err := s.GetWorkloadByID(workloadID)
+	if err != nil {
+		return err
+	}
+	if workload.Metadata == nil {
+		workload.Metadata = map[string]interface{}{}
+	}
+	for k, v := range metadata {
+		key := strings.TrimSpace(k)
+		if key == "" {
+			continue
+		}
+		workload.Metadata[key] = strings.TrimSpace(v)
+	}
+	workload.StatusInfo.LastUpdated = time.Now().UTC()
+	if err := s.saveWorkload(workload); err != nil {
+		return fmt.Errorf("failed to update workload %s metadata: %v", workloadID, err)
+	}
 	return nil
 }
 
