@@ -19,6 +19,7 @@ service AgentControl {
 
   // Retry trigger
   rpc RetryWorkload(RetryWorkloadRequest) returns (RetryWorkloadResponse);
+  rpc SubmitAutomationSuggestion(SubmitAutomationSuggestionRequest) returns (SubmitAutomationSuggestionResponse);
 
   // Cluster and node management visibility
   rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
@@ -29,6 +30,39 @@ service AgentControl {
 
   // Optional future streaming channel
   rpc ControlStream(stream ControlMessage) returns (stream ControlMessage);
+}
+
+enum AutomationActionType {
+  AUTOMATION_ACTION_TYPE_UNSPECIFIED = 0;
+  AUTOMATION_ACTION_SET_DESIRED_STATE = 1;
+  AUTOMATION_ACTION_RETRY_WORKLOAD = 2;
+  AUTOMATION_ACTION_DELETE_WORKLOAD = 3;
+  AUTOMATION_ACTION_SCALE_REPLICAS = 4;
+}
+
+message AutomationSuggestion {
+  string suggestion_id = 1;
+  string policy_id = 2;
+  string policy_name = 3;
+  string target_workload = 4;
+  AutomationActionType action_type = 5;
+  string desired_state = 6;
+  int32 desired_replicas = 7;
+  int32 replica_delta = 8;
+  string reason = 9;
+  google.protobuf.Timestamp suggested_at = 10;
+}
+
+message SubmitAutomationSuggestionRequest {
+  AutomationSuggestion suggestion = 1;
+}
+
+message SubmitAutomationSuggestionResponse {
+  bool accepted = 1;
+  string decision = 2;
+  string reason = 3;
+  string applied_action = 4;
+  google.protobuf.Timestamp decided_at = 5;
 }
 
 message RegisterNodeRequest {
@@ -46,6 +80,7 @@ message NodeCapabilities {
   int64 memory_total_mb = 2;
   repeated StoragePool storage_pools = 3;
   repeated string supported_workload_types = 4; // container, compose, vm
+  repeated string supported_storage_drivers = 5; // local, nfs, ceph-rbd
 }
 
 message StoragePool {
@@ -66,6 +101,7 @@ message HeartbeatRequest {
   NodeUsage usage = 2;
   repeated WorkloadStatus workload_statuses = 3;
   google.protobuf.Timestamp timestamp = 4;
+  repeated WorkloadUsageSnapshot workload_usage = 5;
 }
 
 message NodeUsage {
@@ -134,6 +170,7 @@ message ContainerSpec {
   repeated Port ports = 5;
   string restart_policy = 6;
   bool privileged = 7;
+  repeated ManagedVolumeSpec managed_volumes = 8;
 }
 
 message VolumeMount {
@@ -163,6 +200,7 @@ message VMSpec {
   repeated NetworkConfig networks = 4;
   CloudInitConfig cloud_init = 5;
   string os_image = 6;
+  repeated ManagedVolumeSpec managed_volumes = 7;
 }
 
 message DiskConfig {
@@ -181,6 +219,39 @@ message CloudInitConfig {
   string user_data = 1;
   string meta_data = 2;
   string network_config = 3;
+  string vendor_data = 4;
+}
+
+message ManagedVolumeSpec {
+  string name = 1;
+  string driver = 2; // local|nfs|ceph-rbd
+  int64 size_gb = 3;
+  string access_mode = 4;
+  string fs_type = 5;
+  string mount_path = 6;
+  bool read_only = 7;
+  string retain_policy = 8; // Delete|Retain
+}
+
+message WorkloadUsageSnapshot {
+  string workload_id = 1;
+  string type = 2;
+  double cpu_percent = 3;
+  int64 memory_bytes = 4;
+  int64 disk_read_bytes = 5;
+  int64 disk_write_bytes = 6;
+  int64 net_rx_bytes = 7;
+  int64 net_tx_bytes = 8;
+  google.protobuf.Timestamp collected_at = 9;
+  string source = 10;
+}
+
+message ReasonDetail {
+  string code = 1;
+  string message = 2;
+  google.protobuf.Timestamp last_transition = 3;
+  google.protobuf.Timestamp next_retry_at = 4;
+  bool retryable = 5;
 }
 
 message WorkloadStatus {
@@ -189,6 +260,8 @@ message WorkloadStatus {
   FailureReason failure_reason = 3;
   string message = 4;
   google.protobuf.Timestamp last_transition = 5;
+  ReasonDetail reason = 6;
+  WorkloadUsageSnapshot usage = 7;
 }
 
 enum FailureReason {
@@ -272,6 +345,8 @@ message WorkloadView {
   google.protobuf.Timestamp retry_next_at = 9;
   string failure_reason = 10;
   google.protobuf.Timestamp last_updated = 11;
+  ReasonDetail reason = 12;
+  WorkloadUsageSnapshot usage = 13;
 }
 
 message GetClusterSummaryRequest {}
