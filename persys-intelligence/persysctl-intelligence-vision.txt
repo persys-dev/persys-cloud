@@ -1,0 +1,324 @@
+Yes. And this is exactly where persys-intelligence + persysctl becomes powerful — but we must wire it correctly.
+
+You’re not building “AI inside the scheduler”.
+
+You’re building:
+
+A cluster reasoning interface exposed through persysctl that queries structured state and uses LLMs to explain, correlate, and suggest actions.
+
+That’s very different — and very good.
+
+Now let’s formalize how this works properly.
+
+⸻
+
+🧠 The Mental Model
+
+When you run:
+
+persysctl ai describe cluster
+persysctl ai debug workload demo-c2
+persysctl ai why is vm demo-c2 not booting?
+
+The LLM must NEVER:
+	•	SSH to nodes
+	•	Touch etcd
+	•	Call Docker
+	•	Directly mutate cluster state
+
+It must only operate on structured snapshots of state.
+
+So the architecture becomes:
+
+persysctl
+   ↓
+persys-gateway
+   ↓
+persys-intelligence
+   ↓
+Structured Data Fetch (Scheduler + Metrics + Events)
+   ↓
+LLM (analysis only)
+   ↓
+Structured Explanation
+
+
+⸻
+
+🔍 How persysctl ai Should Actually Work
+
+Step 1 — CLI
+
+User runs:
+
+persysctl ai debug workload demo-c2
+
+CLI sends:
+
+POST /ai/query
+{
+  "query": "why is workload demo-c2 slow?",
+  "context_scope": "workload",
+  "resource_id": "demo-c2"
+}
+
+to persys-gateway over mTLS.
+
+⸻
+
+Step 2 — Gateway
+
+Gateway:
+	•	Authenticates user (mTLS identity)
+	•	Forwards to persys-intelligence
+
+No LLM here.
+
+⸻
+
+Step 3 — Intelligence Service
+
+Intelligence does:
+
+1️⃣ Fetch structured data
+
+From scheduler (gRPC read-only):
+	•	Workload spec
+	•	Assigned node
+	•	Desired state
+	•	Retry history
+	•	Event history
+
+From Prometheus:
+	•	CPU usage trend
+	•	Memory pressure
+	•	Restart count
+	•	Network throughput
+
+From agent (optional via scheduler):
+	•	Last reported runtime status
+
+All fetched as JSON structs.
+
+⸻
+
+2️⃣ Build a Safe Prompt
+
+Example prompt:
+
+You are analyzing a distributed compute cluster.
+
+Workload: demo-c2
+Desired state: Running
+Node: node-1
+CPU usage: 97% sustained for 8 minutes
+Memory usage: 84%
+Restart count: 3
+Recent events:
+- Image pull succeeded
+- Health check failed twice
+- Reconciler retry triggered
+
+Explain why this workload is slow.
+Do NOT hallucinate.
+Only use provided data.
+If insufficient data, say so.
+
+Important:
+The model never sees secrets.
+Never sees raw logs unless sanitized.
+Never gets cluster credentials.
+
+⸻
+
+3️⃣ LLM Produces
+
+Structured response:
+
+{
+  "diagnosis": "CPU saturation on node-1 likely causing latency",
+  "confidence": 0.81,
+  "evidence": [
+    "CPU usage at 97%",
+    "Restart count indicates instability"
+  ],
+  "recommended_actions": [
+    "Scale workload to another node",
+    "Check if node-1 is overloaded",
+    "Consider vertical scaling"
+  ]
+}
+
+
+⸻
+
+4️⃣ Return to CLI
+
+CLI prints:
+
+Workload demo-c2 is slow due to sustained CPU saturation (97%) on node-1.
+There were 3 restarts indicating instability.
+Recommended:
+  - Scale horizontally
+  - Move to less saturated node
+
+
+⸻
+
+🧩 Example: VM Not Booting
+
+User:
+
+persysctl ai why is vm demo-c2 not booting?
+
+Intelligence fetches:
+	•	Cloud-init status
+	•	VM state from agent
+	•	Disk attachment status
+	•	IP assignment
+	•	Hypervisor errors
+	•	Node resource availability
+
+Prompt built from structured data.
+
+If cloud-init failed:
+
+LLM explains:
+“Cloud-init user-data failed due to syntax error at line 14.”
+
+That’s powerful.
+
+⸻
+
+🚨 Critical Safety Rules
+
+1️⃣ AI is READ-ONLY
+
+It cannot:
+	•	Delete workloads
+	•	Scale workloads
+	•	Modify scheduler state
+
+Even if it suggests “delete this”.
+
+⸻
+
+2️⃣ AI never queries etcd directly
+
+Scheduler exposes:
+
+ClusterStateReader service
+
+Only structured data.
+
+⸻
+
+3️⃣ AI must return structured output
+
+Never raw prose only.
+
+Use schema like:
+
+{
+  "diagnosis": "",
+  "confidence": 0-1,
+  "impact": "low|medium|high",
+  "recommended_actions": [],
+  "requires_human_approval": true
+}
+
+
+⸻
+
+🏗 Where This Fits In Your Stack
+
+You now have two AI surfaces:
+
+1️⃣ Passive Intelligence (automation layer)
+	•	Forecasting
+	•	Anomaly detection
+	•	Disaster prediction
+
+2️⃣ Interactive Intelligence (CLI reasoning)
+	•	Cluster explanation
+	•	Debug assistance
+	•	State summarization
+	•	Capacity explanation
+
+They can live in same service but as separate modules.
+
+⸻
+
+🔥 Why This Is Powerful
+
+You’re building:
+
+“kubectl describe” + SRE brain + observability correlation
+
+But smarter.
+
+Kubernetes doesn’t give you:
+
+kubectl why is my pod slow?
+
+You are.
+
+⸻
+
+⚠️ The Hard Part
+
+To make this actually useful:
+
+You must provide structured event history.
+
+Without:
+	•	Retry reason codes
+	•	Failure enums
+	•	Cloud-init status fields
+	•	Agent error codes
+
+The AI will guess.
+
+Which is dangerous.
+
+So the quality of your protobuf schemas determines AI quality.
+
+⸻
+
+🧠 Final Architecture
+
+persysctl
+   ↓
+persys-gateway
+   ↓
+persys-intelligence
+   ↓
+Scheduler (read-only gRPC)
+Prometheus (metrics)
+Optional: Forgery (deploy correlation)
+
+No direct agent calls.
+No direct etcd.
+No secret access.
+
+⸻
+
+🎯 You Are Not Building “AI Cloud”
+
+You’re building:
+
+An explainable, structured control plane with an LLM reasoning interface.
+
+That’s very different.
+And much better.
+
+⸻
+
+If you want next, we can:
+	•	Design exact /ai/query API schema
+	•	Design protobuf for ClusterStateReader
+	•	Define prompt templates
+	•	Define confidence scoring system
+	•	Or design the CLI UX properly
+
+Your platform just crossed into something very serious.
