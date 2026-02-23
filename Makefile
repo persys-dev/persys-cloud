@@ -7,7 +7,7 @@ GOCACHE ?= $(CURDIR)/.cache/go-build
 GOMODCACHE ?= $(CURDIR)/.cache/go-mod
 GO_ENV = GOCACHE="$(GOCACHE)" GOMODCACHE="$(GOMODCACHE)"
 
-SERVICES := compute-agent persys-scheduler persysctl persys-gateway persys-federation persys-forgery persys-operator vault-mtls-mock
+SERVICES := compute-agent persys-scheduler persysctl persys-gateway persys-federation persys-forgery persys-operator persys-automation persys-intelligence vault-mtls-mock
 
 compute-agent_DIR := compute-agent
 compute-agent_PKG := ./cmd/agent
@@ -36,6 +36,14 @@ persys-forgery_BIN := persys-forgery
 persys-operator_DIR := persys-operator
 persys-operator_PKG := ./cmd/main.go
 persys-operator_BIN := persys-operator
+
+persys-automation_DIR := persys-automation
+persys-automation_PKG := ./cmd/automation
+persys-automation_BIN := persys-automation
+
+persys-intelligence_DIR := persys-intelligence
+persys-intelligence_PKG := ./cmd/intelligence
+persys-intelligence_BIN := persys-intelligence
 
 vault-mtls-mock_DIR := vault-mtls-mock
 vault-mtls-mock_PKG := ./main.go
