@@ -1,0 +1,44 @@
+{
+  "title": "Persys Forgery Comprehensive Observability",
+  "uid": "persys-forgery-overview",
+  "schemaVersion": 38,
+  "version": 2,
+  "refresh": "5s",
+  "tags": ["persys", "forgery", "pipeline"],
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {"list": [{"name": "interval", "type": "custom", "query": "1m,5m,15m,30m,1h", "current": {"text": "5m", "value": "5m"}}]},
+  "panels": [
+    {"type":"stat","title":"Forgery Up","gridPos":{"h":4,"w":4,"x":0,"y":0},"datasource":"prometheus","targets":[{"expr":"max(up{job='persys-forgery'})","refId":"A"}]},
+    {"type":"stat","title":"Webhooks Received","gridPos":{"h":4,"w":5,"x":4,"y":0},"datasource":"prometheus","targets":[{"expr":"persys_forgery_webhooks_received_total","refId":"A"}]},
+    {"type":"stat","title":"Webhook Failures","gridPos":{"h":4,"w":5,"x":9,"y":0},"datasource":"prometheus","targets":[{"expr":"persys_forgery_webhooks_failed_total","refId":"A"}]},
+    {"type":"stat","title":"Builds Succeeded","gridPos":{"h":4,"w":5,"x":14,"y":0},"datasource":"prometheus","targets":[{"expr":"persys_forgery_builds_succeeded_total","refId":"A"}]},
+    {"type":"stat","title":"Builds Failed","gridPos":{"h":4,"w":5,"x":19,"y":0},"datasource":"prometheus","targets":[{"expr":"persys_forgery_builds_failed_total","refId":"A"}]},
+
+    {"type":"timeseries","title":"Webhook & Build Rates","gridPos":{"h":8,"w":12,"x":0,"y":4},"datasource":"prometheus","targets":[
+      {"expr":"rate(persys_forgery_webhooks_received_total[$interval])","legendFormat":"webhooks_received","refId":"A"},
+      {"expr":"rate(persys_forgery_webhooks_failed_total[$interval])","legendFormat":"webhooks_failed","refId":"B"},
+      {"expr":"rate(persys_forgery_builds_started_total[$interval])","legendFormat":"builds_started","refId":"C"},
+      {"expr":"rate(persys_forgery_builds_succeeded_total[$interval])","legendFormat":"builds_succeeded","refId":"D"},
+      {"expr":"rate(persys_forgery_builds_failed_total[$interval])","legendFormat":"builds_failed","refId":"E"}
+    ]},
+    {"type":"timeseries","title":"Pipeline Event Throughput","gridPos":{"h":8,"w":12,"x":12,"y":4},"datasource":"prometheus","targets":[
+      {"expr":"rate(persys_forgery_pipeline_events_total[$interval])","legendFormat":"pipeline_events","refId":"A"}
+    ]},
+
+    {"type":"timeseries","title":"Queue Depth","gridPos":{"h":8,"w":12,"x":0,"y":12},"datasource":"prometheus","targets":[
+      {"expr":"persys_forgery_build_queue_depth","legendFormat":"build_queue","refId":"A"},
+      {"expr":"persys_forgery_webhook_queue_depth","legendFormat":"webhook_queue","refId":"B"}
+    ]},
+    {"type":"timeseries","title":"gRPC Request / Error Rates","gridPos":{"h":8,"w":12,"x":12,"y":12},"datasource":"prometheus","targets":[
+      {"expr":"rate(persys_forgery_grpc_requests_total[$interval])","legendFormat":"grpc_requests","refId":"A"},
+      {"expr":"rate(persys_forgery_grpc_errors_total[$interval])","legendFormat":"grpc_errors","refId":"B"}
+    ]},
+
+    {"type":"stat","title":"Build Failure Ratio","gridPos":{"h":4,"w":12,"x":0,"y":20},"datasource":"prometheus","targets":[
+      {"expr":"rate(persys_forgery_builds_failed_total[$interval]) / clamp_min(rate(persys_forgery_builds_started_total[$interval]),1)","refId":"A"}
+    ]},
+    {"type":"stat","title":"Webhook Failure Ratio","gridPos":{"h":4,"w":12,"x":12,"y":20},"datasource":"prometheus","targets":[
+      {"expr":"rate(persys_forgery_webhooks_failed_total[$interval]) / clamp_min(rate(persys_forgery_webhooks_received_total[$interval]),1)","refId":"A"}
+    ]}
+  ]
+}

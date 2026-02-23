@@ -1,0 +1,159 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 38,
+  "version": 3,
+  "uid": "persys-federation-overview",
+  "title": "Persys Federation Comprehensive Observability",
+  "tags": ["persys", "federation", "grpc"],
+  "refresh": "5s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "interval",
+        "type": "custom",
+        "query": "1m,5m,15m,30m,1h",
+        "current": { "text": "5m", "value": "5m" },
+        "label": "Rate Interval"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Health & Reliability",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Federation Up",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "max(up{job='persys-federation'})", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "gRPC Requests Total",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "persys_federation_grpc_requests_total", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "gRPC Errors Total",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "persys_federation_grpc_errors_total", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "gRPC Error Rate (5m)",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
+      "datasource": "prometheus",
+      "targets": [
+        {
+          "expr": "rate(persys_federation_grpc_errors_total[5m]) / clamp_min(rate(persys_federation_grpc_requests_total[5m]), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "gRPC Request / Error Rate",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "datasource": "prometheus",
+      "targets": [
+        { "expr": "rate(persys_federation_grpc_requests_total[$interval])", "legendFormat": "requests", "refId": "A" },
+        { "expr": "rate(persys_federation_grpc_errors_total[$interval])", "legendFormat": "errors", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "gRPC Success Rate",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "datasource": "prometheus",
+      "targets": [
+        {
+          "expr": "(rate(persys_federation_grpc_requests_total[$interval]) - rate(persys_federation_grpc_errors_total[$interval])) / clamp_min(rate(persys_federation_grpc_requests_total[$interval]), 1)",
+          "legendFormat": "success_rate",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] }
+    },
+    {
+      "type": "row",
+      "title": "Traffic Analysis",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "Requests vs Errors (Cumulative)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "datasource": "prometheus",
+      "targets": [
+        { "expr": "persys_federation_grpc_requests_total", "legendFormat": "requests_total", "refId": "A" },
+        { "expr": "persys_federation_grpc_errors_total", "legendFormat": "errors_total", "refId": "B" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Budget Burn Proxy",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "datasource": "prometheus",
+      "targets": [
+        {
+          "expr": "rate(persys_federation_grpc_errors_total[$interval]) / clamp_min(rate(persys_federation_grpc_requests_total[$interval]), 1)",
+          "legendFormat": "error_ratio",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    }
+  ]
+}

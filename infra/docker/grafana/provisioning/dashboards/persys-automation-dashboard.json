@@ -1,0 +1,30 @@
+{
+  "title": "Persys Automation Comprehensive Observability",
+  "uid": "persys-automation-overview",
+  "schemaVersion": 38,
+  "version": 2,
+  "refresh": "5s",
+  "tags": ["persys", "automation"],
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {"list": [{"name": "interval", "type": "custom", "query": "1m,5m,15m,30m,1h", "current": {"text": "5m", "value": "5m"}}]},
+  "panels": [
+    {"type":"stat","title":"Automation Up","gridPos":{"h":4,"w":6,"x":0,"y":0},"datasource":"prometheus","targets":[{"expr":"max(up{job='persys-automation'})","refId":"A"}]},
+    {"type":"stat","title":"Evaluations Total","gridPos":{"h":4,"w":6,"x":6,"y":0},"datasource":"prometheus","targets":[{"expr":"persys_automation_policy_evaluations_total","refId":"A"}]},
+    {"type":"stat","title":"Matches Total","gridPos":{"h":4,"w":6,"x":12,"y":0},"datasource":"prometheus","targets":[{"expr":"persys_automation_policy_matches_total","refId":"A"}]},
+    {"type":"stat","title":"Dispatches Total","gridPos":{"h":4,"w":6,"x":18,"y":0},"datasource":"prometheus","targets":[{"expr":"persys_automation_policy_dispatches_total","refId":"A"}]},
+    {"type":"timeseries","title":"Evaluation/Match/Dispatch Rate","gridPos":{"h":8,"w":12,"x":0,"y":4},"datasource":"prometheus","targets":[
+      {"expr":"rate(persys_automation_policy_evaluations_total[$interval])","legendFormat":"evaluations","refId":"A"},
+      {"expr":"rate(persys_automation_policy_matches_total[$interval])","legendFormat":"matches","refId":"B"},
+      {"expr":"rate(persys_automation_policy_dispatches_total[$interval])","legendFormat":"dispatches","refId":"C"}
+    ]},
+    {"type":"timeseries","title":"Match & Dispatch Efficiency","gridPos":{"h":8,"w":12,"x":12,"y":4},"datasource":"prometheus","targets":[
+      {"expr":"rate(persys_automation_policy_matches_total[$interval]) / clamp_min(rate(persys_automation_policy_evaluations_total[$interval]),1)","legendFormat":"match_rate","refId":"A"},
+      {"expr":"rate(persys_automation_policy_dispatches_total[$interval]) / clamp_min(rate(persys_automation_policy_matches_total[$interval]),1)","legendFormat":"dispatch_rate","refId":"B"}
+    ]},
+    {"type":"table","title":"Automation Snapshot","gridPos":{"h":7,"w":24,"x":0,"y":12},"datasource":"prometheus","targets":[
+      {"expr":"persys_automation_policy_evaluations_total","format":"table","instant":true,"refId":"A"},
+      {"expr":"persys_automation_policy_matches_total","format":"table","instant":true,"refId":"B"},
+      {"expr":"persys_automation_policy_dispatches_total","format":"table","instant":true,"refId":"C"}
+    ]}
+  ]
+}

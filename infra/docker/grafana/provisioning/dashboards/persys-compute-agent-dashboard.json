@@ -1,0 +1,311 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 38,
+  "version": 3,
+  "uid": "persys-compute-agent-overview",
+  "title": "Persys Compute Agent Comprehensive Observability",
+  "tags": ["persys", "compute-agent", "tasks", "node"],
+  "refresh": "5s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "interval",
+        "type": "custom",
+        "query": "1m,5m,15m,30m,1h",
+        "current": { "text": "5m", "value": "5m" },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "label": "Rate Interval"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Health & Throughput",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Agent Up",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "max(up{job='compute-agent'})", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Workloads Created",
+      "gridPos": { "h": 4, "w": 5, "x": 4, "y": 1 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "persys_agent_workload_created_total", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "Workloads Deleted",
+      "gridPos": { "h": 4, "w": 5, "x": 9, "y": 1 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "persys_agent_workload_deleted_total", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "Workloads Failed",
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 1 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "persys_agent_workload_failed_total", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "GC Runs",
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 1 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "persys_agent_garbage_collection_runs_total", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Workload Operation Rate",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+      "datasource": "prometheus",
+      "targets": [
+        { "expr": "rate(persys_agent_workload_created_total[$interval])", "legendFormat": "created", "refId": "A" },
+        { "expr": "rate(persys_agent_workload_deleted_total[$interval])", "legendFormat": "deleted", "refId": "B" },
+        { "expr": "rate(persys_agent_workload_failed_total[$interval])", "legendFormat": "failed", "refId": "C" },
+        { "expr": "rate(persys_agent_workload_reconcile_total[$interval])", "legendFormat": "reconcile", "refId": "D" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Current Workloads by State/Type",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "sum by(state,type) (persys_agent_workload_count)", "legendFormat": "{{state}} / {{type}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "type": "row",
+      "title": "Task Queue SLO Signals",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Queue Depth",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 14 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "persys_agent_task_queue_depth", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "Task Failure Rate (5m)",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 14 },
+      "datasource": "prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(persys_agent_task_executions_total{status='failed'}[5m])) / clamp_min(sum(rate(persys_agent_task_executions_total[5m])), 1)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.02 },
+              { "color": "red", "value": 0.08 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "p95 Task Latency (5m)",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 14 },
+      "datasource": "prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(persys_agent_task_latency_seconds_bucket[5m])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "Task Throughput (5m)",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 14 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "sum(rate(persys_agent_task_executions_total[5m]))", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Queue Depth Over Time",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 18 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "persys_agent_task_queue_depth", "legendFormat": "depth", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Task Latency p50/p95/p99",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 18 },
+      "datasource": "prometheus",
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(persys_agent_task_latency_seconds_bucket[$interval])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(persys_agent_task_latency_seconds_bucket[$interval])) by (le))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum(rate(persys_agent_task_latency_seconds_bucket[$interval])) by (le))", "legendFormat": "p99", "refId": "C" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Task Failure Rate by Type",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 18 },
+      "datasource": "prometheus",
+      "targets": [
+        {
+          "expr": "sum by(type) (rate(persys_agent_task_executions_total{status='failed'}[$interval])) / clamp_min(sum by(type) (rate(persys_agent_task_executions_total[$interval])), 1)",
+          "legendFormat": "{{type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Task Execution Rate by Type & Status",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 26 },
+      "datasource": "prometheus",
+      "targets": [
+        {
+          "expr": "sum by(type,status) (rate(persys_agent_task_executions_total[$interval]))",
+          "legendFormat": "{{type}} / {{status}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Task Failures Total by Type",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 26 },
+      "datasource": "prometheus",
+      "targets": [
+        {
+          "expr": "persys_agent_task_failures_total",
+          "legendFormat": "{{type}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "type": "row",
+      "title": "Saturation & Garbage Collection",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 34 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU / Memory Utilization",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 35 },
+      "datasource": "prometheus",
+      "targets": [
+        { "expr": "persys_agent_system_cpu_utilization_percent", "legendFormat": "cpu", "refId": "A" },
+        { "expr": "persys_agent_system_memory_utilization_percent", "legendFormat": "memory", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Disk Utilization by Mount",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 35 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "persys_agent_system_disk_utilization_percent", "legendFormat": "{{mount_point}}", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Runtime Health Status",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 35 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "persys_agent_runtime_health_status", "legendFormat": "{{runtime_type}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "GC Duration and Run Rate",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 43 },
+      "datasource": "prometheus",
+      "targets": [
+        {
+          "expr": "rate(persys_agent_garbage_collection_runs_total[$interval])",
+          "legendFormat": "runs_rate",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(persys_agent_garbage_collection_duration_seconds_sum[$interval]) / clamp_min(rate(persys_agent_garbage_collection_duration_seconds_count[$interval]), 1)",
+          "legendFormat": "avg_duration_sec",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "GC Findings / Deletes",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 43 },
+      "datasource": "prometheus",
+      "targets": [
+        {
+          "expr": "persys_agent_garbage_collection_orphaned_resources_found",
+          "legendFormat": "orphaned {{resource_type}}",
+          "refId": "A"
+        },
+        {
+          "expr": "persys_agent_garbage_collection_old_failed_workloads_found",
+          "legendFormat": "old_failed_workloads",
+          "refId": "B"
+        },
+        {
+          "expr": "rate(persys_agent_garbage_collection_resources_deleted_total[$interval])",
+          "legendFormat": "deleted {{resource_type}}",
+          "refId": "C"
+        }
+      ]
+    }
+  ]
+}
