@@ -42,7 +42,7 @@ jobs:
 
         # Check each service directory for changes
         if echo "$CHANGED_FILES" | grep -q "^persys-gateway/"; then
-          build_image "api-gateway" "persys-gateway"
+          build_image "persys-gateway" "persys-gateway"
         fi
 
         if echo "$CHANGED_FILES" | grep -q "^persys-scheduler/"; then
