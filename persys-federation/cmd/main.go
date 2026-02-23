@@ -107,7 +107,7 @@ func initTracer(endpoint string) (*trace.TracerProvider, error) {
 }
 
 func startGrpcServer(config *config.Config) {
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(federationUnaryMetricsInterceptor()))
 	cloudServer, err := gapi.NewGrpcCloudServer(*config, cloudSvc)
 	if err != nil {
 		utils.AuditLog(fmt.Sprintf("Failed to create gRPC server: %v", err))
@@ -142,5 +142,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	metricsAddr := getenvDefault("PERSYS_FEDERATION_METRICS_ADDR", ":8096")
+	metricsServer := startMetricsServer(metricsAddr)
+	defer func() {
+		_ = metricsServer.Close()
+	}()
 	startGrpcServer(config)
 }
