@@ -19,18 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentControl_RegisterNode_FullMethodName               = "/persys.control.v1.AgentControl/RegisterNode"
-	AgentControl_Heartbeat_FullMethodName                  = "/persys.control.v1.AgentControl/Heartbeat"
-	AgentControl_ApplyWorkload_FullMethodName              = "/persys.control.v1.AgentControl/ApplyWorkload"
-	AgentControl_DeleteWorkload_FullMethodName             = "/persys.control.v1.AgentControl/DeleteWorkload"
-	AgentControl_RetryWorkload_FullMethodName              = "/persys.control.v1.AgentControl/RetryWorkload"
-	AgentControl_SubmitAutomationSuggestion_FullMethodName = "/persys.control.v1.AgentControl/SubmitAutomationSuggestion"
-	AgentControl_ListNodes_FullMethodName                  = "/persys.control.v1.AgentControl/ListNodes"
-	AgentControl_GetNode_FullMethodName                    = "/persys.control.v1.AgentControl/GetNode"
-	AgentControl_ListWorkloads_FullMethodName              = "/persys.control.v1.AgentControl/ListWorkloads"
-	AgentControl_GetWorkload_FullMethodName                = "/persys.control.v1.AgentControl/GetWorkload"
-	AgentControl_GetClusterSummary_FullMethodName          = "/persys.control.v1.AgentControl/GetClusterSummary"
-	AgentControl_ControlStream_FullMethodName              = "/persys.control.v1.AgentControl/ControlStream"
+	AgentControl_RegisterNode_FullMethodName   = "/persys.control.v1.AgentControl/RegisterNode"
+	AgentControl_Heartbeat_FullMethodName      = "/persys.control.v1.AgentControl/Heartbeat"
+	AgentControl_ApplyWorkload_FullMethodName  = "/persys.control.v1.AgentControl/ApplyWorkload"
+	AgentControl_DeleteWorkload_FullMethodName = "/persys.control.v1.AgentControl/DeleteWorkload"
+	AgentControl_RetryWorkload_FullMethodName  = "/persys.control.v1.AgentControl/RetryWorkload"
+	AgentControl_ControlStream_FullMethodName  = "/persys.control.v1.AgentControl/ControlStream"
 )
 
 // AgentControlClient is the client API for AgentControl service.
@@ -46,13 +40,6 @@ type AgentControlClient interface {
 	DeleteWorkload(ctx context.Context, in *DeleteWorkloadRequest, opts ...grpc.CallOption) (*DeleteWorkloadResponse, error)
 	// Retry trigger
 	RetryWorkload(ctx context.Context, in *RetryWorkloadRequest, opts ...grpc.CallOption) (*RetryWorkloadResponse, error)
-	SubmitAutomationSuggestion(ctx context.Context, in *SubmitAutomationSuggestionRequest, opts ...grpc.CallOption) (*SubmitAutomationSuggestionResponse, error)
-	// Cluster and node management visibility
-	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
-	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error)
-	ListWorkloads(ctx context.Context, in *ListWorkloadsRequest, opts ...grpc.CallOption) (*ListWorkloadsResponse, error)
-	GetWorkload(ctx context.Context, in *GetWorkloadRequest, opts ...grpc.CallOption) (*GetWorkloadResponse, error)
-	GetClusterSummary(ctx context.Context, in *GetClusterSummaryRequest, opts ...grpc.CallOption) (*GetClusterSummaryResponse, error)
 	// Optional future streaming channel
 	ControlStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ControlMessage, ControlMessage], error)
 }
@@ -115,66 +102,6 @@ func (c *agentControlClient) RetryWorkload(ctx context.Context, in *RetryWorkloa
 	return out, nil
 }
 
-func (c *agentControlClient) SubmitAutomationSuggestion(ctx context.Context, in *SubmitAutomationSuggestionRequest, opts ...grpc.CallOption) (*SubmitAutomationSuggestionResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SubmitAutomationSuggestionResponse)
-	err := c.cc.Invoke(ctx, AgentControl_SubmitAutomationSuggestion_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *agentControlClient) ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListNodesResponse)
-	err := c.cc.Invoke(ctx, AgentControl_ListNodes_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *agentControlClient) GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetNodeResponse)
-	err := c.cc.Invoke(ctx, AgentControl_GetNode_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *agentControlClient) ListWorkloads(ctx context.Context, in *ListWorkloadsRequest, opts ...grpc.CallOption) (*ListWorkloadsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ListWorkloadsResponse)
-	err := c.cc.Invoke(ctx, AgentControl_ListWorkloads_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *agentControlClient) GetWorkload(ctx context.Context, in *GetWorkloadRequest, opts ...grpc.CallOption) (*GetWorkloadResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetWorkloadResponse)
-	err := c.cc.Invoke(ctx, AgentControl_GetWorkload_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *agentControlClient) GetClusterSummary(ctx context.Context, in *GetClusterSummaryRequest, opts ...grpc.CallOption) (*GetClusterSummaryResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetClusterSummaryResponse)
-	err := c.cc.Invoke(ctx, AgentControl_GetClusterSummary_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *agentControlClient) ControlStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ControlMessage, ControlMessage], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &AgentControl_ServiceDesc.Streams[0], AgentControl_ControlStream_FullMethodName, cOpts...)
@@ -201,13 +128,6 @@ type AgentControlServer interface {
 	DeleteWorkload(context.Context, *DeleteWorkloadRequest) (*DeleteWorkloadResponse, error)
 	// Retry trigger
 	RetryWorkload(context.Context, *RetryWorkloadRequest) (*RetryWorkloadResponse, error)
-	SubmitAutomationSuggestion(context.Context, *SubmitAutomationSuggestionRequest) (*SubmitAutomationSuggestionResponse, error)
-	// Cluster and node management visibility
-	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
-	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
-	ListWorkloads(context.Context, *ListWorkloadsRequest) (*ListWorkloadsResponse, error)
-	GetWorkload(context.Context, *GetWorkloadRequest) (*GetWorkloadResponse, error)
-	GetClusterSummary(context.Context, *GetClusterSummaryRequest) (*GetClusterSummaryResponse, error)
 	// Optional future streaming channel
 	ControlStream(grpc.BidiStreamingServer[ControlMessage, ControlMessage]) error
 	mustEmbedUnimplementedAgentControlServer()
@@ -234,24 +154,6 @@ func (UnimplementedAgentControlServer) DeleteWorkload(context.Context, *DeleteWo
 }
 func (UnimplementedAgentControlServer) RetryWorkload(context.Context, *RetryWorkloadRequest) (*RetryWorkloadResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RetryWorkload not implemented")
-}
-func (UnimplementedAgentControlServer) SubmitAutomationSuggestion(context.Context, *SubmitAutomationSuggestionRequest) (*SubmitAutomationSuggestionResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SubmitAutomationSuggestion not implemented")
-}
-func (UnimplementedAgentControlServer) ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListNodes not implemented")
-}
-func (UnimplementedAgentControlServer) GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetNode not implemented")
-}
-func (UnimplementedAgentControlServer) ListWorkloads(context.Context, *ListWorkloadsRequest) (*ListWorkloadsResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListWorkloads not implemented")
-}
-func (UnimplementedAgentControlServer) GetWorkload(context.Context, *GetWorkloadRequest) (*GetWorkloadResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetWorkload not implemented")
-}
-func (UnimplementedAgentControlServer) GetClusterSummary(context.Context, *GetClusterSummaryRequest) (*GetClusterSummaryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetClusterSummary not implemented")
 }
 func (UnimplementedAgentControlServer) ControlStream(grpc.BidiStreamingServer[ControlMessage, ControlMessage]) error {
 	return status.Error(codes.Unimplemented, "method ControlStream not implemented")
@@ -367,114 +269,6 @@ func _AgentControl_RetryWorkload_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AgentControl_SubmitAutomationSuggestion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SubmitAutomationSuggestionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AgentControlServer).SubmitAutomationSuggestion(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AgentControl_SubmitAutomationSuggestion_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentControlServer).SubmitAutomationSuggestion(ctx, req.(*SubmitAutomationSuggestionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AgentControl_ListNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListNodesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AgentControlServer).ListNodes(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AgentControl_ListNodes_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentControlServer).ListNodes(ctx, req.(*ListNodesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AgentControl_GetNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetNodeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AgentControlServer).GetNode(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AgentControl_GetNode_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentControlServer).GetNode(ctx, req.(*GetNodeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AgentControl_ListWorkloads_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListWorkloadsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AgentControlServer).ListWorkloads(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AgentControl_ListWorkloads_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentControlServer).ListWorkloads(ctx, req.(*ListWorkloadsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AgentControl_GetWorkload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetWorkloadRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AgentControlServer).GetWorkload(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AgentControl_GetWorkload_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentControlServer).GetWorkload(ctx, req.(*GetWorkloadRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AgentControl_GetClusterSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetClusterSummaryRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AgentControlServer).GetClusterSummary(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AgentControl_GetClusterSummary_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AgentControlServer).GetClusterSummary(ctx, req.(*GetClusterSummaryRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _AgentControl_ControlStream_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(AgentControlServer).ControlStream(&grpc.GenericServerStream[ControlMessage, ControlMessage]{ServerStream: stream})
 }
@@ -508,30 +302,6 @@ var AgentControl_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RetryWorkload",
 			Handler:    _AgentControl_RetryWorkload_Handler,
-		},
-		{
-			MethodName: "SubmitAutomationSuggestion",
-			Handler:    _AgentControl_SubmitAutomationSuggestion_Handler,
-		},
-		{
-			MethodName: "ListNodes",
-			Handler:    _AgentControl_ListNodes_Handler,
-		},
-		{
-			MethodName: "GetNode",
-			Handler:    _AgentControl_GetNode_Handler,
-		},
-		{
-			MethodName: "ListWorkloads",
-			Handler:    _AgentControl_ListWorkloads_Handler,
-		},
-		{
-			MethodName: "GetWorkload",
-			Handler:    _AgentControl_GetWorkload_Handler,
-		},
-		{
-			MethodName: "GetClusterSummary",
-			Handler:    _AgentControl_GetClusterSummary_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
