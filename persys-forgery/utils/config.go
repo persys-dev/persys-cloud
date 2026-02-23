@@ -89,7 +89,7 @@ func (c *Config) applyDefaults() {
 		c.Redis.WebhookQueueKey = "forge:webhooks"
 	}
 	if c.Redis.PipelineStatusQueue == "" {
-		c.Redis.PipelineStatusQueue = "forge:pipeline-status"
+		c.Redis.PipelineStatusQueue = "pipeline_status"
 	}
 	if c.Build.Workspace == "" {
 		c.Build.Workspace = "/tmp/forge-builds"
@@ -115,6 +115,7 @@ func (c *Config) applyEnvOverrides() {
 	c.MySQLDSN = envOrFile("PERSYS_FORGERY_MYSQL_DSN", c.MySQLDSN)
 	c.Redis.Addr = envOrFile("PERSYS_FORGERY_REDIS_ADDR", c.Redis.Addr)
 	c.Redis.Password = envOrFile("PERSYS_FORGERY_REDIS_PASSWORD", c.Redis.Password)
+	c.Redis.PipelineStatusQueue = envOrFile("PERSYS_FORGERY_PIPELINE_STATUS_KEY", c.Redis.PipelineStatusQueue)
 	c.GRPC.Addr = envOrFile("PERSYS_FORGERY_GRPC_ADDR", c.GRPC.Addr)
 
 	c.TLS.CertPath = envOrFile("PERSYS_FORGERY_TLS_CERT_PATH", c.TLS.CertPath)

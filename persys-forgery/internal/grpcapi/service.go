@@ -12,6 +12,7 @@ import (
 
 	vault "github.com/hashicorp/vault/api"
 	forgeryv1 "github.com/persys-dev/persys-cloud/persys-forgery/internal/forgeryv1"
+	"github.com/persys-dev/persys-cloud/persys-forgery/internal/metrics"
 	"github.com/persys-dev/persys-cloud/persys-forgery/internal/models"
 	"github.com/persys-dev/persys-cloud/persys-forgery/internal/queue"
 	"github.com/persys-dev/persys-cloud/persys-forgery/utils"
@@ -26,32 +27,39 @@ type Service struct {
 	rdb             *redis.Client
 	webhookQueueKey string
 	buildQueueKey   string
+	pipelineStatus  string
 }
 
-func NewService(cfg *utils.Config, db *gorm.DB, rdb *redis.Client, webhookQueueKey, buildQueueKey string) *Service {
+func NewService(cfg *utils.Config, db *gorm.DB, rdb *redis.Client, webhookQueueKey, buildQueueKey, pipelineStatus string) *Service {
 	return &Service{
 		cfg:             cfg,
 		db:              db,
 		rdb:             rdb,
 		webhookQueueKey: webhookQueueKey,
 		buildQueueKey:   buildQueueKey,
+		pipelineStatus:  pipelineStatus,
 	}
 }
 
 func (s *Service) ForwardWebhook(ctx context.Context, req *forgeryv1.ForwardWebhookRequest) (*forgeryv1.ForwardWebhookResponse, error) {
+	metrics.IncGRPCRequest()
 	if req == nil {
+		metrics.IncGRPCError()
 		return &forgeryv1.ForwardWebhookResponse{Accepted: false, Message: "request is required"}, nil
 	}
 	if !req.GetVerified() {
+		metrics.IncGRPCError()
 		return &forgeryv1.ForwardWebhookResponse{Accepted: false, Message: "webhook must be pre-verified by gateway"}, nil
 	}
 	if req.GetRepository() == "" {
+		metrics.IncGRPCError()
 		return &forgeryv1.ForwardWebhookResponse{Accepted: false, Message: "repository is required"}, nil
 	}
 
 	payload := map[string]interface{}{}
 	if req.GetPayloadJson() != "" {
 		if err := json.Unmarshal([]byte(req.GetPayloadJson()), &payload); err != nil {
+			metrics.IncGRPCError()
 			return &forgeryv1.ForwardWebhookResponse{Accepted: false, Message: fmt.Sprintf("invalid payload_json: %v", err)}, nil
 		}
 	}
@@ -71,9 +79,11 @@ func (s *Service) ForwardWebhook(ctx context.Context, req *forgeryv1.ForwardWebh
 
 	data, err := json.Marshal(event)
 	if err != nil {
+		metrics.IncGRPCError()
 		return &forgeryv1.ForwardWebhookResponse{Accepted: false, Message: fmt.Sprintf("failed to marshal event: %v", err)}, nil
 	}
 	if err := s.rdb.LPush(ctx, s.webhookQueueKey, data).Err(); err != nil {
+		metrics.IncGRPCError()
 		return &forgeryv1.ForwardWebhookResponse{Accepted: false, Message: fmt.Sprintf("failed to enqueue webhook: %v", err)}, nil
 	}
 
@@ -228,13 +238,16 @@ func (s *Service) RegisterWebhook(ctx context.Context, req *forgeryv1.RegisterWe
 }
 
 func (s *Service) TriggerBuild(ctx context.Context, req *forgeryv1.TriggerBuildRequest) (*forgeryv1.OperationStatus, error) {
+	metrics.IncGRPCRequest()
 	projectName := strings.TrimSpace(req.GetProjectName())
 	if projectName == "" {
+		metrics.IncGRPCError()
 		return &forgeryv1.OperationStatus{Ok: false, Message: "project_name is required"}, nil
 	}
 	var project models.Project
 	err := s.db.WithContext(ctx).Where("name = ?", projectName).First(&project).Error
 	if err != nil {
+		metrics.IncGRPCError()
 		return &forgeryv1.OperationStatus{Ok: false, Message: fmt.Sprintf("project lookup failed: %v", err)}, nil
 	}
 
@@ -276,12 +289,57 @@ func (s *Service) TriggerBuild(ctx context.Context, req *forgeryv1.TriggerBuildR
 
 	data, marshalErr := json.Marshal(buildReq)
 	if marshalErr != nil {
+		metrics.IncGRPCError()
 		return &forgeryv1.OperationStatus{Ok: false, Message: marshalErr.Error()}, nil
 	}
 	if err := s.rdb.LPush(ctx, s.buildQueueKey, data).Err(); err != nil {
+		metrics.IncGRPCError()
 		return &forgeryv1.OperationStatus{Ok: false, Message: err.Error()}, nil
 	}
 	return &forgeryv1.OperationStatus{Ok: true, Message: "build queued"}, nil
+}
+
+func (s *Service) ListPipelineStatus(ctx context.Context, req *forgeryv1.ListPipelineStatusRequest) (*forgeryv1.ListPipelineStatusResponse, error) {
+	metrics.IncGRPCRequest()
+	limit := int(req.GetLimit())
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	rawItems, err := s.rdb.LRange(ctx, s.pipelineStatus, 0, int64(limit-1)).Result()
+	if err != nil {
+		metrics.IncGRPCError()
+		return nil, err
+	}
+
+	deliveryFilter := strings.TrimSpace(req.GetDeliveryId())
+	repoFilter := strings.TrimSpace(req.GetRepository())
+	resp := &forgeryv1.ListPipelineStatusResponse{
+		Entries: make([]*forgeryv1.PipelineStatusEntry, 0, len(rawItems)),
+	}
+	for _, item := range rawItems {
+		var evt queue.PipelineStatusEvent
+		if err := json.Unmarshal([]byte(item), &evt); err != nil {
+			continue
+		}
+		if deliveryFilter != "" && evt.DeliveryID != deliveryFilter {
+			continue
+		}
+		if repoFilter != "" && evt.Repository != repoFilter {
+			continue
+		}
+		resp.Entries = append(resp.Entries, &forgeryv1.PipelineStatusEntry{
+			DeliveryId: evt.DeliveryID,
+			Repository: evt.Repository,
+			Status:     evt.Status,
+			Message:    evt.Message,
+			Timestamp:  evt.Timestamp.UTC().Format(time.RFC3339Nano),
+		})
+	}
+	return resp, nil
 }
 
 func (s *Service) storeToken(ctx context.Context, userID, token string) error {

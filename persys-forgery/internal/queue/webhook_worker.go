@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/persys-dev/persys-cloud/persys-forgery/internal/metrics"
 	"github.com/persys-dev/persys-cloud/persys-forgery/internal/models"
 	"github.com/persys-dev/persys-cloud/persys-forgery/utils"
 	"github.com/redis/go-redis/v9"
@@ -44,6 +45,7 @@ func StartWebhookWorker(cfg *utils.Config) {
 			log.Println("Webhook worker Redis error:", err)
 			continue
 		}
+		updateWebhookQueueDepth(ctx, rdb, cfg.Redis.WebhookQueueKey)
 		if len(res) < 2 {
 			continue
 		}
@@ -51,8 +53,10 @@ func StartWebhookWorker(cfg *utils.Config) {
 		var event VerifiedWebhookEvent
 		if err := json.Unmarshal([]byte(res[1]), &event); err != nil {
 			log.Println("Failed to unmarshal webhook event:", err)
+			metrics.IncWebhooksFailed()
 			continue
 		}
+		metrics.IncWebhooksReceived()
 
 		publishPipelineStatus(ctx, rdb, cfg.Redis.PipelineStatusQueue, PipelineStatusEvent{
 			DeliveryID: event.DeliveryID,
@@ -65,6 +69,7 @@ func StartWebhookWorker(cfg *utils.Config) {
 		buildReq := buildRequestFromWebhook(event)
 		payload, err := json.Marshal(buildReq)
 		if err != nil {
+			metrics.IncWebhooksFailed()
 			publishPipelineStatus(ctx, rdb, cfg.Redis.PipelineStatusQueue, PipelineStatusEvent{
 				DeliveryID: event.DeliveryID,
 				Repository: event.Repository,
@@ -76,6 +81,7 @@ func StartWebhookWorker(cfg *utils.Config) {
 		}
 
 		if err := rdb.LPush(ctx, cfg.Redis.BuildQueueKey, payload).Err(); err != nil {
+			metrics.IncWebhooksFailed()
 			publishPipelineStatus(ctx, rdb, cfg.Redis.PipelineStatusQueue, PipelineStatusEvent{
 				DeliveryID: event.DeliveryID,
 				Repository: event.Repository,
@@ -202,6 +208,7 @@ func extractPullRequest(payload map[string]interface{}) *struct {
 }
 
 func publishPipelineStatus(ctx context.Context, rdb *redis.Client, queue string, evt PipelineStatusEvent) {
+	metrics.IncPipelineEvents()
 	payload, err := json.Marshal(evt)
 	if err != nil {
 		log.Printf("failed to marshal pipeline status event: %v", err)
@@ -210,4 +217,12 @@ func publishPipelineStatus(ctx context.Context, rdb *redis.Client, queue string,
 	if err := rdb.LPush(ctx, queue, payload).Err(); err != nil {
 		log.Printf("failed to publish pipeline status event: %v", err)
 	}
+}
+
+func updateWebhookQueueDepth(ctx context.Context, rdb *redis.Client, key string) {
+	n, err := rdb.LLen(ctx, key).Result()
+	if err != nil {
+		return
+	}
+	metrics.SetWebhookQueueDepth(n)
 }

@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v3.21.12
-// source: api/proto/forgery.proto
+// source: forgery.proto
 
 package forgeryv1
 
@@ -39,7 +39,7 @@ type ForwardWebhookRequest struct {
 
 func (x *ForwardWebhookRequest) Reset() {
 	*x = ForwardWebhookRequest{}
-	mi := &file_api_proto_forgery_proto_msgTypes[0]
+	mi := &file_forgery_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -51,7 +51,7 @@ func (x *ForwardWebhookRequest) String() string {
 func (*ForwardWebhookRequest) ProtoMessage() {}
 
 func (x *ForwardWebhookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[0]
+	mi := &file_forgery_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -64,7 +64,7 @@ func (x *ForwardWebhookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardWebhookRequest.ProtoReflect.Descriptor instead.
 func (*ForwardWebhookRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{0}
+	return file_forgery_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *ForwardWebhookRequest) GetDeliveryId() string {
@@ -147,7 +147,7 @@ type ForwardWebhookResponse struct {
 
 func (x *ForwardWebhookResponse) Reset() {
 	*x = ForwardWebhookResponse{}
-	mi := &file_api_proto_forgery_proto_msgTypes[1]
+	mi := &file_forgery_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -159,7 +159,7 @@ func (x *ForwardWebhookResponse) String() string {
 func (*ForwardWebhookResponse) ProtoMessage() {}
 
 func (x *ForwardWebhookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[1]
+	mi := &file_forgery_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -172,7 +172,7 @@ func (x *ForwardWebhookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardWebhookResponse.ProtoReflect.Descriptor instead.
 func (*ForwardWebhookResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{1}
+	return file_forgery_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ForwardWebhookResponse) GetAccepted() bool {
@@ -208,7 +208,7 @@ type UpsertProjectRequest struct {
 
 func (x *UpsertProjectRequest) Reset() {
 	*x = UpsertProjectRequest{}
-	mi := &file_api_proto_forgery_proto_msgTypes[2]
+	mi := &file_forgery_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -220,7 +220,7 @@ func (x *UpsertProjectRequest) String() string {
 func (*UpsertProjectRequest) ProtoMessage() {}
 
 func (x *UpsertProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[2]
+	mi := &file_forgery_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -233,7 +233,7 @@ func (x *UpsertProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpsertProjectRequest.ProtoReflect.Descriptor instead.
 func (*UpsertProjectRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{2}
+	return file_forgery_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *UpsertProjectRequest) GetName() string {
@@ -322,7 +322,7 @@ type GetProjectRequest struct {
 
 func (x *GetProjectRequest) Reset() {
 	*x = GetProjectRequest{}
-	mi := &file_api_proto_forgery_proto_msgTypes[3]
+	mi := &file_forgery_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -334,7 +334,7 @@ func (x *GetProjectRequest) String() string {
 func (*GetProjectRequest) ProtoMessage() {}
 
 func (x *GetProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[3]
+	mi := &file_forgery_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -347,7 +347,7 @@ func (x *GetProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetProjectRequest.ProtoReflect.Descriptor instead.
 func (*GetProjectRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{3}
+	return file_forgery_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *GetProjectRequest) GetName() string {
@@ -365,7 +365,7 @@ type ListProjectsRequest struct {
 
 func (x *ListProjectsRequest) Reset() {
 	*x = ListProjectsRequest{}
-	mi := &file_api_proto_forgery_proto_msgTypes[4]
+	mi := &file_forgery_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -377,7 +377,7 @@ func (x *ListProjectsRequest) String() string {
 func (*ListProjectsRequest) ProtoMessage() {}
 
 func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[4]
+	mi := &file_forgery_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -390,7 +390,7 @@ func (x *ListProjectsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsRequest.ProtoReflect.Descriptor instead.
 func (*ListProjectsRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{4}
+	return file_forgery_proto_rawDescGZIP(), []int{4}
 }
 
 type DeleteProjectRequest struct {
@@ -402,7 +402,7 @@ type DeleteProjectRequest struct {
 
 func (x *DeleteProjectRequest) Reset() {
 	*x = DeleteProjectRequest{}
-	mi := &file_api_proto_forgery_proto_msgTypes[5]
+	mi := &file_forgery_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -414,7 +414,7 @@ func (x *DeleteProjectRequest) String() string {
 func (*DeleteProjectRequest) ProtoMessage() {}
 
 func (x *DeleteProjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[5]
+	mi := &file_forgery_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -427,7 +427,7 @@ func (x *DeleteProjectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteProjectRequest.ProtoReflect.Descriptor instead.
 func (*DeleteProjectRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{5}
+	return file_forgery_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DeleteProjectRequest) GetName() string {
@@ -456,7 +456,7 @@ type Project struct {
 
 func (x *Project) Reset() {
 	*x = Project{}
-	mi := &file_api_proto_forgery_proto_msgTypes[6]
+	mi := &file_forgery_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -468,7 +468,7 @@ func (x *Project) String() string {
 func (*Project) ProtoMessage() {}
 
 func (x *Project) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[6]
+	mi := &file_forgery_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -481,7 +481,7 @@ func (x *Project) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Project.ProtoReflect.Descriptor instead.
 func (*Project) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{6}
+	return file_forgery_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Project) GetName() string {
@@ -572,7 +572,7 @@ type ProjectResponse struct {
 
 func (x *ProjectResponse) Reset() {
 	*x = ProjectResponse{}
-	mi := &file_api_proto_forgery_proto_msgTypes[7]
+	mi := &file_forgery_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -584,7 +584,7 @@ func (x *ProjectResponse) String() string {
 func (*ProjectResponse) ProtoMessage() {}
 
 func (x *ProjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[7]
+	mi := &file_forgery_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -597,7 +597,7 @@ func (x *ProjectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProjectResponse.ProtoReflect.Descriptor instead.
 func (*ProjectResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{7}
+	return file_forgery_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ProjectResponse) GetOk() bool {
@@ -630,7 +630,7 @@ type ListProjectsResponse struct {
 
 func (x *ListProjectsResponse) Reset() {
 	*x = ListProjectsResponse{}
-	mi := &file_api_proto_forgery_proto_msgTypes[8]
+	mi := &file_forgery_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -642,7 +642,7 @@ func (x *ListProjectsResponse) String() string {
 func (*ListProjectsResponse) ProtoMessage() {}
 
 func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[8]
+	mi := &file_forgery_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -655,7 +655,7 @@ func (x *ListProjectsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListProjectsResponse.ProtoReflect.Descriptor instead.
 func (*ListProjectsResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{8}
+	return file_forgery_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListProjectsResponse) GetProjects() []*Project {
@@ -677,7 +677,7 @@ type StoreGitHubCredentialRequest struct {
 
 func (x *StoreGitHubCredentialRequest) Reset() {
 	*x = StoreGitHubCredentialRequest{}
-	mi := &file_api_proto_forgery_proto_msgTypes[9]
+	mi := &file_forgery_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -689,7 +689,7 @@ func (x *StoreGitHubCredentialRequest) String() string {
 func (*StoreGitHubCredentialRequest) ProtoMessage() {}
 
 func (x *StoreGitHubCredentialRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[9]
+	mi := &file_forgery_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -702,7 +702,7 @@ func (x *StoreGitHubCredentialRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StoreGitHubCredentialRequest.ProtoReflect.Descriptor instead.
 func (*StoreGitHubCredentialRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{9}
+	return file_forgery_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *StoreGitHubCredentialRequest) GetUserId() string {
@@ -743,7 +743,7 @@ type ListUserRepositoriesRequest struct {
 
 func (x *ListUserRepositoriesRequest) Reset() {
 	*x = ListUserRepositoriesRequest{}
-	mi := &file_api_proto_forgery_proto_msgTypes[10]
+	mi := &file_forgery_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -755,7 +755,7 @@ func (x *ListUserRepositoriesRequest) String() string {
 func (*ListUserRepositoriesRequest) ProtoMessage() {}
 
 func (x *ListUserRepositoriesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[10]
+	mi := &file_forgery_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -768,7 +768,7 @@ func (x *ListUserRepositoriesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUserRepositoriesRequest.ProtoReflect.Descriptor instead.
 func (*ListUserRepositoriesRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{10}
+	return file_forgery_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ListUserRepositoriesRequest) GetUserId() string {
@@ -798,7 +798,7 @@ type Repository struct {
 
 func (x *Repository) Reset() {
 	*x = Repository{}
-	mi := &file_api_proto_forgery_proto_msgTypes[11]
+	mi := &file_forgery_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -810,7 +810,7 @@ func (x *Repository) String() string {
 func (*Repository) ProtoMessage() {}
 
 func (x *Repository) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[11]
+	mi := &file_forgery_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -823,7 +823,7 @@ func (x *Repository) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Repository.ProtoReflect.Descriptor instead.
 func (*Repository) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{11}
+	return file_forgery_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Repository) GetFullName() string {
@@ -872,7 +872,7 @@ type ListUserRepositoriesResponse struct {
 
 func (x *ListUserRepositoriesResponse) Reset() {
 	*x = ListUserRepositoriesResponse{}
-	mi := &file_api_proto_forgery_proto_msgTypes[12]
+	mi := &file_forgery_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -884,7 +884,7 @@ func (x *ListUserRepositoriesResponse) String() string {
 func (*ListUserRepositoriesResponse) ProtoMessage() {}
 
 func (x *ListUserRepositoriesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[12]
+	mi := &file_forgery_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -897,7 +897,7 @@ func (x *ListUserRepositoriesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListUserRepositoriesResponse.ProtoReflect.Descriptor instead.
 func (*ListUserRepositoriesResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{12}
+	return file_forgery_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ListUserRepositoriesResponse) GetOk() bool {
@@ -934,7 +934,7 @@ type RegisterWebhookRequest struct {
 
 func (x *RegisterWebhookRequest) Reset() {
 	*x = RegisterWebhookRequest{}
-	mi := &file_api_proto_forgery_proto_msgTypes[13]
+	mi := &file_forgery_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -946,7 +946,7 @@ func (x *RegisterWebhookRequest) String() string {
 func (*RegisterWebhookRequest) ProtoMessage() {}
 
 func (x *RegisterWebhookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[13]
+	mi := &file_forgery_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -959,7 +959,7 @@ func (x *RegisterWebhookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterWebhookRequest.ProtoReflect.Descriptor instead.
 func (*RegisterWebhookRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{13}
+	return file_forgery_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RegisterWebhookRequest) GetUserId() string {
@@ -1013,7 +1013,7 @@ type TriggerBuildRequest struct {
 
 func (x *TriggerBuildRequest) Reset() {
 	*x = TriggerBuildRequest{}
-	mi := &file_api_proto_forgery_proto_msgTypes[14]
+	mi := &file_forgery_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1025,7 +1025,7 @@ func (x *TriggerBuildRequest) String() string {
 func (*TriggerBuildRequest) ProtoMessage() {}
 
 func (x *TriggerBuildRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[14]
+	mi := &file_forgery_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1038,7 +1038,7 @@ func (x *TriggerBuildRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TriggerBuildRequest.ProtoReflect.Descriptor instead.
 func (*TriggerBuildRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{14}
+	return file_forgery_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *TriggerBuildRequest) GetProjectName() string {
@@ -1107,7 +1107,7 @@ type OperationStatus struct {
 
 func (x *OperationStatus) Reset() {
 	*x = OperationStatus{}
-	mi := &file_api_proto_forgery_proto_msgTypes[15]
+	mi := &file_forgery_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1119,7 +1119,7 @@ func (x *OperationStatus) String() string {
 func (*OperationStatus) ProtoMessage() {}
 
 func (x *OperationStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_forgery_proto_msgTypes[15]
+	mi := &file_forgery_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1132,7 +1132,7 @@ func (x *OperationStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationStatus.ProtoReflect.Descriptor instead.
 func (*OperationStatus) Descriptor() ([]byte, []int) {
-	return file_api_proto_forgery_proto_rawDescGZIP(), []int{15}
+	return file_forgery_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *OperationStatus) GetOk() bool {
@@ -1149,11 +1149,191 @@ func (x *OperationStatus) GetMessage() string {
 	return ""
 }
 
-var File_api_proto_forgery_proto protoreflect.FileDescriptor
+type ListPipelineStatusRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DeliveryId    string                 `protobuf:"bytes,1,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
+	Repository    string                 `protobuf:"bytes,2,opt,name=repository,proto3" json:"repository,omitempty"`
+	Limit         uint32                 `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
 
-const file_api_proto_forgery_proto_rawDesc = "" +
+func (x *ListPipelineStatusRequest) Reset() {
+	*x = ListPipelineStatusRequest{}
+	mi := &file_forgery_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPipelineStatusRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPipelineStatusRequest) ProtoMessage() {}
+
+func (x *ListPipelineStatusRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_forgery_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPipelineStatusRequest.ProtoReflect.Descriptor instead.
+func (*ListPipelineStatusRequest) Descriptor() ([]byte, []int) {
+	return file_forgery_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ListPipelineStatusRequest) GetDeliveryId() string {
+	if x != nil {
+		return x.DeliveryId
+	}
+	return ""
+}
+
+func (x *ListPipelineStatusRequest) GetRepository() string {
+	if x != nil {
+		return x.Repository
+	}
+	return ""
+}
+
+func (x *ListPipelineStatusRequest) GetLimit() uint32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type PipelineStatusEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DeliveryId    string                 `protobuf:"bytes,1,opt,name=delivery_id,json=deliveryId,proto3" json:"delivery_id,omitempty"`
+	Repository    string                 `protobuf:"bytes,2,opt,name=repository,proto3" json:"repository,omitempty"`
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Message       string                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	Timestamp     string                 `protobuf:"bytes,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PipelineStatusEntry) Reset() {
+	*x = PipelineStatusEntry{}
+	mi := &file_forgery_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PipelineStatusEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PipelineStatusEntry) ProtoMessage() {}
+
+func (x *PipelineStatusEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_forgery_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PipelineStatusEntry.ProtoReflect.Descriptor instead.
+func (*PipelineStatusEntry) Descriptor() ([]byte, []int) {
+	return file_forgery_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *PipelineStatusEntry) GetDeliveryId() string {
+	if x != nil {
+		return x.DeliveryId
+	}
+	return ""
+}
+
+func (x *PipelineStatusEntry) GetRepository() string {
+	if x != nil {
+		return x.Repository
+	}
+	return ""
+}
+
+func (x *PipelineStatusEntry) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *PipelineStatusEntry) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *PipelineStatusEntry) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
+}
+
+type ListPipelineStatusResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entries       []*PipelineStatusEntry `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListPipelineStatusResponse) Reset() {
+	*x = ListPipelineStatusResponse{}
+	mi := &file_forgery_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListPipelineStatusResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListPipelineStatusResponse) ProtoMessage() {}
+
+func (x *ListPipelineStatusResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_forgery_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListPipelineStatusResponse.ProtoReflect.Descriptor instead.
+func (*ListPipelineStatusResponse) Descriptor() ([]byte, []int) {
+	return file_forgery_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ListPipelineStatusResponse) GetEntries() []*PipelineStatusEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+var File_forgery_proto protoreflect.FileDescriptor
+
+const file_forgery_proto_rawDesc = "" +
 	"\n" +
-	"\x17api/proto/forgery.proto\x12\x11persys.forgery.v1\"\xad\x02\n" +
+	"\rforgery.proto\x12\x11persys.forgery.v1\"\xad\x02\n" +
 	"\x15ForwardWebhookRequest\x12\x1f\n" +
 	"\vdelivery_id\x18\x01 \x01(\tR\n" +
 	"deliveryId\x12\x1d\n" +
@@ -1270,7 +1450,25 @@ const file_api_proto_forgery_proto_rawDesc = "" +
 	"event_type\x18\b \x01(\tR\teventType\";\n" +
 	"\x0fOperationStatus\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage2\x91\a\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"r\n" +
+	"\x19ListPipelineStatusRequest\x12\x1f\n" +
+	"\vdelivery_id\x18\x01 \x01(\tR\n" +
+	"deliveryId\x12\x1e\n" +
+	"\n" +
+	"repository\x18\x02 \x01(\tR\n" +
+	"repository\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\rR\x05limit\"\xa6\x01\n" +
+	"\x13PipelineStatusEntry\x12\x1f\n" +
+	"\vdelivery_id\x18\x01 \x01(\tR\n" +
+	"deliveryId\x12\x1e\n" +
+	"\n" +
+	"repository\x18\x02 \x01(\tR\n" +
+	"repository\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x18\n" +
+	"\amessage\x18\x04 \x01(\tR\amessage\x12\x1c\n" +
+	"\ttimestamp\x18\x05 \x01(\tR\ttimestamp\"^\n" +
+	"\x1aListPipelineStatusResponse\x12@\n" +
+	"\aentries\x18\x01 \x03(\v2&.persys.forgery.v1.PipelineStatusEntryR\aentries2\x84\b\n" +
 	"\x0eForgeryControl\x12e\n" +
 	"\x0eForwardWebhook\x12(.persys.forgery.v1.ForwardWebhookRequest\x1a).persys.forgery.v1.ForwardWebhookResponse\x12\\\n" +
 	"\rUpsertProject\x12'.persys.forgery.v1.UpsertProjectRequest\x1a\".persys.forgery.v1.ProjectResponse\x12V\n" +
@@ -1281,22 +1479,23 @@ const file_api_proto_forgery_proto_rawDesc = "" +
 	"\x15StoreGitHubCredential\x12/.persys.forgery.v1.StoreGitHubCredentialRequest\x1a\".persys.forgery.v1.OperationStatus\x12w\n" +
 	"\x14ListUserRepositories\x12..persys.forgery.v1.ListUserRepositoriesRequest\x1a/.persys.forgery.v1.ListUserRepositoriesResponse\x12`\n" +
 	"\x0fRegisterWebhook\x12).persys.forgery.v1.RegisterWebhookRequest\x1a\".persys.forgery.v1.OperationStatus\x12Z\n" +
-	"\fTriggerBuild\x12&.persys.forgery.v1.TriggerBuildRequest\x1a\".persys.forgery.v1.OperationStatusBPZNgithub.com/persys-dev/persys-cloud/persys-forgery/internal/forgeryv1;forgeryv1b\x06proto3"
+	"\fTriggerBuild\x12&.persys.forgery.v1.TriggerBuildRequest\x1a\".persys.forgery.v1.OperationStatus\x12q\n" +
+	"\x12ListPipelineStatus\x12,.persys.forgery.v1.ListPipelineStatusRequest\x1a-.persys.forgery.v1.ListPipelineStatusResponseBPZNgithub.com/persys-dev/persys-cloud/persys-forgery/internal/forgeryv1;forgeryv1b\x06proto3"
 
 var (
-	file_api_proto_forgery_proto_rawDescOnce sync.Once
-	file_api_proto_forgery_proto_rawDescData []byte
+	file_forgery_proto_rawDescOnce sync.Once
+	file_forgery_proto_rawDescData []byte
 )
 
-func file_api_proto_forgery_proto_rawDescGZIP() []byte {
-	file_api_proto_forgery_proto_rawDescOnce.Do(func() {
-		file_api_proto_forgery_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_api_proto_forgery_proto_rawDesc), len(file_api_proto_forgery_proto_rawDesc)))
+func file_forgery_proto_rawDescGZIP() []byte {
+	file_forgery_proto_rawDescOnce.Do(func() {
+		file_forgery_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_forgery_proto_rawDesc), len(file_forgery_proto_rawDesc)))
 	})
-	return file_api_proto_forgery_proto_rawDescData
+	return file_forgery_proto_rawDescData
 }
 
-var file_api_proto_forgery_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
-var file_api_proto_forgery_proto_goTypes = []any{
+var file_forgery_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_forgery_proto_goTypes = []any{
 	(*ForwardWebhookRequest)(nil),        // 0: persys.forgery.v1.ForwardWebhookRequest
 	(*ForwardWebhookResponse)(nil),       // 1: persys.forgery.v1.ForwardWebhookResponse
 	(*UpsertProjectRequest)(nil),         // 2: persys.forgery.v1.UpsertProjectRequest
@@ -1313,56 +1512,62 @@ var file_api_proto_forgery_proto_goTypes = []any{
 	(*RegisterWebhookRequest)(nil),       // 13: persys.forgery.v1.RegisterWebhookRequest
 	(*TriggerBuildRequest)(nil),          // 14: persys.forgery.v1.TriggerBuildRequest
 	(*OperationStatus)(nil),              // 15: persys.forgery.v1.OperationStatus
+	(*ListPipelineStatusRequest)(nil),    // 16: persys.forgery.v1.ListPipelineStatusRequest
+	(*PipelineStatusEntry)(nil),          // 17: persys.forgery.v1.PipelineStatusEntry
+	(*ListPipelineStatusResponse)(nil),   // 18: persys.forgery.v1.ListPipelineStatusResponse
 }
-var file_api_proto_forgery_proto_depIdxs = []int32{
+var file_forgery_proto_depIdxs = []int32{
 	6,  // 0: persys.forgery.v1.ProjectResponse.project:type_name -> persys.forgery.v1.Project
 	6,  // 1: persys.forgery.v1.ListProjectsResponse.projects:type_name -> persys.forgery.v1.Project
 	11, // 2: persys.forgery.v1.ListUserRepositoriesResponse.repositories:type_name -> persys.forgery.v1.Repository
-	0,  // 3: persys.forgery.v1.ForgeryControl.ForwardWebhook:input_type -> persys.forgery.v1.ForwardWebhookRequest
-	2,  // 4: persys.forgery.v1.ForgeryControl.UpsertProject:input_type -> persys.forgery.v1.UpsertProjectRequest
-	3,  // 5: persys.forgery.v1.ForgeryControl.GetProject:input_type -> persys.forgery.v1.GetProjectRequest
-	4,  // 6: persys.forgery.v1.ForgeryControl.ListProjects:input_type -> persys.forgery.v1.ListProjectsRequest
-	5,  // 7: persys.forgery.v1.ForgeryControl.DeleteProject:input_type -> persys.forgery.v1.DeleteProjectRequest
-	9,  // 8: persys.forgery.v1.ForgeryControl.StoreGitHubCredential:input_type -> persys.forgery.v1.StoreGitHubCredentialRequest
-	10, // 9: persys.forgery.v1.ForgeryControl.ListUserRepositories:input_type -> persys.forgery.v1.ListUserRepositoriesRequest
-	13, // 10: persys.forgery.v1.ForgeryControl.RegisterWebhook:input_type -> persys.forgery.v1.RegisterWebhookRequest
-	14, // 11: persys.forgery.v1.ForgeryControl.TriggerBuild:input_type -> persys.forgery.v1.TriggerBuildRequest
-	1,  // 12: persys.forgery.v1.ForgeryControl.ForwardWebhook:output_type -> persys.forgery.v1.ForwardWebhookResponse
-	7,  // 13: persys.forgery.v1.ForgeryControl.UpsertProject:output_type -> persys.forgery.v1.ProjectResponse
-	7,  // 14: persys.forgery.v1.ForgeryControl.GetProject:output_type -> persys.forgery.v1.ProjectResponse
-	8,  // 15: persys.forgery.v1.ForgeryControl.ListProjects:output_type -> persys.forgery.v1.ListProjectsResponse
-	15, // 16: persys.forgery.v1.ForgeryControl.DeleteProject:output_type -> persys.forgery.v1.OperationStatus
-	15, // 17: persys.forgery.v1.ForgeryControl.StoreGitHubCredential:output_type -> persys.forgery.v1.OperationStatus
-	12, // 18: persys.forgery.v1.ForgeryControl.ListUserRepositories:output_type -> persys.forgery.v1.ListUserRepositoriesResponse
-	15, // 19: persys.forgery.v1.ForgeryControl.RegisterWebhook:output_type -> persys.forgery.v1.OperationStatus
-	15, // 20: persys.forgery.v1.ForgeryControl.TriggerBuild:output_type -> persys.forgery.v1.OperationStatus
-	12, // [12:21] is the sub-list for method output_type
-	3,  // [3:12] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	17, // 3: persys.forgery.v1.ListPipelineStatusResponse.entries:type_name -> persys.forgery.v1.PipelineStatusEntry
+	0,  // 4: persys.forgery.v1.ForgeryControl.ForwardWebhook:input_type -> persys.forgery.v1.ForwardWebhookRequest
+	2,  // 5: persys.forgery.v1.ForgeryControl.UpsertProject:input_type -> persys.forgery.v1.UpsertProjectRequest
+	3,  // 6: persys.forgery.v1.ForgeryControl.GetProject:input_type -> persys.forgery.v1.GetProjectRequest
+	4,  // 7: persys.forgery.v1.ForgeryControl.ListProjects:input_type -> persys.forgery.v1.ListProjectsRequest
+	5,  // 8: persys.forgery.v1.ForgeryControl.DeleteProject:input_type -> persys.forgery.v1.DeleteProjectRequest
+	9,  // 9: persys.forgery.v1.ForgeryControl.StoreGitHubCredential:input_type -> persys.forgery.v1.StoreGitHubCredentialRequest
+	10, // 10: persys.forgery.v1.ForgeryControl.ListUserRepositories:input_type -> persys.forgery.v1.ListUserRepositoriesRequest
+	13, // 11: persys.forgery.v1.ForgeryControl.RegisterWebhook:input_type -> persys.forgery.v1.RegisterWebhookRequest
+	14, // 12: persys.forgery.v1.ForgeryControl.TriggerBuild:input_type -> persys.forgery.v1.TriggerBuildRequest
+	16, // 13: persys.forgery.v1.ForgeryControl.ListPipelineStatus:input_type -> persys.forgery.v1.ListPipelineStatusRequest
+	1,  // 14: persys.forgery.v1.ForgeryControl.ForwardWebhook:output_type -> persys.forgery.v1.ForwardWebhookResponse
+	7,  // 15: persys.forgery.v1.ForgeryControl.UpsertProject:output_type -> persys.forgery.v1.ProjectResponse
+	7,  // 16: persys.forgery.v1.ForgeryControl.GetProject:output_type -> persys.forgery.v1.ProjectResponse
+	8,  // 17: persys.forgery.v1.ForgeryControl.ListProjects:output_type -> persys.forgery.v1.ListProjectsResponse
+	15, // 18: persys.forgery.v1.ForgeryControl.DeleteProject:output_type -> persys.forgery.v1.OperationStatus
+	15, // 19: persys.forgery.v1.ForgeryControl.StoreGitHubCredential:output_type -> persys.forgery.v1.OperationStatus
+	12, // 20: persys.forgery.v1.ForgeryControl.ListUserRepositories:output_type -> persys.forgery.v1.ListUserRepositoriesResponse
+	15, // 21: persys.forgery.v1.ForgeryControl.RegisterWebhook:output_type -> persys.forgery.v1.OperationStatus
+	15, // 22: persys.forgery.v1.ForgeryControl.TriggerBuild:output_type -> persys.forgery.v1.OperationStatus
+	18, // 23: persys.forgery.v1.ForgeryControl.ListPipelineStatus:output_type -> persys.forgery.v1.ListPipelineStatusResponse
+	14, // [14:24] is the sub-list for method output_type
+	4,  // [4:14] is the sub-list for method input_type
+	4,  // [4:4] is the sub-list for extension type_name
+	4,  // [4:4] is the sub-list for extension extendee
+	0,  // [0:4] is the sub-list for field type_name
 }
 
-func init() { file_api_proto_forgery_proto_init() }
-func file_api_proto_forgery_proto_init() {
-	if File_api_proto_forgery_proto != nil {
+func init() { file_forgery_proto_init() }
+func file_forgery_proto_init() {
+	if File_forgery_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_forgery_proto_rawDesc), len(file_api_proto_forgery_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_forgery_proto_rawDesc), len(file_forgery_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_api_proto_forgery_proto_goTypes,
-		DependencyIndexes: file_api_proto_forgery_proto_depIdxs,
-		MessageInfos:      file_api_proto_forgery_proto_msgTypes,
+		GoTypes:           file_forgery_proto_goTypes,
+		DependencyIndexes: file_forgery_proto_depIdxs,
+		MessageInfos:      file_forgery_proto_msgTypes,
 	}.Build()
-	File_api_proto_forgery_proto = out.File
-	file_api_proto_forgery_proto_goTypes = nil
-	file_api_proto_forgery_proto_depIdxs = nil
+	File_forgery_proto = out.File
+	file_forgery_proto_goTypes = nil
+	file_forgery_proto_depIdxs = nil
 }
