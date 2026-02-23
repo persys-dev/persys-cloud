@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package persys.automation.v1;
+
+option go_package = "github.com/persys-dev/persys-cloud/persys-automation/api/proto;automationv1";
+
+import "google/protobuf/timestamp.proto";
+
+service AutomationControl {
+  rpc CreatePolicy(CreatePolicyRequest) returns (CreatePolicyResponse);
+  rpc ListPolicies(ListPoliciesRequest) returns (ListPoliciesResponse);
+  rpc EnablePolicy(EnablePolicyRequest) returns (EnablePolicyResponse);
+  rpc DisablePolicy(DisablePolicyRequest) returns (DisablePolicyResponse);
+  rpc EvaluateNow(EvaluateNowRequest) returns (EvaluateNowResponse);
+  rpc ListAuditLog(ListAuditLogRequest) returns (ListAuditLogResponse);
+}
+
+enum PolicyType {
+  POLICY_TYPE_UNSPECIFIED = 0;
+  POLICY_TYPE_SCALE = 1;
+  POLICY_TYPE_SCHEDULE = 2;
+  POLICY_TYPE_OFFLOAD = 3;
+  POLICY_TYPE_DRIFT = 4;
+  POLICY_TYPE_REDEPLOY = 5;
+}
+
+message Policy {
+  string id = 1;
+  string name = 2;
+  string target_workload = 3;
+  PolicyType type = 4;
+  string condition_expression = 5;
+  string action_expression = 6;
+  bool enabled = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+message CreatePolicyRequest {
+  string name = 1;
+  string target_workload = 2;
+  PolicyType type = 3;
+  string condition_expression = 4;
+  string action_expression = 5;
+}
+
+message CreatePolicyResponse {
+  Policy policy = 1;
+}
+
+message ListPoliciesRequest {
+  bool include_disabled = 1;
+}
+
+message ListPoliciesResponse {
+  repeated Policy policies = 1;
+}
+
+message EnablePolicyRequest {
+  string policy_id = 1;
+}
+
+message EnablePolicyResponse {
+  Policy policy = 1;
+}
+
+message DisablePolicyRequest {
+  string policy_id = 1;
+}
+
+message DisablePolicyResponse {
+  Policy policy = 1;
+}
+
+message EvaluateNowRequest {
+  string policy_id = 1;
+}
+
+message PolicyEvaluationResult {
+  string policy_id = 1;
+  bool matched = 2;
+  bool dispatched = 3;
+  string reason = 4;
+}
+
+message EvaluateNowResponse {
+  repeated PolicyEvaluationResult results = 1;
+}
+
+message ListAuditLogRequest {
+  uint32 limit = 1;
+}
+
+message AuditEntry {
+  string id = 1;
+  string policy_id = 2;
+  string policy_name = 3;
+  string target_workload = 4;
+  bool matched = 5;
+  bool dispatched = 6;
+  string reason = 7;
+  string old_state = 8;
+  string new_state = 9;
+  google.protobuf.Timestamp timestamp = 10;
+}
+
+message ListAuditLogResponse {
+  repeated AuditEntry entries = 1;
+}
