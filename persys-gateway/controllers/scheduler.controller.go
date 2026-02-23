@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -231,6 +232,27 @@ func (c *ProwController) TriggerBuildHandler() gin.HandlerFunc {
 			Sender:      strings.TrimSpace(reqBody.Sender),
 			Mode:        strings.TrimSpace(reqBody.Mode),
 			EventType:   strings.TrimSpace(reqBody.EventType),
+		})
+		if err != nil {
+			ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+			return
+		}
+		writeProtoJSON(ctx, http.StatusOK, resp)
+	}
+}
+
+func (c *ProwController) ListPipelineStatusHandler() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		limit := uint32(50)
+		if rawLimit := strings.TrimSpace(ctx.Query("limit")); rawLimit != "" {
+			if n, err := strconv.Atoi(rawLimit); err == nil && n > 0 {
+				limit = uint32(n)
+			}
+		}
+		resp, err := c.prowService.ListPipelineStatus(ctx.Request.Context(), &forgeryv1.ListPipelineStatusRequest{
+			DeliveryId: strings.TrimSpace(ctx.Query("delivery_id")),
+			Repository: strings.TrimSpace(ctx.Query("repository")),
+			Limit:      limit,
 		})
 		if err != nil {
 			ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})

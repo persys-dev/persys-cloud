@@ -8,10 +8,11 @@ IMAGE_NAME=persys-gateway
 IMAGE_TAG=latest
 GO = go
 GOFLAGS = -v
+PROTOC ?= protoc
 
 # Default target
 .PHONY: all
-all: build
+all: proto build
 
 # Ensure bin directory exists
 $(BINARY_DIR):
@@ -21,6 +22,14 @@ $(BINARY_DIR):
 .PHONY: build
 build: $(BINARY_DIR)
 	$(GO) build $(GOFLAGS) -o $(BINARY_PATH) ./cmd
+
+.PHONY: proto
+proto:
+	@mkdir -p internal/controlv1 internal/forgeryv1
+	cd ../persys-scheduler/api/proto && \
+	$(PROTOC) --go_out=paths=source_relative:../../../persys-gateway/internal/controlv1 --go-grpc_out=paths=source_relative:../../../persys-gateway/internal/controlv1 control.proto
+	cd ../pkg/forgery/proto && \
+	$(PROTOC) --go_out=paths=source_relative:../../../persys-gateway/internal/forgeryv1 --go-grpc_out=paths=source_relative:../../../persys-gateway/internal/forgeryv1 forgery.proto
 
 # Build the Docker image
 .PHONY: docker-build
@@ -87,6 +96,7 @@ help:
 	@echo "Available targets:"
 	@echo "  all      	   - Build the project into bin/ (default)"
 	@echo "  build    	   - Build the binary into bin/"
+	@echo "  proto         - Generate protobuf/gRPC clients for scheduler/forgery"
 	@echo "  docker-build  - Build Docker image"
 	@echo "  docker-run    - Run PersysAgent container"
 	@echo "  run           - Build and run the application from bin/"

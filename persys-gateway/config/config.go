@@ -294,6 +294,15 @@ func (c *Config) applyEnvOverrides() {
 	// Forgery routing
 	c.Forgery.GRPCAddr = envOrFile("PERSYS_GATEWAY_FORGERY_GRPC_ADDR", c.Forgery.GRPCAddr)
 	c.Forgery.GRPCServerName = envOrFile("PERSYS_GATEWAY_FORGERY_GRPC_SERVER_NAME", c.Forgery.GRPCServerName)
+
+	// Telemetry
+	c.Telemetry.OTLPEndpoint = envOrFile("PERSYS_GATEWAY_OTLP_ENDPOINT", c.Telemetry.OTLPEndpoint)
+	if c.Telemetry.OTLPEndpoint == "" {
+		c.Telemetry.OTLPEndpoint = envOrFile("OTEL_EXPORTER_OTLP_ENDPOINT", c.Telemetry.OTLPEndpoint)
+	}
+	if c.Telemetry.OTLPEndpoint == "" {
+		c.Telemetry.OTLPEndpoint = envOrFile("OTEL_EXPORTER_JAEGER_ENDPOINT", c.Telemetry.OTLPEndpoint)
+	}
 }
 
 func envOrFile(key, fallback string) string {

@@ -20,6 +20,8 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -48,6 +50,7 @@ type forwardJob struct {
 	clusterID  string
 	body       []byte
 	attempt    int
+	traceState propagation.MapCarrier
 }
 
 type githubPushEnvelope struct {
@@ -110,7 +113,7 @@ func (w *webhookService) runWorker(ctx context.Context) {
 
 func (w *webhookService) processJob(ctx context.Context, job forwardJob) {
 	attempt := job.attempt + 1
-	err := w.forwardGRPC(ctx, job.eventName, job.repo, job.clusterID, job.body, job.deliveryID)
+	err := w.forwardGRPC(ctx, job.eventName, job.repo, job.clusterID, job.body, job.deliveryID, job.traceState)
 	if err == nil {
 		w.persist(ctx, models.WebhookEvent{DeliveryID: job.deliveryID, EventName: job.eventName, Repository: job.repo, ClusterID: job.clusterID, Verified: true, Status: "forwarded", Attempts: attempt, LastUpdatedAt: time.Now().UTC()})
 		return
@@ -181,6 +184,9 @@ func (w *webhookService) HandleGitHubWebhook(ctx context.Context, headers http.H
 	w.persist(ctx, models.WebhookEvent{DeliveryID: deliveryID, EventName: eventName, Repository: repo, ClusterID: clusterID, Verified: true, Status: "accepted", Attempts: 0, ReceivedAt: time.Now().UTC(), LastUpdatedAt: time.Now().UTC()})
 
 	job := forwardJob{deliveryID: deliveryID, eventName: eventName, repo: repo, clusterID: clusterID, body: body}
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+	job.traceState = carrier
 	select {
 	case w.jobs <- job:
 	default:
@@ -271,11 +277,15 @@ func (w *webhookService) resolveClusterForRepository(repo string) string {
 	return w.cfg.Scheduler.DefaultClusterID
 }
 
-func (w *webhookService) forwardGRPC(ctx context.Context, eventName, repo, clusterID string, body []byte, deliveryID string) error {
+func (w *webhookService) forwardGRPC(ctx context.Context, eventName, repo, clusterID string, body []byte, deliveryID string, traceState propagation.MapCarrier) error {
 	meta := githubPushEnvelope{}
 	if err := json.Unmarshal(body, &meta); err != nil {
 		return fmt.Errorf("parse webhook body: %w", err)
 	}
+	if traceState != nil {
+		ctx = otel.GetTextMapPropagator().Extract(ctx, traceState)
+	}
+	ctx = injectTraceContext(ctx)
 
 	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()

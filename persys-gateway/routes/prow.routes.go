@@ -35,6 +35,7 @@ func (rc *ProwRouteController) ProwRoute(rg *gin.RouterGroup) {
 		forgery.POST("/projects/upsert", rc.prowController.UpsertProjectHandler())
 		forgery.POST("/builds/trigger", rc.prowController.TriggerBuildHandler())
 		forgery.POST("/webhooks/test", rc.prowController.TestWebhookHandler())
+		forgery.GET("/pipeline/status", rc.prowController.ListPipelineStatusHandler())
 	}
 
 	nodes := router.Group("/nodes")
@@ -61,5 +62,6 @@ func (rc *ProwRouteController) ProwRoute(rg *gin.RouterGroup) {
 		clusters.POST("/forgery/projects/upsert", rc.prowController.UpsertProjectHandler())
 		clusters.POST("/forgery/builds/trigger", rc.prowController.TriggerBuildHandler())
 		clusters.POST("/forgery/webhooks/test", rc.prowController.TestWebhookHandler())
+		clusters.GET("/forgery/pipeline/status", rc.prowController.ListPipelineStatusHandler())
 	}
 }
