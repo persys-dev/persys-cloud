@@ -13,6 +13,7 @@ import (
 	cfgpkg "github.com/persys-dev/persys-cloud/persys-scheduler/internal/config"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/logging"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/models"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
@@ -31,6 +32,7 @@ var schedulerLogger = logging.C("scheduler.core")
 type Scheduler struct {
 	cfg              *cfgpkg.Config
 	etcdClient       *clientv3.Client
+	redisClient      *redis.Client
 	domain           string
 	agentsDomain     string
 	schedulerShard   string
@@ -86,6 +88,7 @@ func NewScheduler(cfg *cfgpkg.Config) (*Scheduler, error) {
 	}
 
 	// Initialize monitor and reconciler
+	scheduler.initRedisStore()
 	scheduler.monitor = NewMonitor(scheduler)
 	scheduler.reconciler = NewReconciler(scheduler, scheduler.monitor)
 
@@ -95,7 +98,10 @@ func NewScheduler(cfg *cfgpkg.Config) (*Scheduler, error) {
 // Close shuts down the scheduler gracefully.
 func (s *Scheduler) Close() error {
 	if s.etcdClient != nil {
-		return s.etcdClient.Close()
+		_ = s.etcdClient.Close()
+	}
+	if s.redisClient != nil {
+		_ = s.redisClient.Close()
 	}
 	return nil
 }
@@ -491,7 +497,7 @@ func (s *Scheduler) DeleteNode(nodeID string) error {
 
 // GetWorkloads retrieves all workloads from etcd.
 func (s *Scheduler) GetWorkloads() ([]models.Workload, error) {
-	resp, err := s.RetryableEtcdGet("/workloads/", clientv3.WithPrefix())
+	specResp, err := s.RetryableEtcdGet(workloadSpecPrefix, clientv3.WithPrefix())
 	if err != nil {
 		if s.currentMode() != ModeNormal {
 			return s.getCachedWorkloads(), nil
@@ -500,15 +506,40 @@ func (s *Scheduler) GetWorkloads() ([]models.Workload, error) {
 	}
 
 	workloads := make([]models.Workload, 0)
-	if resp == nil {
+	if specResp == nil {
 		return workloads, nil
 	}
-
-	for _, kv := range resp.Kvs {
-		var workload models.Workload
-		if err := json.Unmarshal(kv.Value, &workload); err != nil {
+	statusResp, _ := s.RetryableEtcdGet(workloadStatusPrefix, clientv3.WithPrefix())
+	statusMap := map[string]workloadStatus{}
+	if statusResp != nil {
+		for _, kv := range statusResp.Kvs {
+			var st workloadStatus
+			if err := json.Unmarshal(kv.Value, &st); err == nil {
+				statusMap[st.ID] = st
+			}
+		}
+	}
+	for _, kv := range specResp.Kvs {
+		var spec workloadSpec
+		if err := json.Unmarshal(kv.Value, &spec); err != nil {
 			schedulerLogger.WithError(err).WithField("key", string(kv.Key)).Warn("failed to unmarshal workload data")
 			continue
+		}
+		workload := models.Workload{
+			ID: spec.ID, Name: spec.Name, Type: spec.Type, RevisionID: spec.RevisionID, Image: spec.Image, Command: spec.Command,
+			CommandList: spec.CommandList, Compose: spec.Compose, ComposeYAML: spec.ComposeYAML, ProjectName: spec.ProjectName,
+			GitRepo: spec.GitRepo, GitBranch: spec.GitBranch, GitToken: spec.GitToken, EnvVars: spec.EnvVars, Resources: spec.Resources,
+			DesiredState: spec.DesiredState, Labels: spec.Labels, LocalPath: spec.LocalPath, Ports: spec.Ports, Volumes: spec.Volumes,
+			Network: spec.Network, RestartPolicy: spec.RestartPolicy, VM: spec.VM,
+		}
+		if st, ok := statusMap[workload.ID]; ok {
+			workload.AssignedNode = st.AssignedNode
+			workload.NodeID = st.NodeID
+			workload.Status = st.Status
+			workload.Logs = st.Logs
+			workload.Metadata = st.Metadata
+			workload.Retry = st.Retry
+			workload.StatusInfo = st.StatusInfo
 		}
 		workloads = append(workloads, workload)
 	}
@@ -529,7 +560,7 @@ func (s *Scheduler) GetWorkloads() ([]models.Workload, error) {
 
 // GetWorkloadByID retrieves a specific workload by ID.
 func (s *Scheduler) GetWorkloadByID(workloadID string) (models.Workload, error) {
-	resp, err := s.RetryableEtcdGet("/workloads/" + workloadID)
+	specResp, err := s.RetryableEtcdGet(workloadSpecKey(workloadID))
 	if err != nil {
 		if s.currentMode() != ModeNormal {
 			if workload, ok := s.getCachedWorkload(workloadID); ok {
@@ -538,15 +569,29 @@ func (s *Scheduler) GetWorkloadByID(workloadID string) (models.Workload, error) 
 		}
 		return models.Workload{}, fmt.Errorf("failed to get workload %s: %v", workloadID, err)
 	}
-
-	if len(resp.Kvs) == 0 {
-		return models.Workload{}, fmt.Errorf("workload %s not found", workloadID)
+	if specResp == nil || len(specResp.Kvs) == 0 {
+		// compatibility shim for legacy persisted full objects.
+		resp, legacyErr := s.RetryableEtcdGet("/workloads/" + workloadID)
+		if legacyErr != nil || len(resp.Kvs) == 0 {
+			return models.Workload{}, fmt.Errorf("workload %s not found", workloadID)
+		}
+		var legacy models.Workload
+		if err := json.Unmarshal(resp.Kvs[0].Value, &legacy); err != nil {
+			return models.Workload{}, fmt.Errorf("failed to unmarshal legacy workload %s: %v", workloadID, err)
+		}
+		s.cacheWorkload(legacy)
+		return legacy, nil
 	}
-
-	var workload models.Workload
-	if err := json.Unmarshal(resp.Kvs[0].Value, &workload); err != nil {
-		return models.Workload{}, fmt.Errorf("failed to unmarshal workload %s: %v", workloadID, err)
+	var spec workloadSpec
+	if err := json.Unmarshal(specResp.Kvs[0].Value, &spec); err != nil {
+		return models.Workload{}, fmt.Errorf("failed to unmarshal workload spec %s: %v", workloadID, err)
 	}
+	statusResp, _ := s.RetryableEtcdGet(workloadStatusKey(workloadID))
+	var st workloadStatus
+	if statusResp != nil && len(statusResp.Kvs) > 0 {
+		_ = json.Unmarshal(statusResp.Kvs[0].Value, &st)
+	}
+	workload := models.Workload{ID: spec.ID, Name: spec.Name, Type: spec.Type, RevisionID: spec.RevisionID, Image: spec.Image, Command: spec.Command, CommandList: spec.CommandList, Compose: spec.Compose, ComposeYAML: spec.ComposeYAML, ProjectName: spec.ProjectName, GitRepo: spec.GitRepo, GitBranch: spec.GitBranch, GitToken: spec.GitToken, EnvVars: spec.EnvVars, Resources: spec.Resources, DesiredState: spec.DesiredState, Labels: spec.Labels, LocalPath: spec.LocalPath, Ports: spec.Ports, Volumes: spec.Volumes, Network: spec.Network, RestartPolicy: spec.RestartPolicy, VM: spec.VM, AssignedNode: st.AssignedNode, NodeID: st.NodeID, Status: st.Status, Logs: st.Logs, Metadata: st.Metadata, Retry: st.Retry, StatusInfo: st.StatusInfo}
 	s.cacheWorkload(workload)
 
 	return workload, nil
@@ -591,9 +636,11 @@ func (s *Scheduler) DeleteWorkloadWithContext(ctx context.Context, workloadID st
 		}
 	}
 
-	if err := s.RetryableEtcdDelete("/workloads/" + workloadID); err != nil {
+	if err := s.RetryableEtcdDelete(workloadSpecKey(workloadID)); err != nil {
 		return fmt.Errorf("failed to delete workload %s: %v", workloadID, err)
 	}
+	_ = s.RetryableEtcdDelete(workloadStatusKey(workloadID))
+	_ = s.RetryableEtcdDelete("/workloads/" + workloadID)
 	_ = s.RetryableEtcdDelete(assignmentKey(workloadID))
 	_ = s.RetryableEtcdDelete(retryKey(workloadID))
 	_ = s.RetryableEtcdDelete(reconciliationKey(workloadID))
@@ -618,6 +665,9 @@ func (s *Scheduler) UpdateWorkloadStatus(workloadID, status string) error {
 		return err
 	}
 
+	if strings.EqualFold(workload.Status, status) && strings.EqualFold(workload.StatusInfo.ActualState, status) {
+		return nil
+	}
 	workload.Status = status
 	workload.StatusInfo.ActualState = status
 	workload.StatusInfo.LastUpdated = time.Now().UTC()
@@ -651,7 +701,9 @@ func (s *Scheduler) UpdateWorkloadLogs(workloadID, logs string) error {
 	// Append logs with timestamp
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	logEntry := fmt.Sprintf("[%s] %s\n", timestamp, logs)
-
+	if strings.TrimSpace(logs) == "" {
+		return nil
+	}
 	if workload.Logs == "" {
 		workload.Logs = logEntry
 	} else {
@@ -681,12 +733,19 @@ func (s *Scheduler) UpdateWorkloadMetadata(workloadID string, metadata map[strin
 	if workload.Metadata == nil {
 		workload.Metadata = map[string]interface{}{}
 	}
+	changed := false
 	for k, v := range metadata {
 		key := strings.TrimSpace(k)
 		if key == "" {
 			continue
 		}
+		if existing, ok := workload.Metadata[key]; !ok || fmt.Sprintf("%v", existing) != strings.TrimSpace(v) {
+			changed = true
+		}
 		workload.Metadata[key] = strings.TrimSpace(v)
+	}
+	if !changed {
+		return nil
 	}
 	workload.StatusInfo.LastUpdated = time.Now().UTC()
 	if err := s.saveWorkload(workload); err != nil {

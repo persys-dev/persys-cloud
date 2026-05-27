@@ -20,6 +20,12 @@ type Config struct {
 
 	// etcd / discovery
 	EtcdEndpoints          []string
+	RedisAddr              string
+	RedisPassword          string
+	RedisDB                int
+	RedisReconcileTTL      time.Duration
+	RedisEventTTL          time.Duration
+	RedisEventMaxEntries   int64
 	Domain                 string
 	AgentsDiscoveryDomain  string
 	SchedulerShardKey      string
@@ -80,9 +86,15 @@ func Load(insecureFlag bool) (*Config, error) {
 		GRPCAddr:    envOr("PERSYS_GRPC_ADDR", "0.0.0.0"),
 		GRPCPort:    grpcPort,
 		MetricsPort: metricsPort,
-		ExternalIP: envOr("PERSYS_EXTERNAL_IP", ""),
+		ExternalIP:  envOr("PERSYS_EXTERNAL_IP", ""),
 
 		EtcdEndpoints:          splitCSV(envOr("ETCD_ENDPOINTS", "localhost:2379")),
+		RedisAddr:              strings.TrimSpace(os.Getenv("REDIS_ADDR")),
+		RedisPassword:          strings.TrimSpace(os.Getenv("REDIS_PASSWORD")),
+		RedisDB:                envIntOr("REDIS_DB", 0),
+		RedisReconcileTTL:      envDurationOrFlexibleSeconds("REDIS_RECONCILE_TTL", 24*time.Hour),
+		RedisEventTTL:          envDurationOrFlexibleSeconds("REDIS_EVENT_TTL", 24*time.Hour),
+		RedisEventMaxEntries:   int64(envIntOr("REDIS_EVENT_MAX_ENTRIES", 1000)),
 		Domain:                 envOr("DOMAIN", "persys.local"),
 		AgentsDiscoveryDomain:  envOr("AGENTS_DISCOVERY_DOMAIN", "agents.persys.cloud"),
 		SchedulerShardKey:      envOr("SCHEDULER_SHARD_KEY", "genesis"),

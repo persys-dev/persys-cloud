@@ -440,11 +440,8 @@ func (r *Reconciler) applyDesiredState(ctx context.Context, workload models.Work
 	workload.Metadata[workloadReapplyRevisionKey] = strings.TrimSpace(workload.RevisionID)
 	workload.Metadata["lastLaunchTime"] = now
 
-	workloadJSON, marshalErr := json.Marshal(workload)
-	if marshalErr == nil {
-		if err := r.scheduler.RetryableEtcdPut("/workloads/"+workload.ID, string(workloadJSON)); err != nil {
-			return action, fmt.Errorf("persist apply metadata: %w", err)
-		}
+	if err := r.scheduler.saveWorkload(workload); err != nil {
+		return action, fmt.Errorf("persist apply metadata: %w", err)
 	}
 
 	return action, nil
@@ -545,13 +542,29 @@ func (r *Reconciler) updateWorkloadReconciliationStatus(workloadID string, resul
 	workload.Metadata["lastReconciliationSuccess"] = result.Success
 	workload.Metadata["reconciliationRetryCount"] = result.RetryCount
 
-	workloadJSON, err := json.Marshal(workload)
-	if err != nil {
-		reconcilerLogger.WithError(err).WithField("workload_id", workloadID).Warn("failed to marshal workload during reconciliation status update")
+	// High-churn reconciliation metadata should live in Redis when available.
+	if r.scheduler.redisClient != nil {
+		ttl := 24 * time.Hour
+		if r.scheduler.cfg != nil && r.scheduler.cfg.RedisReconcileTTL > 0 {
+			ttl = r.scheduler.cfg.RedisReconcileTTL
+		}
+		statusKey := fmt.Sprintf("workload:%s:reconcile_status", workloadID)
+		if payload, mErr := json.Marshal(workload.Metadata); mErr == nil {
+			if err := r.scheduler.redisClient.Set(context.Background(), statusKey, payload, ttl).Err(); err == nil {
+				return
+			}
+		}
+	}
+
+	currentLastAction, _ := workload.Metadata["last_action"].(string)
+	if result.Action == "NoAction" && currentLastAction == "NoAction" {
 		return
 	}
-	if err := r.scheduler.RetryableEtcdPut("/workloads/"+workloadID, string(workloadJSON)); err != nil {
+	workload.Metadata["last_action"] = result.Action
+
+	if err := r.scheduler.saveWorkload(workload); err != nil {
 		reconcilerLogger.WithError(err).WithField("workload_id", workloadID).Warn("failed to persist reconciliation status")
+		return
 	}
 }
 

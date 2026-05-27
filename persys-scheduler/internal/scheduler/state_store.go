@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	metricspkg "github.com/persys-dev/persys-cloud/persys-scheduler/internal/metrics"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/models"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
@@ -14,6 +15,8 @@ import (
 const (
 	nodesPrefix          = "/nodes/"
 	workloadsPrefix      = "/workloads/"
+	workloadSpecPrefix   = "/workloads-spec/"
+	workloadStatusPrefix = "/workloads-status/"
 	assignmentsPrefix    = "/assignments/"
 	reconciliationPrefix = "/reconciliation/"
 	retriesPrefix        = "/retries/"
@@ -22,6 +25,8 @@ const (
 )
 
 func workloadKey(workloadID string) string       { return workloadsPrefix + workloadID }
+func workloadSpecKey(workloadID string) string   { return workloadSpecPrefix + workloadID }
+func workloadStatusKey(workloadID string) string { return workloadStatusPrefix + workloadID }
 func assignmentKey(workloadID string) string     { return assignmentsPrefix + workloadID }
 func reconciliationKey(workloadID string) string { return reconciliationPrefix + workloadID }
 func retryKey(workloadID string) string          { return retriesPrefix + workloadID }
@@ -84,17 +89,27 @@ func (s *Scheduler) initializeWorkloadDefaults(workload *models.Workload) {
 }
 
 func (s *Scheduler) saveWorkload(workload models.Workload) error {
-	payload, err := json.Marshal(workload)
+	specPayload, err := json.Marshal(workloadSpecFromWorkload(workload))
 	if err != nil {
 		return fmt.Errorf("marshal workload %s: %w", workload.ID, err)
 	}
-	if err := s.RetryableEtcdPut(workloadKey(workload.ID), string(payload)); err != nil {
+	statusPayload, err := json.Marshal(workloadStatusFromWorkload(workload))
+	if err != nil {
+		return fmt.Errorf("marshal workload status %s: %w", workload.ID, err)
+	}
+	if err := s.RetryableEtcdPut(workloadSpecKey(workload.ID), string(specPayload)); err != nil {
 		return err
 	}
+	metricspkg.IncStateStoreWrite("spec")
+	if err := s.RetryableEtcdPut(workloadStatusKey(workload.ID), string(statusPayload)); err != nil {
+		return err
+	}
+	metricspkg.IncStateStoreWrite("status")
 	s.cacheWorkload(workload)
 	retryPayload, err := json.Marshal(workload.Retry)
 	if err == nil {
 		_ = s.RetryableEtcdPut(retryKey(workload.ID), string(retryPayload))
+		metricspkg.IncStateStoreWrite("retry")
 	}
 	return nil
 }
@@ -113,23 +128,14 @@ func (s *Scheduler) writeAssignment(workloadID, nodeID, reason string) error {
 	if err := s.RetryableEtcdPut(assignmentKey(workloadID), string(payload)); err != nil {
 		return err
 	}
+	metricspkg.IncStateStoreWrite("assignment")
 	s.cacheAssignment(rec)
 	return nil
 }
 
 func (s *Scheduler) writeReconciliationRecord(workloadID, action string, success bool, reason string) {
-	rec := models.ReconciliationRecord{
-		WorkloadID:  workloadID,
-		Action:      action,
-		Success:     success,
-		Reason:      reason,
-		AttemptedAt: time.Now().UTC(),
-	}
-	payload, err := json.Marshal(rec)
-	if err != nil {
-		return
-	}
-	_ = s.RetryableEtcdPut(reconciliationKey(workloadID), string(payload))
+	s.writeReconciliationTelemetry(workloadID, action, success, reason, time.Now().UTC())
+	metricspkg.IncStateStoreWrite("reconciliation")
 }
 
 func (s *Scheduler) emitEvent(eventType, workloadID, nodeID, reason string, details map[string]interface{}) {
@@ -146,7 +152,12 @@ func (s *Scheduler) emitEvent(eventType, workloadID, nodeID, reason string, deta
 	if err != nil {
 		return
 	}
+	if s.writeEventTelemetry(payload) {
+		metricspkg.IncStateStoreWrite("event")
+		return
+	}
 	_ = s.RetryableEtcdPut(eventKey(event.ID), string(payload))
+	metricspkg.IncStateStoreWrite("event")
 }
 
 func (s *Scheduler) writeDriftRecord(record models.DriftRecord) {
