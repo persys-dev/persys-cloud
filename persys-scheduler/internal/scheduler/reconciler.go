@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -18,8 +19,21 @@ const defaultMissingGracePeriod = 15 * time.Second
 const defaultNodeUnavailableGrace = 3 * time.Minute
 const workloadReapplyTimestampKey = "lastApplyRequestAt"
 const workloadReapplyRevisionKey = "lastApplyRevision"
+const workloadReapplyAttemptsKey = "reapplyAttempts"
+const workloadReapplyNextAtKey = "reapplyNextAt"
+const maxReapplyBackoff = 15 * time.Minute
+const terminalRetryMetadataKey = "retry_terminal"
+const terminalRetryReasonMetadataKey = "retry_terminal_reason"
+const terminalFailureReasonMetadataKey = "terminal_failure_reason"
 
 var reconcilerLogger = logging.C("scheduler.reconciler")
+
+var nonRetryableFailureReasons = map[string]struct{}{
+	"INVALID_IMAGE":         {},
+	"INVALID_SPECIFICATION": {},
+	"INVALID_CONFIGURATION": {},
+	"PORT_BIND_CONFLICT":    {},
+}
 
 // Reconciler handles reconciliation between desired and actual state.
 type Reconciler struct {
@@ -73,7 +87,10 @@ func (r *Reconciler) ReconcileWorkload(ctx context.Context, workload models.Work
 	}()
 
 	// Respect retry backoff windows to avoid hammering unavailable nodes.
-	if !workload.Retry.NextRetryAt.IsZero() && time.Now().UTC().Before(workload.Retry.NextRetryAt) {
+	// Do not gate retries until multiple failures have occurred.
+	if workload.Retry.Attempts >= minAttemptsBeforeBackoff &&
+		!workload.Retry.NextRetryAt.IsZero() &&
+		time.Now().UTC().Before(workload.Retry.NextRetryAt) {
 		result.Action = "BackoffWait"
 		result.Success = true
 		return result, nil
@@ -326,6 +343,14 @@ func (r *Reconciler) getActualWorkloadState(ctx context.Context, workload models
 	if statusResp == nil {
 		return "Unknown", nil
 	}
+	if len(statusResp.GetMetadata()) > 0 {
+		_ = r.scheduler.UpdateWorkloadMetadata(workload.ID, statusResp.GetMetadata())
+	}
+	if strings.EqualFold(mapActualStateToSchedulerStatus(statusResp.GetActualState()), "Failed") {
+		if msg := strings.TrimSpace(statusResp.GetMessage()); msg != "" {
+			_ = r.scheduler.UpdateWorkloadMetadata(workload.ID, map[string]string{"last_runtime_error": msg})
+		}
+	}
 	return mapActualStateToSchedulerStatus(statusResp.GetActualState()), nil
 }
 
@@ -334,12 +359,6 @@ func (r *Reconciler) needsReconciliation(workload models.Workload, actualState s
 	desiredState := strings.TrimSpace(workload.DesiredState)
 	if desiredState == "" {
 		desiredState = "Running"
-	}
-
-	if actualState == "Missing" || actualState == "Pending" || actualState == "Unknown" {
-		if r.reapplyStillGuarded(workload) {
-			return false
-		}
 	}
 
 	if strings.EqualFold(actualState, desiredState) {
@@ -368,6 +387,64 @@ func (r *Reconciler) performReconciliation(ctx context.Context, workload models.
 	case strings.EqualFold(desiredState, "Deleted"):
 		return r.deleteDesiredWorkload(ctx, workload)
 	case strings.EqualFold(desiredState, "Running") && (strings.EqualFold(actualState, "Missing") || strings.EqualFold(actualState, "Stopped") || strings.EqualFold(actualState, "Failed")):
+		if halt, reason := r.shouldHaltReapply(workload, actualState); halt {
+			lastAction, _ := metadataString(workload.Metadata, "last_action")
+			if !strings.EqualFold(strings.TrimSpace(lastAction), "TerminalFailureNoReapply") {
+				reconcilerLogger.WithFields(logrus.Fields{
+					"workload_id":   workload.ID,
+					"node_id":       workload.NodeID,
+					"actual_state":  actualState,
+					"desired_state": desiredState,
+					"reason":        reason,
+				}).Warn("reapply halted due to terminal workload failure")
+
+				if workload.Metadata == nil {
+					workload.Metadata = map[string]interface{}{}
+				}
+				workload.Status = "Failed"
+				workload.StatusInfo.ActualState = "Failed"
+				workload.StatusInfo.FailureReason = reason
+				workload.StatusInfo.LastUpdated = time.Now().UTC()
+				workload.Metadata["last_action"] = "TerminalFailureNoReapply"
+				workload.Metadata[terminalFailureReasonMetadataKey] = reason
+				clearReapplyMetadata(&workload)
+				_ = r.scheduler.saveWorkload(workload)
+				_ = r.scheduler.UpdateWorkloadLogs(workload.ID, fmt.Sprintf("Reapply halted due to terminal failure: %s", reason))
+			}
+			return "NoAction", nil
+		}
+
+		if guarded, wait := r.reapplyStillGuarded(workload); guarded {
+			reconcilerLogger.WithFields(logrus.Fields{
+				"workload_id":   workload.ID,
+				"node_id":       workload.NodeID,
+				"actual_state":  actualState,
+				"desired_state": desiredState,
+				"wait_until":    wait.Format(time.RFC3339),
+			}).Warn("reapply deferred by exponential backoff")
+			_ = r.scheduler.UpdateWorkloadLogs(workload.ID, fmt.Sprintf("Reapply deferred by backoff until %s (state=%s desired=%s)", wait.Format(time.RFC3339), actualState, desiredState))
+			return "ReapplyBackoffWait", nil
+		}
+		lastApplyAt, _ := metadataString(workload.Metadata, workloadReapplyTimestampKey)
+		lastApplyRevision, _ := metadataString(workload.Metadata, workloadReapplyRevisionKey)
+		lastAction, _ := metadataString(workload.Metadata, "last_action")
+		lastReconAction, _ := metadataString(workload.Metadata, "lastReconciliationAction")
+		reconcilerLogger.WithFields(logrus.Fields{
+			"workload_id":                         workload.ID,
+			"node_id":                             workload.NodeID,
+			"workload_type":                       workload.Type,
+			"desired_state":                       desiredState,
+			"actual_state":                        actualState,
+			"workload_status":                     workload.Status,
+			"reason":                              reapplyReason(actualState),
+			"revision_id":                         strings.TrimSpace(workload.RevisionID),
+			"last_apply_request_at":               strings.TrimSpace(lastApplyAt),
+			"last_apply_revision":                 strings.TrimSpace(lastApplyRevision),
+			"retry_attempts":                      workload.Retry.Attempts,
+			"retry_next_at":                       workload.Retry.NextRetryAt.UTC().Format(time.RFC3339),
+			"metadata_last_action":                strings.TrimSpace(lastAction),
+			"metadata_last_reconciliation_action": strings.TrimSpace(lastReconAction),
+		}).Warn("reconciliation decided to reapply workload to reach desired running state")
 		return r.applyDesiredState(ctx, workload, agentpb.DesiredState_DESIRED_STATE_RUNNING, "ReapplyRunning")
 	case strings.EqualFold(desiredState, "Stopped") && (strings.EqualFold(actualState, "Running") || strings.EqualFold(actualState, "Pending") || strings.EqualFold(actualState, "Unknown")):
 		return r.applyDesiredState(ctx, workload, agentpb.DesiredState_DESIRED_STATE_STOPPED, "ApplyStopped")
@@ -395,6 +472,7 @@ func (r *Reconciler) applyDesiredState(ctx context.Context, workload models.Work
 			if len(statusResp.GetMetadata()) > 0 {
 				_ = r.scheduler.UpdateWorkloadMetadata(workload.ID, statusResp.GetMetadata())
 			}
+			r.resetReapplyBackoff(&workload)
 			return "NoAction", nil
 		}
 		if desired == agentpb.DesiredState_DESIRED_STATE_STOPPED && strings.EqualFold(current, "Stopped") {
@@ -402,6 +480,7 @@ func (r *Reconciler) applyDesiredState(ctx context.Context, workload models.Work
 			if len(statusResp.GetMetadata()) > 0 {
 				_ = r.scheduler.UpdateWorkloadMetadata(workload.ID, statusResp.GetMetadata())
 			}
+			r.resetReapplyBackoff(&workload)
 			return "NoAction", nil
 		}
 	}
@@ -435,14 +514,31 @@ func (r *Reconciler) applyDesiredState(ctx context.Context, workload models.Work
 	if workload.Metadata == nil {
 		workload.Metadata = make(map[string]interface{})
 	}
-	now := time.Now().UTC().Format(time.RFC3339)
-	workload.Metadata[workloadReapplyTimestampKey] = now
-	workload.Metadata[workloadReapplyRevisionKey] = strings.TrimSpace(workload.RevisionID)
-	workload.Metadata["lastLaunchTime"] = now
+	if desired == agentpb.DesiredState_DESIRED_STATE_RUNNING {
+		now := time.Now().UTC().Format(time.RFC3339)
+		workload.Metadata[workloadReapplyTimestampKey] = now
+		workload.Metadata[workloadReapplyRevisionKey] = strings.TrimSpace(workload.RevisionID)
+		workload.Metadata["lastLaunchTime"] = now
+		nextAttempt, nextAt := r.nextReapplyAttempt(workload)
+		workload.Metadata[workloadReapplyAttemptsKey] = nextAttempt
+		workload.Metadata[workloadReapplyNextAtKey] = nextAt.Format(time.RFC3339)
+		_ = r.scheduler.UpdateWorkloadLogs(workload.ID, fmt.Sprintf("Reapply attempt %d recorded; next retry allowed after %s", nextAttempt, nextAt.Format(time.RFC3339)))
+	} else {
+		// Stop/delete actions must not arm running-state reapply backoff windows.
+		for _, key := range []string{
+			workloadReapplyAttemptsKey,
+			workloadReapplyNextAtKey,
+			workloadReapplyTimestampKey,
+			workloadReapplyRevisionKey,
+			"lastLaunchTime",
+		} {
+			delete(workload.Metadata, key)
+		}
+	}
 
-	workloadJSON, marshalErr := json.Marshal(workload)
+	_, marshalErr := json.Marshal(workload)
 	if marshalErr == nil {
-		if err := r.scheduler.RetryableEtcdPut("/workloads/"+workload.ID, string(workloadJSON)); err != nil {
+		if err := r.scheduler.saveWorkload(workload); err != nil {
 			return action, fmt.Errorf("persist apply metadata: %w", err)
 		}
 	}
@@ -450,29 +546,32 @@ func (r *Reconciler) applyDesiredState(ctx context.Context, workload models.Work
 	return action, nil
 }
 
-func (r *Reconciler) reapplyStillGuarded(workload models.Workload) bool {
-	guard := r.scheduler.applyTimeoutFor(workload)
-	if r.scheduler.cfg != nil && r.scheduler.cfg.SchedulerReapplyGuard > 0 {
-		guard = r.scheduler.cfg.SchedulerReapplyGuard
-	}
-	if guard < defaultMissingGracePeriod {
-		guard = defaultMissingGracePeriod
+func (r *Reconciler) reapplyStillGuarded(workload models.Workload) (bool, time.Time) {
+	if attempts, ok := metadataInt(workload.Metadata, workloadReapplyAttemptsKey); !ok || attempts < minAttemptsBeforeBackoff {
+		return false, time.Time{}
 	}
 
 	currentRevision := strings.TrimSpace(workload.RevisionID)
 	lastRevision, hasRevision := metadataString(workload.Metadata, workloadReapplyRevisionKey)
 	if hasRevision && currentRevision != "" && !strings.EqualFold(strings.TrimSpace(lastRevision), currentRevision) {
-		return false
+		return false, time.Time{}
+	}
+	if t, ok := metadataTimestamp(workload.Metadata, workloadReapplyNextAtKey); ok {
+		if time.Now().UTC().Before(t) {
+			return true, t
+		}
+		return false, time.Time{}
 	}
 
+	// Backward compatibility with older metadata: static guard from last apply.
+	guard := r.baseReapplyBackoff(workload)
 	if t, ok := metadataTimestamp(workload.Metadata, workloadReapplyTimestampKey); ok && time.Since(t) < guard {
-		return true
+		return true, t.Add(guard)
 	}
-	// Backward compatibility with older metadata key.
 	if t, ok := metadataTimestamp(workload.Metadata, "lastLaunchTime"); ok && time.Since(t) < guard {
-		return true
+		return true, t.Add(guard)
 	}
-	return false
+	return false, time.Time{}
 }
 
 func metadataTimestamp(metadata map[string]interface{}, key string) (time.Time, bool) {
@@ -513,6 +612,172 @@ func metadataString(metadata map[string]interface{}, key string) (string, bool) 
 	}
 }
 
+func metadataInt(metadata map[string]interface{}, key string) (int, bool) {
+	if metadata == nil {
+		return 0, false
+	}
+	raw, ok := metadata[key]
+	if !ok {
+		return 0, false
+	}
+	switch v := raw.(type) {
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	case float64:
+		return int(v), true
+	case string:
+		var parsed int
+		if _, err := fmt.Sscanf(strings.TrimSpace(v), "%d", &parsed); err == nil {
+			return parsed, true
+		}
+	}
+	return 0, false
+}
+
+func (r *Reconciler) baseReapplyBackoff(workload models.Workload) time.Duration {
+	guard := r.scheduler.applyTimeoutFor(workload)
+	if r.scheduler.cfg != nil && r.scheduler.cfg.SchedulerReapplyGuard > 0 {
+		guard = r.scheduler.cfg.SchedulerReapplyGuard
+	}
+	if guard < defaultMissingGracePeriod {
+		guard = defaultMissingGracePeriod
+	}
+	return guard
+}
+
+func (r *Reconciler) nextReapplyAttempt(workload models.Workload) (int, time.Time) {
+	attempt, ok := metadataInt(workload.Metadata, workloadReapplyAttemptsKey)
+	if !ok || attempt < 0 {
+		attempt = 0
+	}
+	attempt++
+
+	base := r.baseReapplyBackoff(workload)
+	effectiveAttempt := attempt - (minAttemptsBeforeBackoff - 1)
+	if effectiveAttempt < 1 {
+		effectiveAttempt = 1
+	}
+	multiplier := math.Pow(2, float64(effectiveAttempt-1))
+	backoff := time.Duration(float64(base) * multiplier)
+	if backoff > maxReapplyBackoff {
+		backoff = maxReapplyBackoff
+	}
+	return attempt, time.Now().UTC().Add(backoff)
+}
+
+func (r *Reconciler) resetReapplyBackoff(workload *models.Workload) {
+	if workload == nil || workload.Metadata == nil {
+		return
+	}
+	changed := false
+	for _, key := range []string{workloadReapplyAttemptsKey, workloadReapplyNextAtKey, workloadReapplyTimestampKey, workloadReapplyRevisionKey} {
+		if _, exists := workload.Metadata[key]; exists {
+			delete(workload.Metadata, key)
+			changed = true
+		}
+	}
+	if !changed {
+		return
+	}
+	workload.StatusInfo.LastUpdated = time.Now().UTC()
+	_ = r.scheduler.saveWorkload(*workload)
+}
+
+func reapplyReason(actualState string) string {
+	switch {
+	case strings.EqualFold(actualState, "Missing"):
+		return "agent reported workload missing"
+	case strings.EqualFold(actualState, "Stopped"):
+		return "agent reported workload stopped while desired running"
+	case strings.EqualFold(actualState, "Failed"):
+		return "agent reported workload failed while desired running"
+	default:
+		return "desired/actual state mismatch"
+	}
+}
+
+func (r *Reconciler) shouldHaltReapply(workload models.Workload, actualState string) (bool, string) {
+	if !strings.EqualFold(strings.TrimSpace(workload.DesiredState), "Running") {
+		return false, ""
+	}
+	if !(strings.EqualFold(actualState, "Failed") || strings.EqualFold(actualState, "Stopped") || strings.EqualFold(actualState, "Missing")) {
+		return false, ""
+	}
+
+	if isMetadataTrue(workload.Metadata, terminalRetryMetadataKey) {
+		reason := strings.TrimSpace(runtimeFailureReason(workload.Metadata))
+		if reason == "" {
+			reason = "agent marked workload as terminal/non-retryable"
+		}
+		return true, reason
+	}
+
+	if failureCode, ok := metadataString(workload.Metadata, "failure_reason"); ok {
+		if _, terminal := nonRetryableFailureReasons[strings.ToUpper(strings.TrimSpace(failureCode))]; terminal {
+			reason := strings.TrimSpace(runtimeFailureReason(workload.Metadata))
+			if reason == "" {
+				reason = fmt.Sprintf("non-retryable failure reason: %s", strings.TrimSpace(failureCode))
+			}
+			return true, reason
+		}
+	}
+
+	if workload.Retry.MaxAttempts > 0 &&
+		workload.Retry.Attempts >= workload.Retry.MaxAttempts &&
+		(strings.EqualFold(actualState, "Failed") || strings.EqualFold(workload.Status, "Failed")) {
+		reason := strings.TrimSpace(runtimeFailureReason(workload.Metadata))
+		if reason == "" {
+			reason = fmt.Sprintf("scheduler retry limit reached (%d/%d)", workload.Retry.Attempts, workload.Retry.MaxAttempts)
+		}
+		return true, reason
+	}
+
+	return false, ""
+}
+
+func runtimeFailureReason(metadata map[string]interface{}) string {
+	if metadata == nil {
+		return ""
+	}
+	for _, key := range []string{
+		terminalRetryReasonMetadataKey,
+		terminalFailureReasonMetadataKey,
+		"container.stderr",
+		"last_runtime_error",
+		"container.runtime_error",
+		"last_error",
+		"failure_reason",
+	} {
+		if v, ok := metadataString(metadata, key); ok {
+			clean := strings.TrimSpace(v)
+			if clean != "" {
+				return clean
+			}
+		}
+	}
+	return ""
+}
+
+func isMetadataTrue(metadata map[string]interface{}, key string) bool {
+	if metadata == nil {
+		return false
+	}
+	raw, ok := metadata[key]
+	if !ok {
+		return false
+	}
+	switch v := raw.(type) {
+	case bool:
+		return v
+	case string:
+		return strings.EqualFold(strings.TrimSpace(v), "true")
+	default:
+		return false
+	}
+}
+
 func (r *Reconciler) deleteDesiredWorkload(ctx context.Context, workload models.Workload) (string, error) {
 	if workload.NodeID != "" {
 		node, err := r.scheduler.GetNodeByID(workload.NodeID)
@@ -545,13 +810,29 @@ func (r *Reconciler) updateWorkloadReconciliationStatus(workloadID string, resul
 	workload.Metadata["lastReconciliationSuccess"] = result.Success
 	workload.Metadata["reconciliationRetryCount"] = result.RetryCount
 
-	workloadJSON, err := json.Marshal(workload)
-	if err != nil {
-		reconcilerLogger.WithError(err).WithField("workload_id", workloadID).Warn("failed to marshal workload during reconciliation status update")
+	// High-churn reconciliation metadata should live in Redis when available.
+	if r.scheduler.redisClient != nil {
+		ttl := 24 * time.Hour
+		if r.scheduler.cfg != nil && r.scheduler.cfg.RedisReconcileTTL > 0 {
+			ttl = r.scheduler.cfg.RedisReconcileTTL
+		}
+		statusKey := fmt.Sprintf("workload:%s:reconcile_status", workloadID)
+		if payload, mErr := json.Marshal(workload.Metadata); mErr == nil {
+			if err := r.scheduler.redisClient.Set(context.Background(), statusKey, payload, ttl).Err(); err == nil {
+				return
+			}
+		}
+	}
+
+	currentLastAction, _ := workload.Metadata["last_action"].(string)
+	if result.Action == "NoAction" && currentLastAction == "NoAction" {
 		return
 	}
-	if err := r.scheduler.RetryableEtcdPut("/workloads/"+workloadID, string(workloadJSON)); err != nil {
+	workload.Metadata["last_action"] = result.Action
+
+	if err := r.scheduler.saveWorkload(workload); err != nil {
 		reconcilerLogger.WithError(err).WithField("workload_id", workloadID).Warn("failed to persist reconciliation status")
+		return
 	}
 }
 
