@@ -19,6 +19,7 @@ services:
       - jaeger
     environment:
       - OTEL_EXPORTER_JAEGER_ENDPOINT=${OTEL_EXPORTER_JAEGER_ENDPOINT:-jaeger:4318}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
       - PERSYS_VAULT_ADDR=${PERSYS_GATEWAY_VAULT_ADDR:-http://vault:8200}
       - PERSYS_VAULT_AUTH_METHOD=${PERSYS_GATEWAY_VAULT_AUTH_METHOD:-approle}
       - PERSYS_VAULT_TOKEN=${PERSYS_GATEWAY_VAULT_TOKEN:-}
@@ -47,10 +48,13 @@ services:
       - mysql
       - redis
     environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
+      - OTEL_SERVICE_NAME=${PERSYS_FORGERY_OTEL_SERVICE_NAME:-persys-forgery}
       - PERSYS_FORGERY_MYSQL_DSN=${PERSYS_FORGERY_MYSQL_DSN:-forgery:password@tcp(mysql:3306)/forgery_db?parseTime=true}
       - PERSYS_FORGERY_REDIS_ADDR=${PERSYS_FORGERY_REDIS_ADDR:-redis:6379}
       - PERSYS_FORGERY_REDIS_PASSWORD=${PERSYS_FORGERY_REDIS_PASSWORD:-}
       - PERSYS_FORGERY_REDIS_PASSWORD_FILE=${PERSYS_FORGERY_REDIS_PASSWORD_FILE:-}
+      - PERSYS_FORGERY_PIPELINE_STATUS_KEY=${PERSYS_FORGERY_PIPELINE_STATUS_KEY:-pipeline_status}
       - PERSYS_FORGERY_VAULT_ADDR=${PERSYS_FORGERY_VAULT_ADDR:-http://vault:8200}
       - PERSYS_FORGERY_VAULT_AUTH_METHOD=${PERSYS_FORGERY_VAULT_AUTH_METHOD:-approle}
       - PERSYS_FORGERY_VAULT_TOKEN=${PERSYS_FORGERY_VAULT_TOKEN:-}
@@ -73,6 +77,7 @@ services:
       - vault
       - coredns
       - jaeger
+      - redis
     environment:
       - ETCD_ENDPOINTS=${ETCD_ENDPOINTS:-etcd:2379}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
@@ -88,6 +93,105 @@ services:
       - PERSYS_VAULT_APPROLE_ROLE_ID=${PERSYS_SCHEDULER_VAULT_ROLE_ID}
       - PERSYS_VAULT_APPROLE_SECRET_ID=${PERSYS_SCHEDULER_VAULT_SECRET_ID}
       - PERSYS_VAULT_PKI_MOUNT=${PERSYS_VAULT_PKI_MOUNT:-pki}
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=1
+    networks:
+      - persys-cloud-net
+
+  # --- Persys Automation (policy engine and control-plane automation) ---
+  persys-automation:
+    build: ../../persys-automation
+    ports:
+      - 8091:8091
+      - 8092:8092
+    depends_on:
+      - persys-scheduler
+      - prometheus
+      - automation-postgres
+      - persys-intelligence
+    environment:
+      - AUTOMATION_GRPC_ADDR=0.0.0.0
+      - AUTOMATION_GRPC_PORT=8091
+      - AUTOMATION_METRICS_PORT=8092
+      - AUTOMATION_EVAL_INTERVAL=${AUTOMATION_EVAL_INTERVAL:-30s}
+      - AUTOMATION_PROMETHEUS_URL=${AUTOMATION_PROMETHEUS_URL:-http://prometheus:9090}
+      - AUTOMATION_SCHEDULER_ADDR=${AUTOMATION_SCHEDULER_ADDR:-persys-scheduler:8085}
+      - AUTOMATION_SCHEDULER_TLS_ENABLED=${AUTOMATION_SCHEDULER_TLS_ENABLED:-false}
+      - AUTOMATION_SCHEDULER_TLS_CA=${AUTOMATION_SCHEDULER_TLS_CA:-/etc/persys/certs/persys_automation/ca.pem}
+      - AUTOMATION_CLIENT_TLS_CERT=${AUTOMATION_CLIENT_TLS_CERT:-/etc/persys/certs/persys_automation/persys_automation.crt}
+      - AUTOMATION_CLIENT_TLS_KEY=${AUTOMATION_CLIENT_TLS_KEY:-/etc/persys/certs/persys_automation/persys_automation-key.key}
+      - AUTOMATION_SERVER_TLS_ENABLED=${AUTOMATION_SERVER_TLS_ENABLED:-false}
+      - AUTOMATION_SERVER_TLS_CA=${AUTOMATION_SERVER_TLS_CA:-/etc/persys/certs/persys_automation/ca.pem}
+      - AUTOMATION_SERVER_TLS_CERT=${AUTOMATION_SERVER_TLS_CERT:-/etc/persys/certs/persys_automation/persys_automation.crt}
+      - AUTOMATION_SERVER_TLS_KEY=${AUTOMATION_SERVER_TLS_KEY:-/etc/persys/certs/persys_automation/persys_automation-key.key}
+      - AUTOMATION_VAULT_ENABLED=${AUTOMATION_VAULT_ENABLED:-false}
+      - AUTOMATION_VAULT_ADDR=${AUTOMATION_VAULT_ADDR:-http://vault:8200}
+      - AUTOMATION_VAULT_AUTH_METHOD=${AUTOMATION_VAULT_AUTH_METHOD:-approle}
+      - AUTOMATION_VAULT_TOKEN=${AUTOMATION_VAULT_TOKEN:-}
+      - AUTOMATION_VAULT_APPROLE_ROLE_ID=${AUTOMATION_VAULT_APPROLE_ROLE_ID:-}
+      - AUTOMATION_VAULT_APPROLE_SECRET_ID=${AUTOMATION_VAULT_APPROLE_SECRET_ID:-}
+      - AUTOMATION_VAULT_PKI_MOUNT=${AUTOMATION_VAULT_PKI_MOUNT:-pki}
+      - AUTOMATION_VAULT_PKI_ROLE=${AUTOMATION_VAULT_PKI_ROLE:-persys-automation}
+      - AUTOMATION_VAULT_CERT_TTL=${AUTOMATION_VAULT_CERT_TTL:-24h}
+      - AUTOMATION_VAULT_SERVICE_NAME=${AUTOMATION_VAULT_SERVICE_NAME:-persys-automation}
+      - AUTOMATION_VAULT_SERVICE_DOMAIN=${AUTOMATION_VAULT_SERVICE_DOMAIN:-persys.local}
+      - AUTOMATION_VAULT_RETRY_INTERVAL=${AUTOMATION_VAULT_RETRY_INTERVAL:-1m}
+      - AUTOMATION_FORGERY_REDIS_ENABLED=${AUTOMATION_FORGERY_REDIS_ENABLED:-true}
+      - AUTOMATION_FORGERY_REDIS_ADDR=${AUTOMATION_FORGERY_REDIS_ADDR:-redis:6379}
+      - AUTOMATION_FORGERY_REDIS_PASSWORD=${AUTOMATION_FORGERY_REDIS_PASSWORD:-}
+      - AUTOMATION_FORGERY_REDIS_DB=${AUTOMATION_FORGERY_REDIS_DB:-0}
+      - AUTOMATION_FORGERY_PIPELINE_KEY=${AUTOMATION_FORGERY_PIPELINE_KEY:-pipeline_status}
+      - AUTOMATION_STORE_BACKEND=${AUTOMATION_STORE_BACKEND:-postgres}
+      - AUTOMATION_POSTGRES_DSN=${AUTOMATION_POSTGRES_DSN:-postgres://automation:automation@automation-postgres:5432/persys_automation?sslmode=disable}
+      - AUTOMATION_LEADER_ELECTION_ENABLED=${AUTOMATION_LEADER_ELECTION_ENABLED:-true}
+      - AUTOMATION_LEADER_ELECTION_LOCK_ID=${AUTOMATION_LEADER_ELECTION_LOCK_ID:-771001}
+      - AUTOMATION_LEADER_ELECTION_POLL_INTERVAL=${AUTOMATION_LEADER_ELECTION_POLL_INTERVAL:-5s}
+    networks:
+      - persys-cloud-net
+
+  # --- Persys Intelligence (read-only AI reasoning + recommendations) ---
+  persys-intelligence:
+    build: ../../persys-intelligence
+    ports:
+      - 8093:8093
+      - 8094:8094
+    depends_on:
+      - persys-scheduler
+      - prometheus
+    environment:
+      - INTELLIGENCE_HTTP_ADDR=0.0.0.0
+      - INTELLIGENCE_HTTP_PORT=8093
+      - INTELLIGENCE_METRICS_ADDR=0.0.0.0
+      - INTELLIGENCE_METRICS_PORT=8094
+      - INTELLIGENCE_MODE=${INTELLIGENCE_MODE:-advisory}
+      - INTELLIGENCE_MODEL_PROVIDER=${INTELLIGENCE_MODEL_PROVIDER:-mock}
+      - INTELLIGENCE_DEFAULT_WORKLOAD=${INTELLIGENCE_DEFAULT_WORKLOAD:-demo-c2}
+      - INTELLIGENCE_INFERENCE_TIMEOUT=${INTELLIGENCE_INFERENCE_TIMEOUT:-3s}
+      - INTELLIGENCE_INFERENCE_RATE_LIMIT_PER_SEC=${INTELLIGENCE_INFERENCE_RATE_LIMIT_PER_SEC:-5}
+      - INTELLIGENCE_INFERENCE_FAILURE_THRESHOLD=${INTELLIGENCE_INFERENCE_FAILURE_THRESHOLD:-3}
+      - INTELLIGENCE_INFERENCE_COOLDOWN=${INTELLIGENCE_INFERENCE_COOLDOWN:-30s}
+      - INTELLIGENCE_POLICY_MIN_CONFIDENCE=${INTELLIGENCE_POLICY_MIN_CONFIDENCE:-0.7}
+      - INTELLIGENCE_POLICY_MAX_RISK=${INTELLIGENCE_POLICY_MAX_RISK:-0.6}
+      - INTELLIGENCE_SERVER_TLS_ENABLED=${INTELLIGENCE_SERVER_TLS_ENABLED:-false}
+      - INTELLIGENCE_SERVER_TLS_CERT=${INTELLIGENCE_SERVER_TLS_CERT:-/etc/persys/certs/persys_intelligence/persys_intelligence.crt}
+      - INTELLIGENCE_SERVER_TLS_KEY=${INTELLIGENCE_SERVER_TLS_KEY:-/etc/persys/certs/persys_intelligence/persys_intelligence-key.key}
+      - INTELLIGENCE_SERVER_TLS_CA=${INTELLIGENCE_SERVER_TLS_CA:-/etc/persys/certs/persys_scheduler/ca.pem}
+      - INTELLIGENCE_VAULT_ENABLED=${INTELLIGENCE_VAULT_ENABLED:-false}
+      - INTELLIGENCE_VAULT_ADDR=${INTELLIGENCE_VAULT_ADDR:-http://vault:8200}
+      - INTELLIGENCE_VAULT_AUTH_METHOD=${INTELLIGENCE_VAULT_AUTH_METHOD:-approle}
+      - INTELLIGENCE_VAULT_TOKEN=${INTELLIGENCE_VAULT_TOKEN:-}
+      - INTELLIGENCE_VAULT_APPROLE_ROLE_ID=${INTELLIGENCE_VAULT_APPROLE_ROLE_ID:-}
+      - INTELLIGENCE_VAULT_APPROLE_SECRET_ID=${INTELLIGENCE_VAULT_APPROLE_SECRET_ID:-}
+      - INTELLIGENCE_VAULT_PKI_MOUNT=${INTELLIGENCE_VAULT_PKI_MOUNT:-pki}
+      - INTELLIGENCE_VAULT_PKI_ROLE=${INTELLIGENCE_VAULT_PKI_ROLE:-persys-intelligence}
+      - INTELLIGENCE_VAULT_CERT_TTL=${INTELLIGENCE_VAULT_CERT_TTL:-24h}
+      - INTELLIGENCE_VAULT_SERVICE_NAME=${INTELLIGENCE_VAULT_SERVICE_NAME:-persys-intelligence}
+      - INTELLIGENCE_VAULT_SERVICE_DOMAIN=${INTELLIGENCE_VAULT_SERVICE_DOMAIN:-persys.local}
+      - INTELLIGENCE_VAULT_RETRY_INTERVAL=${INTELLIGENCE_VAULT_RETRY_INTERVAL:-1m}
+      - INTELLIGENCE_MODEL_ENDPOINT=${INTELLIGENCE_MODEL_ENDPOINT:-}
+      - INTELLIGENCE_MODEL_API_KEY=${INTELLIGENCE_MODEL_API_KEY:-}
+      - INTELLIGENCE_MODEL_NAME=${INTELLIGENCE_MODEL_NAME:-}
     networks:
       - persys-cloud-net
     
@@ -96,6 +200,8 @@ services:
       context: ../../compute-agent
       dockerfile: Dockerfile
     environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
+      - OTEL_SERVICE_NAME=${COMPUTE_AGENT_OTEL_SERVICE_NAME:-compute-agent}
       - PERSYS_VAULT_ADDR=${COMPUTE_AGENT_VAULT_ADDR:-http://vault:8200}
       - PERSYS_VAULT_AUTH_METHOD=${COMPUTE_AGENT_VAULT_AUTH_METHOD:-approle}
       - PERSYS_VAULT_TOKEN=${COMPUTE_AGENT_VAULT_TOKEN:-}
@@ -111,7 +217,6 @@ services:
     user: "0:0"
     volumes:
       - ${DOCKER_SOCK_PATH:-/var/run/docker.sock}:/var/run/docker.sock
-      - ../../certs:/etc/persys/certs/agent
     depends_on:
       - vault
       - persys-scheduler
@@ -229,8 +334,13 @@ services:
     image: prom/node-exporter
     ports:
       - '9100:9100'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
     networks:
       - persys-cloud-net
+
 # --- MySQL (Forgery persistence) ---
   mysql:
     image: mysql:8.0
@@ -259,7 +369,22 @@ services:
     networks:
       - persys-cloud-net
 
-  # --- MongoDB (Database for API Gateway) ---
+#  --- Postgres (Automation policy and audit store) ---
+  automation-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${AUTOMATION_POSTGRES_DB:-persys_automation}
+      - POSTGRES_USER=${AUTOMATION_POSTGRES_USER:-automation}
+      - POSTGRES_PASSWORD=${AUTOMATION_POSTGRES_PASSWORD:-automation}
+    ports:
+      - "5432:5432"
+    volumes:
+      - automation_postgres_data:/var/lib/postgresql/data
+    networks:
+      - persys-cloud-net
+
+#  --- MongoDB (Database for Persys Gateway) ---
   mongodb:
     image: mongo:latest
     restart: always
@@ -277,7 +402,7 @@ services:
   # --- etcd (Key-value store for Prow and CoreDNS) ---
   etcd:
     image: quay.io/coreos/etcd:v3.5.0
-    command: etcd --advertise-client-urls http://etcd:2379 --listen-client-urls http://0.0.0.0:2379
+    command: etcd --advertise-client-urls http://etcd:2379 --listen-client-urls http://0.0.0.0:2379 --auto-compaction-retention=1h
     restart: unless-stopped
     volumes:
       - etcd_data:/etcd-data
@@ -293,6 +418,7 @@ volumes:
   mongodb_data_container:
   mysql_data:
   redis_data:
+  automation_postgres_data:
   prometheus_data:
   grafana_data:
   vault_data:
