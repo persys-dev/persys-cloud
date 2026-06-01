@@ -23,6 +23,16 @@ $(BINARY_DIR):
 build: $(BINARY_DIR)
 	$(GO) build $(GOFLAGS) -o $(BINARY_PATH) ./cmd/scheduler
 
+# Generate gRPC/protobuf stubs for scheduler control API.
+# Outputs to:
+# - persys-scheduler/internal/controlv1
+# - pkg/scheduler/controlv1 (shared clients)
+.PHONY: proto
+proto:
+	cd api/proto && \
+	protoc --go_out=paths=source_relative:../../internal/controlv1 --go-grpc_out=paths=source_relative:../../internal/controlv1 control.proto && \
+	protoc --go_out=paths=source_relative:../../../pkg/scheduler/controlv1 --go-grpc_out=paths=source_relative:../../../pkg/scheduler/controlv1 control.proto
+
 # Build the Docker image
 .PHONY: docker-build
 docker-build:
@@ -88,6 +98,7 @@ help:
 	@echo "Available targets:"
 	@echo "  all      	   - Build the project into bin/ (default)"
 	@echo "  build    	   - Build the binary into bin/"
+	@echo "  proto         - Generate protobuf/gRPC stubs into internal/ and pkg/"
 	@echo "  docker-build  - Build Docker image"
 	@echo "  docker-run    - Run PersysAgent container"
 	@echo "  run           - Build and run the application from bin/"
