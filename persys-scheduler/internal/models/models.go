@@ -40,67 +40,70 @@ type DockerSwarm struct {
 
 // Node represents a registered node
 type Node struct {
-	NodeID                 string            `json:"nodeId" binding:"required"`
-	IPAddress              string            `json:"ipAddress" binding:"required"`
-	Username               string            `json:"username" binding:"required"`
-	Hostname               string            `json:"hostname" binding:"required"`
-	OSName                 string            `json:"osName" binding:"required"`
-	KernelVersion          string            `json:"kernelVersion" binding:"required"`
-	Status                 string            `json:"status" binding:"required"`
-	Timestamp              string            `json:"timestamp" binding:"required"`
-	Resources              Resources         `json:"resources"`
-	TotalCPU               float64           `json:"totalCpu"`
-	TotalMemory            int64             `json:"totalMemory"`
-	AvailableCPU           float64           `json:"availableCpu"`
-	AvailableMemory        int64             `json:"availableMemory"`
-	Hypervisor             Hypervisor        `json:"hypervisor" binding:"required"`
-	ContainerEngine        ContainerEngine   `json:"containerEngine" binding:"required"`
-	DockerSwarm            DockerSwarm       `json:"dockerSwarm"`
-	LastHeartbeat          time.Time         `json:"lastHeartbeat"`
-	StatusReason           string            `json:"statusReason,omitempty"`
-	StatusUpdatedBy        string            `json:"statusUpdatedBy,omitempty"`
-	StatusUpdatedAt        time.Time         `json:"statusUpdatedAt,omitempty"`
-	Labels                 map[string]string `json:"labels,omitempty"`
-	AgentPort              int               `json:"agentPort"` // Added for agent communication
-	AgentGRPCPort          int               `json:"agentGrpcPort,omitempty"`
-	AgentEndpoint          string            `json:"agentEndpoint,omitempty"`
-	SupportedWorkloadTypes []string          `json:"supportedWorkloadTypes,omitempty"`
-	DomainName             string            `json:"domainName,omitempty"` // Added field
+	NodeID                  string            `json:"nodeId" binding:"required"`
+	IPAddress               string            `json:"ipAddress" binding:"required"`
+	Username                string            `json:"username" binding:"required"`
+	Hostname                string            `json:"hostname" binding:"required"`
+	OSName                  string            `json:"osName" binding:"required"`
+	KernelVersion           string            `json:"kernelVersion" binding:"required"`
+	Status                  string            `json:"status" binding:"required"`
+	Timestamp               string            `json:"timestamp" binding:"required"`
+	Resources               Resources         `json:"resources"`
+	TotalCPU                float64           `json:"totalCpu"`
+	TotalMemory             int64             `json:"totalMemory"`
+	AvailableCPU            float64           `json:"availableCpu"`
+	AvailableMemory         int64             `json:"availableMemory"`
+	Hypervisor              Hypervisor        `json:"hypervisor" binding:"required"`
+	ContainerEngine         ContainerEngine   `json:"containerEngine" binding:"required"`
+	DockerSwarm             DockerSwarm       `json:"dockerSwarm"`
+	LastHeartbeat           time.Time         `json:"lastHeartbeat"`
+	StatusReason            string            `json:"statusReason,omitempty"`
+	StatusUpdatedBy         string            `json:"statusUpdatedBy,omitempty"`
+	StatusUpdatedAt         time.Time         `json:"statusUpdatedAt,omitempty"`
+	Labels                  map[string]string `json:"labels,omitempty"`
+	AgentPort               int               `json:"agentPort"` // Added for agent communication
+	AgentGRPCPort           int               `json:"agentGrpcPort,omitempty"`
+	AgentEndpoint           string            `json:"agentEndpoint,omitempty"`
+	SupportedWorkloadTypes  []string          `json:"supportedWorkloadTypes,omitempty"`
+	SupportedStorageDrivers []string          `json:"supportedStorageDrivers,omitempty"`
+	DomainName              string            `json:"domainName,omitempty"` // Added field
 }
 
 // Workload represents a scheduled task
 type Workload struct {
-	ID            string                 `json:"id,omitempty"`
-	Name          string                 `json:"name" binding:"required"`
-	Type          string                 `json:"type" binding:"required"` // "docker-container", "docker-compose", "compose", "vm"
-	RevisionID    string                 `json:"revisionId,omitempty"`    // stable revision for idempotent apply
-	AssignedNode  string                 `json:"assignedNode,omitempty"`
-	Image         string                 `json:"image,omitempty"`       // For docker-container
-	Command       string                 `json:"command,omitempty"`     // For docker-container
-	CommandList   []string               `json:"commandList,omitempty"` // Preserves tokenized command/args for container workloads
-	Compose       string                 `json:"compose,omitempty"`     // Base64-encoded Compose content (optional)
-	ComposeYAML   string                 `json:"composeYaml,omitempty"` // Base64-encoded Compose YAML for compute-agent compose spec
-	ProjectName   string                 `json:"projectName,omitempty"` // Deterministic compose project name
-	GitRepo       string                 `json:"gitRepo,omitempty"`     // Git URL for git-compose
-	GitBranch     string                 `json:"gitBranch,omitempty"`   // Git branch for git-compose
-	GitToken      string                 `json:"gitToken,omitempty"`    // Optional Git auth token
-	EnvVars       map[string]string      `json:"envVars,omitempty"`     // Environment variables
-	Resources     Resources              `json:"resources"`
-	NodeID        string                 `json:"nodeId,omitempty"`
-	Status        string                 `json:"status"`
-	DesiredState  string                 `json:"desiredState,omitempty"` // Desired state for reconciliation
-	Labels        map[string]string      `json:"labels,omitempty"`
-	CreatedAt     time.Time              `json:"createdAt"`
-	LocalPath     string                 `json:"localPath,omitempty"`     // Local path for docker-compose
-	Ports         []string               `json:"ports,omitempty"`         // e.g., ["8080:80"]
-	Volumes       []string               `json:"volumes,omitempty"`       // e.g., ["/host:/container"]
-	Network       string                 `json:"network,omitempty"`       // e.g., "bridge"
-	RestartPolicy string                 `json:"restartPolicy,omitempty"` // e.g., "always"
-	Logs          string                 `json:"logs,omitempty"`          // Execution logs and output
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`      // Reconciliation metadata
-	Retry         RetryState             `json:"retry"`
-	StatusInfo    WorkloadStatusInfo     `json:"statusInfo"`
-	VM            *VMSpec                `json:"vm,omitempty"` // VM workload spec
+	ID             string                 `json:"id,omitempty"`
+	Name           string                 `json:"name" binding:"required"`
+	Type           string                 `json:"type" binding:"required"` // "docker-container", "docker-compose", "compose", "vm"
+	RevisionID     string                 `json:"revisionId,omitempty"`    // stable revision for idempotent apply
+	AssignedNode   string                 `json:"assignedNode,omitempty"`
+	Image          string                 `json:"image,omitempty"`       // For docker-container
+	Command        string                 `json:"command,omitempty"`     // For docker-container
+	CommandList    []string               `json:"commandList,omitempty"` // Preserves tokenized command/args for container workloads
+	Compose        string                 `json:"compose,omitempty"`     // Base64-encoded Compose content (optional)
+	ComposeYAML    string                 `json:"composeYaml,omitempty"` // Base64-encoded Compose YAML for compute-agent compose spec
+	ProjectName    string                 `json:"projectName,omitempty"` // Deterministic compose project name
+	GitRepo        string                 `json:"gitRepo,omitempty"`     // Git URL for git-compose
+	GitBranch      string                 `json:"gitBranch,omitempty"`   // Git branch for git-compose
+	GitToken       string                 `json:"gitToken,omitempty"`    // Optional Git auth token
+	EnvVars        map[string]string      `json:"envVars,omitempty"`     // Environment variables
+	Resources      Resources              `json:"resources"`
+	NodeID         string                 `json:"nodeId,omitempty"`
+	Status         string                 `json:"status"`
+	DesiredState   string                 `json:"desiredState,omitempty"` // Desired state for reconciliation
+	Labels         map[string]string      `json:"labels,omitempty"`
+	CreatedAt      time.Time              `json:"createdAt"`
+	LocalPath      string                 `json:"localPath,omitempty"` // Local path for docker-compose
+	Ports          []string               `json:"ports,omitempty"`     // e.g., ["8080:80"]
+	Volumes        []string               `json:"volumes,omitempty"`   // e.g., ["/host:/container"]
+	ManagedVolumes []ManagedVolumeSpec    `json:"managedVolumes,omitempty"`
+	Network        string                 `json:"network,omitempty"`       // e.g., "bridge"
+	RestartPolicy  string                 `json:"restartPolicy,omitempty"` // e.g., "always"
+	Logs           string                 `json:"logs,omitempty"`          // Execution logs and output
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`      // Reconciliation metadata
+	Retry          RetryState             `json:"retry"`
+	StatusInfo     WorkloadStatusInfo     `json:"statusInfo"`
+	Usage          *WorkloadUsage         `json:"usage,omitempty"`
+	VM             *VMSpec                `json:"vm,omitempty"` // VM workload spec
 }
 
 type RetryState struct {
@@ -110,9 +113,10 @@ type RetryState struct {
 }
 
 type WorkloadStatusInfo struct {
-	ActualState   string    `json:"actualState,omitempty"`
-	LastUpdated   time.Time `json:"lastUpdated,omitempty"`
-	FailureReason string    `json:"failureReason,omitempty"`
+	ActualState   string          `json:"actualState,omitempty"`
+	LastUpdated   time.Time       `json:"lastUpdated,omitempty"`
+	FailureReason string          `json:"failureReason,omitempty"`
+	Reason        *WorkloadReason `json:"reason,omitempty"`
 }
 
 type AssignmentRecord struct {
@@ -154,14 +158,15 @@ type DriftRecord struct {
 
 // VMSpec defines VM-specific fields for scheduler API and persistence.
 type VMSpec struct {
-	Name            string            `json:"name,omitempty"`
-	VCPUs           int32             `json:"vcpus,omitempty"`
-	MemoryMB        int64             `json:"memoryMb,omitempty"`
-	Disks           []VMDiskConfig    `json:"disks,omitempty"`
-	Networks        []VMNetworkConfig `json:"networks,omitempty"`
-	CloudInit       string            `json:"cloudInit,omitempty"`
-	Metadata        map[string]string `json:"metadata,omitempty"`
-	CloudInitConfig *CloudInitConfig  `json:"cloudInitConfig,omitempty"`
+	Name            string              `json:"name,omitempty"`
+	VCPUs           int32               `json:"vcpus,omitempty"`
+	MemoryMB        int64               `json:"memoryMb,omitempty"`
+	Disks           []VMDiskConfig      `json:"disks,omitempty"`
+	Networks        []VMNetworkConfig   `json:"networks,omitempty"`
+	CloudInit       string              `json:"cloudInit,omitempty"`
+	Metadata        map[string]string   `json:"metadata,omitempty"`
+	CloudInitConfig *CloudInitConfig    `json:"cloudInitConfig,omitempty"`
+	ManagedVolumes  []ManagedVolumeSpec `json:"managedVolumes,omitempty"`
 }
 
 type VMDiskConfig struct {
@@ -184,6 +189,71 @@ type CloudInitConfig struct {
 	MetaData      string `json:"metaData,omitempty"`
 	NetworkConfig string `json:"networkConfig,omitempty"`
 	VendorData    string `json:"vendorData,omitempty"`
+}
+
+type ManagedVolumeSpec struct {
+	Name         string `json:"name,omitempty"`
+	Driver       string `json:"driver,omitempty"`
+	SizeGB       int64  `json:"sizeGb,omitempty"`
+	AccessMode   string `json:"accessMode,omitempty"`
+	FSType       string `json:"fsType,omitempty"`
+	MountPath    string `json:"mountPath,omitempty"`
+	ReadOnly     bool   `json:"readOnly,omitempty"`
+	RetainPolicy string `json:"retainPolicy,omitempty"`
+}
+
+type WorkloadUsage struct {
+	WorkloadID     string    `json:"workloadId,omitempty"`
+	Type           string    `json:"type,omitempty"`
+	CPUPercent     float64   `json:"cpuPercent,omitempty"`
+	MemoryBytes    int64     `json:"memoryBytes,omitempty"`
+	DiskReadBytes  int64     `json:"diskReadBytes,omitempty"`
+	DiskWriteBytes int64     `json:"diskWriteBytes,omitempty"`
+	NetRXBytes     int64     `json:"netRxBytes,omitempty"`
+	NetTXBytes     int64     `json:"netTxBytes,omitempty"`
+	CollectedAt    time.Time `json:"collectedAt,omitempty"`
+	Source         string    `json:"source,omitempty"`
+}
+
+type WorkloadReason struct {
+	Code           string    `json:"code,omitempty"`
+	Message        string    `json:"message,omitempty"`
+	LastTransition time.Time `json:"lastTransition,omitempty"`
+	NextRetryAt    time.Time `json:"nextRetryAt,omitempty"`
+	Retryable      bool      `json:"retryable,omitempty"`
+}
+
+// ManagedVolumeRecord is the control-plane source of truth for a managed volume.
+type ManagedVolumeRecord struct {
+	ID            string    `json:"id"`
+	Name          string    `json:"name"`
+	Driver        string    `json:"driver"`
+	SizeGB        int64     `json:"sizeGb,omitempty"`
+	AccessMode    string    `json:"accessMode,omitempty"`
+	FSType        string    `json:"fsType,omitempty"`
+	RetainPolicy  string    `json:"retainPolicy,omitempty"`
+	Phase         string    `json:"phase,omitempty"` // Provisioning|Provisioned|Attached|Released|Retained|Deleting|Deleted|Error
+	LastError     string    `json:"lastError,omitempty"`
+	WorkloadRefs  []string  `json:"workloadRefs,omitempty"`
+	AttachedNodes []string  `json:"attachedNodes,omitempty"`
+	CreatedAt     time.Time `json:"createdAt,omitempty"`
+	UpdatedAt     time.Time `json:"updatedAt,omitempty"`
+}
+
+// VolumeAttachmentRecord is the control-plane source of truth for node/workload attachment.
+type VolumeAttachmentRecord struct {
+	ID             string    `json:"id"`
+	VolumeID       string    `json:"volumeId"`
+	WorkloadID     string    `json:"workloadId"`
+	NodeID         string    `json:"nodeId"`
+	Driver         string    `json:"driver,omitempty"`
+	MountPath      string    `json:"mountPath,omitempty"`
+	ReadOnly       bool      `json:"readOnly,omitempty"`
+	Phase          string    `json:"phase,omitempty"` // Attaching|Attached|Detaching|Detached|Error
+	LastError      string    `json:"lastError,omitempty"`
+	LastTransition time.Time `json:"lastTransition,omitempty"`
+	CreatedAt      time.Time `json:"createdAt,omitempty"`
+	UpdatedAt      time.Time `json:"updatedAt,omitempty"`
 }
 
 // AgentCommand represents a command payload for the agent API

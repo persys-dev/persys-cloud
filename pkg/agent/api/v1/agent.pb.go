@@ -1035,18 +1035,19 @@ func (*WorkloadSpec_Compose) isWorkloadSpec_Spec() {}
 func (*WorkloadSpec_Vm) isWorkloadSpec_Spec() {}
 
 type ContainerSpec struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Image         string                 `protobuf:"bytes,1,opt,name=image,proto3" json:"image,omitempty"`
-	Command       []string               `protobuf:"bytes,2,rep,name=command,proto3" json:"command,omitempty"`
-	Args          []string               `protobuf:"bytes,3,rep,name=args,proto3" json:"args,omitempty"`
-	Env           map[string]string      `protobuf:"bytes,4,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Volumes       []*VolumeMount         `protobuf:"bytes,5,rep,name=volumes,proto3" json:"volumes,omitempty"`
-	Ports         []*PortMapping         `protobuf:"bytes,6,rep,name=ports,proto3" json:"ports,omitempty"`
-	Resources     *ResourceLimits        `protobuf:"bytes,7,opt,name=resources,proto3" json:"resources,omitempty"`
-	RestartPolicy *RestartPolicy         `protobuf:"bytes,8,opt,name=restart_policy,json=restartPolicy,proto3" json:"restart_policy,omitempty"`
-	Labels        map[string]string      `protobuf:"bytes,9,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Image          string                 `protobuf:"bytes,1,opt,name=image,proto3" json:"image,omitempty"`
+	Command        []string               `protobuf:"bytes,2,rep,name=command,proto3" json:"command,omitempty"`
+	Args           []string               `protobuf:"bytes,3,rep,name=args,proto3" json:"args,omitempty"`
+	Env            map[string]string      `protobuf:"bytes,4,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Volumes        []*VolumeMount         `protobuf:"bytes,5,rep,name=volumes,proto3" json:"volumes,omitempty"`
+	Ports          []*PortMapping         `protobuf:"bytes,6,rep,name=ports,proto3" json:"ports,omitempty"`
+	Resources      *ResourceLimits        `protobuf:"bytes,7,opt,name=resources,proto3" json:"resources,omitempty"`
+	RestartPolicy  *RestartPolicy         `protobuf:"bytes,8,opt,name=restart_policy,json=restartPolicy,proto3" json:"restart_policy,omitempty"`
+	Labels         map[string]string      `protobuf:"bytes,9,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	ManagedVolumes []*ManagedVolumeSpec   `protobuf:"bytes,10,rep,name=managed_volumes,json=managedVolumes,proto3" json:"managed_volumes,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ContainerSpec) Reset() {
@@ -1142,6 +1143,13 @@ func (x *ContainerSpec) GetLabels() map[string]string {
 	return nil
 }
 
+func (x *ContainerSpec) GetManagedVolumes() []*ManagedVolumeSpec {
+	if x != nil {
+		return x.ManagedVolumes
+	}
+	return nil
+}
+
 type ComposeSpec struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ProjectName   string                 `protobuf:"bytes,1,opt,name=project_name,json=projectName,proto3" json:"project_name,omitempty"`
@@ -1212,6 +1220,7 @@ type VMSpec struct {
 	CloudInit       string                 `protobuf:"bytes,6,opt,name=cloud_init,json=cloudInit,proto3" json:"cloud_init,omitempty"` // optional cloud-init user-data (YAML content)
 	Metadata        map[string]string      `protobuf:"bytes,7,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	CloudInitConfig *CloudInitConfig       `protobuf:"bytes,8,opt,name=cloud_init_config,json=cloudInitConfig,proto3" json:"cloud_init_config,omitempty"` // advanced cloud-init settings
+	ManagedVolumes  []*ManagedVolumeSpec   `protobuf:"bytes,9,rep,name=managed_volumes,json=managedVolumes,proto3" json:"managed_volumes,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1302,6 +1311,13 @@ func (x *VMSpec) GetCloudInitConfig() *CloudInitConfig {
 	return nil
 }
 
+func (x *VMSpec) GetManagedVolumes() []*ManagedVolumeSpec {
+	if x != nil {
+		return x.ManagedVolumes
+	}
+	return nil
+}
+
 type CloudInitConfig struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserData      string                 `protobuf:"bytes,1,opt,name=user_data,json=userData,proto3" json:"user_data,omitempty"`                // cloud-init user-data script
@@ -1370,6 +1386,106 @@ func (x *CloudInitConfig) GetVendorData() string {
 	return ""
 }
 
+type ManagedVolumeSpec struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Driver        string                 `protobuf:"bytes,2,opt,name=driver,proto3" json:"driver,omitempty"` // local|nfs|ceph-rbd
+	SizeGb        int64                  `protobuf:"varint,3,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
+	AccessMode    string                 `protobuf:"bytes,4,opt,name=access_mode,json=accessMode,proto3" json:"access_mode,omitempty"`
+	FsType        string                 `protobuf:"bytes,5,opt,name=fs_type,json=fsType,proto3" json:"fs_type,omitempty"`
+	MountPath     string                 `protobuf:"bytes,6,opt,name=mount_path,json=mountPath,proto3" json:"mount_path,omitempty"`
+	ReadOnly      bool                   `protobuf:"varint,7,opt,name=read_only,json=readOnly,proto3" json:"read_only,omitempty"`
+	RetainPolicy  string                 `protobuf:"bytes,8,opt,name=retain_policy,json=retainPolicy,proto3" json:"retain_policy,omitempty"` // Delete|Retain
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ManagedVolumeSpec) Reset() {
+	*x = ManagedVolumeSpec{}
+	mi := &file_agent_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ManagedVolumeSpec) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ManagedVolumeSpec) ProtoMessage() {}
+
+func (x *ManagedVolumeSpec) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ManagedVolumeSpec.ProtoReflect.Descriptor instead.
+func (*ManagedVolumeSpec) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ManagedVolumeSpec) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ManagedVolumeSpec) GetDriver() string {
+	if x != nil {
+		return x.Driver
+	}
+	return ""
+}
+
+func (x *ManagedVolumeSpec) GetSizeGb() int64 {
+	if x != nil {
+		return x.SizeGb
+	}
+	return 0
+}
+
+func (x *ManagedVolumeSpec) GetAccessMode() string {
+	if x != nil {
+		return x.AccessMode
+	}
+	return ""
+}
+
+func (x *ManagedVolumeSpec) GetFsType() string {
+	if x != nil {
+		return x.FsType
+	}
+	return ""
+}
+
+func (x *ManagedVolumeSpec) GetMountPath() string {
+	if x != nil {
+		return x.MountPath
+	}
+	return ""
+}
+
+func (x *ManagedVolumeSpec) GetReadOnly() bool {
+	if x != nil {
+		return x.ReadOnly
+	}
+	return false
+}
+
+func (x *ManagedVolumeSpec) GetRetainPolicy() string {
+	if x != nil {
+		return x.RetainPolicy
+	}
+	return ""
+}
+
 type VolumeMount struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	HostPath      string                 `protobuf:"bytes,1,opt,name=host_path,json=hostPath,proto3" json:"host_path,omitempty"`
@@ -1381,7 +1497,7 @@ type VolumeMount struct {
 
 func (x *VolumeMount) Reset() {
 	*x = VolumeMount{}
-	mi := &file_agent_proto_msgTypes[18]
+	mi := &file_agent_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1393,7 +1509,7 @@ func (x *VolumeMount) String() string {
 func (*VolumeMount) ProtoMessage() {}
 
 func (x *VolumeMount) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[18]
+	mi := &file_agent_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1406,7 +1522,7 @@ func (x *VolumeMount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VolumeMount.ProtoReflect.Descriptor instead.
 func (*VolumeMount) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{18}
+	return file_agent_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *VolumeMount) GetHostPath() string {
@@ -1441,7 +1557,7 @@ type PortMapping struct {
 
 func (x *PortMapping) Reset() {
 	*x = PortMapping{}
-	mi := &file_agent_proto_msgTypes[19]
+	mi := &file_agent_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1453,7 +1569,7 @@ func (x *PortMapping) String() string {
 func (*PortMapping) ProtoMessage() {}
 
 func (x *PortMapping) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[19]
+	mi := &file_agent_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1466,7 +1582,7 @@ func (x *PortMapping) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PortMapping.ProtoReflect.Descriptor instead.
 func (*PortMapping) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{19}
+	return file_agent_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *PortMapping) GetHostPort() int32 {
@@ -1501,7 +1617,7 @@ type ResourceLimits struct {
 
 func (x *ResourceLimits) Reset() {
 	*x = ResourceLimits{}
-	mi := &file_agent_proto_msgTypes[20]
+	mi := &file_agent_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1513,7 +1629,7 @@ func (x *ResourceLimits) String() string {
 func (*ResourceLimits) ProtoMessage() {}
 
 func (x *ResourceLimits) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[20]
+	mi := &file_agent_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1526,7 +1642,7 @@ func (x *ResourceLimits) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceLimits.ProtoReflect.Descriptor instead.
 func (*ResourceLimits) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{20}
+	return file_agent_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ResourceLimits) GetCpuShares() int64 {
@@ -1560,7 +1676,7 @@ type RestartPolicy struct {
 
 func (x *RestartPolicy) Reset() {
 	*x = RestartPolicy{}
-	mi := &file_agent_proto_msgTypes[21]
+	mi := &file_agent_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1572,7 +1688,7 @@ func (x *RestartPolicy) String() string {
 func (*RestartPolicy) ProtoMessage() {}
 
 func (x *RestartPolicy) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[21]
+	mi := &file_agent_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1585,7 +1701,7 @@ func (x *RestartPolicy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RestartPolicy.ProtoReflect.Descriptor instead.
 func (*RestartPolicy) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{21}
+	return file_agent_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *RestartPolicy) GetPolicy() string {
@@ -1616,7 +1732,7 @@ type DiskConfig struct {
 
 func (x *DiskConfig) Reset() {
 	*x = DiskConfig{}
-	mi := &file_agent_proto_msgTypes[22]
+	mi := &file_agent_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1628,7 +1744,7 @@ func (x *DiskConfig) String() string {
 func (*DiskConfig) ProtoMessage() {}
 
 func (x *DiskConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[22]
+	mi := &file_agent_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1641,7 +1757,7 @@ func (x *DiskConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiskConfig.ProtoReflect.Descriptor instead.
 func (*DiskConfig) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{22}
+	return file_agent_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DiskConfig) GetPath() string {
@@ -1697,7 +1813,7 @@ type NetworkConfig struct {
 
 func (x *NetworkConfig) Reset() {
 	*x = NetworkConfig{}
-	mi := &file_agent_proto_msgTypes[23]
+	mi := &file_agent_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1709,7 +1825,7 @@ func (x *NetworkConfig) String() string {
 func (*NetworkConfig) ProtoMessage() {}
 
 func (x *NetworkConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[23]
+	mi := &file_agent_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1722,7 +1838,7 @@ func (x *NetworkConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkConfig.ProtoReflect.Descriptor instead.
 func (*NetworkConfig) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{23}
+	return file_agent_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *NetworkConfig) GetNetwork() string {
@@ -1757,13 +1873,14 @@ type WorkloadStatus struct {
 	CreatedAt     int64                  `protobuf:"varint,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt     int64                  `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	Metadata      map[string]string      `protobuf:"bytes,9,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Usage         *WorkloadUsageSnapshot `protobuf:"bytes,10,opt,name=usage,proto3" json:"usage,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *WorkloadStatus) Reset() {
 	*x = WorkloadStatus{}
-	mi := &file_agent_proto_msgTypes[24]
+	mi := &file_agent_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1775,7 +1892,7 @@ func (x *WorkloadStatus) String() string {
 func (*WorkloadStatus) ProtoMessage() {}
 
 func (x *WorkloadStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_agent_proto_msgTypes[24]
+	mi := &file_agent_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1788,7 +1905,7 @@ func (x *WorkloadStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkloadStatus.ProtoReflect.Descriptor instead.
 func (*WorkloadStatus) Descriptor() ([]byte, []int) {
-	return file_agent_proto_rawDescGZIP(), []int{24}
+	return file_agent_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *WorkloadStatus) GetId() string {
@@ -1852,6 +1969,129 @@ func (x *WorkloadStatus) GetMetadata() map[string]string {
 		return x.Metadata
 	}
 	return nil
+}
+
+func (x *WorkloadStatus) GetUsage() *WorkloadUsageSnapshot {
+	if x != nil {
+		return x.Usage
+	}
+	return nil
+}
+
+type WorkloadUsageSnapshot struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	WorkloadId     string                 `protobuf:"bytes,1,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`
+	Type           WorkloadType           `protobuf:"varint,2,opt,name=type,proto3,enum=persys.agent.v1.WorkloadType" json:"type,omitempty"`
+	CpuPercent     float64                `protobuf:"fixed64,3,opt,name=cpu_percent,json=cpuPercent,proto3" json:"cpu_percent,omitempty"`
+	MemoryBytes    int64                  `protobuf:"varint,4,opt,name=memory_bytes,json=memoryBytes,proto3" json:"memory_bytes,omitempty"`
+	DiskReadBytes  int64                  `protobuf:"varint,5,opt,name=disk_read_bytes,json=diskReadBytes,proto3" json:"disk_read_bytes,omitempty"`
+	DiskWriteBytes int64                  `protobuf:"varint,6,opt,name=disk_write_bytes,json=diskWriteBytes,proto3" json:"disk_write_bytes,omitempty"`
+	NetRxBytes     int64                  `protobuf:"varint,7,opt,name=net_rx_bytes,json=netRxBytes,proto3" json:"net_rx_bytes,omitempty"`
+	NetTxBytes     int64                  `protobuf:"varint,8,opt,name=net_tx_bytes,json=netTxBytes,proto3" json:"net_tx_bytes,omitempty"`
+	CollectedAt    int64                  `protobuf:"varint,9,opt,name=collected_at,json=collectedAt,proto3" json:"collected_at,omitempty"` // unix timestamp
+	Source         string                 `protobuf:"bytes,10,opt,name=source,proto3" json:"source,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *WorkloadUsageSnapshot) Reset() {
+	*x = WorkloadUsageSnapshot{}
+	mi := &file_agent_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorkloadUsageSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorkloadUsageSnapshot) ProtoMessage() {}
+
+func (x *WorkloadUsageSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_agent_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorkloadUsageSnapshot.ProtoReflect.Descriptor instead.
+func (*WorkloadUsageSnapshot) Descriptor() ([]byte, []int) {
+	return file_agent_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *WorkloadUsageSnapshot) GetWorkloadId() string {
+	if x != nil {
+		return x.WorkloadId
+	}
+	return ""
+}
+
+func (x *WorkloadUsageSnapshot) GetType() WorkloadType {
+	if x != nil {
+		return x.Type
+	}
+	return WorkloadType_WORKLOAD_TYPE_UNSPECIFIED
+}
+
+func (x *WorkloadUsageSnapshot) GetCpuPercent() float64 {
+	if x != nil {
+		return x.CpuPercent
+	}
+	return 0
+}
+
+func (x *WorkloadUsageSnapshot) GetMemoryBytes() int64 {
+	if x != nil {
+		return x.MemoryBytes
+	}
+	return 0
+}
+
+func (x *WorkloadUsageSnapshot) GetDiskReadBytes() int64 {
+	if x != nil {
+		return x.DiskReadBytes
+	}
+	return 0
+}
+
+func (x *WorkloadUsageSnapshot) GetDiskWriteBytes() int64 {
+	if x != nil {
+		return x.DiskWriteBytes
+	}
+	return 0
+}
+
+func (x *WorkloadUsageSnapshot) GetNetRxBytes() int64 {
+	if x != nil {
+		return x.NetRxBytes
+	}
+	return 0
+}
+
+func (x *WorkloadUsageSnapshot) GetNetTxBytes() int64 {
+	if x != nil {
+		return x.NetTxBytes
+	}
+	return 0
+}
+
+func (x *WorkloadUsageSnapshot) GetCollectedAt() int64 {
+	if x != nil {
+		return x.CollectedAt
+	}
+	return 0
+}
+
+func (x *WorkloadUsageSnapshot) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
 }
 
 var File_agent_proto protoreflect.FileDescriptor
@@ -1922,7 +2162,7 @@ const file_agent_proto_rawDesc = "" +
 	"\tcontainer\x18\x01 \x01(\v2\x1e.persys.agent.v1.ContainerSpecH\x00R\tcontainer\x128\n" +
 	"\acompose\x18\x02 \x01(\v2\x1c.persys.agent.v1.ComposeSpecH\x00R\acompose\x12)\n" +
 	"\x02vm\x18\x03 \x01(\v2\x17.persys.agent.v1.VMSpecH\x00R\x02vmB\x06\n" +
-	"\x04spec\"\xb7\x04\n" +
+	"\x04spec\"\x84\x05\n" +
 	"\rContainerSpec\x12\x14\n" +
 	"\x05image\x18\x01 \x01(\tR\x05image\x12\x18\n" +
 	"\acommand\x18\x02 \x03(\tR\acommand\x12\x12\n" +
@@ -1932,7 +2172,9 @@ const file_agent_proto_rawDesc = "" +
 	"\x05ports\x18\x06 \x03(\v2\x1c.persys.agent.v1.PortMappingR\x05ports\x12=\n" +
 	"\tresources\x18\a \x01(\v2\x1f.persys.agent.v1.ResourceLimitsR\tresources\x12E\n" +
 	"\x0erestart_policy\x18\b \x01(\v2\x1e.persys.agent.v1.RestartPolicyR\rrestartPolicy\x12B\n" +
-	"\x06labels\x18\t \x03(\v2*.persys.agent.v1.ContainerSpec.LabelsEntryR\x06labels\x1a6\n" +
+	"\x06labels\x18\t \x03(\v2*.persys.agent.v1.ContainerSpec.LabelsEntryR\x06labels\x12K\n" +
+	"\x0fmanaged_volumes\x18\n" +
+	" \x03(\v2\".persys.agent.v1.ManagedVolumeSpecR\x0emanagedVolumes\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a9\n" +
@@ -1945,7 +2187,7 @@ const file_agent_proto_rawDesc = "" +
 	"\x03env\x18\x03 \x03(\v2%.persys.agent.v1.ComposeSpec.EnvEntryR\x03env\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xab\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf8\x03\n" +
 	"\x06VMSpec\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05vcpus\x18\x02 \x01(\x05R\x05vcpus\x12\x1b\n" +
@@ -1955,7 +2197,8 @@ const file_agent_proto_rawDesc = "" +
 	"\n" +
 	"cloud_init\x18\x06 \x01(\tR\tcloudInit\x12A\n" +
 	"\bmetadata\x18\a \x03(\v2%.persys.agent.v1.VMSpec.MetadataEntryR\bmetadata\x12L\n" +
-	"\x11cloud_init_config\x18\b \x01(\v2 .persys.agent.v1.CloudInitConfigR\x0fcloudInitConfig\x1a;\n" +
+	"\x11cloud_init_config\x18\b \x01(\v2 .persys.agent.v1.CloudInitConfigR\x0fcloudInitConfig\x12K\n" +
+	"\x0fmanaged_volumes\x18\t \x03(\v2\".persys.agent.v1.ManagedVolumeSpecR\x0emanagedVolumes\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x93\x01\n" +
@@ -1964,7 +2207,18 @@ const file_agent_proto_rawDesc = "" +
 	"\tmeta_data\x18\x02 \x01(\tR\bmetaData\x12%\n" +
 	"\x0enetwork_config\x18\x03 \x01(\tR\rnetworkConfig\x12\x1f\n" +
 	"\vvendor_data\x18\x04 \x01(\tR\n" +
-	"vendorData\"n\n" +
+	"vendorData\"\xf3\x01\n" +
+	"\x11ManagedVolumeSpec\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
+	"\x06driver\x18\x02 \x01(\tR\x06driver\x12\x17\n" +
+	"\asize_gb\x18\x03 \x01(\x03R\x06sizeGb\x12\x1f\n" +
+	"\vaccess_mode\x18\x04 \x01(\tR\n" +
+	"accessMode\x12\x17\n" +
+	"\afs_type\x18\x05 \x01(\tR\x06fsType\x12\x1d\n" +
+	"\n" +
+	"mount_path\x18\x06 \x01(\tR\tmountPath\x12\x1b\n" +
+	"\tread_only\x18\a \x01(\bR\breadOnly\x12#\n" +
+	"\rretain_policy\x18\b \x01(\tR\fretainPolicy\"n\n" +
 	"\vVolumeMount\x12\x1b\n" +
 	"\thost_path\x18\x01 \x01(\tR\bhostPath\x12%\n" +
 	"\x0econtainer_path\x18\x02 \x01(\tR\rcontainerPath\x12\x1b\n" +
@@ -1994,7 +2248,7 @@ const file_agent_proto_rawDesc = "" +
 	"\vmac_address\x18\x02 \x01(\tR\n" +
 	"macAddress\x12\x1d\n" +
 	"\n" +
-	"ip_address\x18\x03 \x01(\tR\tipAddress\"\xd9\x03\n" +
+	"ip_address\x18\x03 \x01(\tR\tipAddress\"\x97\x04\n" +
 	"\x0eWorkloadStatus\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x121\n" +
 	"\x04type\x18\x02 \x01(\x0e2\x1d.persys.agent.v1.WorkloadTypeR\x04type\x12\x1f\n" +
@@ -2007,10 +2261,28 @@ const file_agent_proto_rawDesc = "" +
 	"created_at\x18\a \x01(\x03R\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\b \x01(\x03R\tupdatedAt\x12I\n" +
-	"\bmetadata\x18\t \x03(\v2-.persys.agent.v1.WorkloadStatus.MetadataEntryR\bmetadata\x1a;\n" +
+	"\bmetadata\x18\t \x03(\v2-.persys.agent.v1.WorkloadStatus.MetadataEntryR\bmetadata\x12<\n" +
+	"\x05usage\x18\n" +
+	" \x01(\v2&.persys.agent.v1.WorkloadUsageSnapshotR\x05usage\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*{\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x80\x03\n" +
+	"\x15WorkloadUsageSnapshot\x12\x1f\n" +
+	"\vworkload_id\x18\x01 \x01(\tR\n" +
+	"workloadId\x121\n" +
+	"\x04type\x18\x02 \x01(\x0e2\x1d.persys.agent.v1.WorkloadTypeR\x04type\x12\x1f\n" +
+	"\vcpu_percent\x18\x03 \x01(\x01R\n" +
+	"cpuPercent\x12!\n" +
+	"\fmemory_bytes\x18\x04 \x01(\x03R\vmemoryBytes\x12&\n" +
+	"\x0fdisk_read_bytes\x18\x05 \x01(\x03R\rdiskReadBytes\x12(\n" +
+	"\x10disk_write_bytes\x18\x06 \x01(\x03R\x0ediskWriteBytes\x12 \n" +
+	"\fnet_rx_bytes\x18\a \x01(\x03R\n" +
+	"netRxBytes\x12 \n" +
+	"\fnet_tx_bytes\x18\b \x01(\x03R\n" +
+	"netTxBytes\x12!\n" +
+	"\fcollected_at\x18\t \x01(\x03R\vcollectedAt\x12\x16\n" +
+	"\x06source\x18\n" +
+	" \x01(\tR\x06source*{\n" +
 	"\fWorkloadType\x12\x1d\n" +
 	"\x19WORKLOAD_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17WORKLOAD_TYPE_CONTAINER\x10\x01\x12\x19\n" +
@@ -2033,7 +2305,7 @@ const file_agent_proto_rawDesc = "" +
 	"\x11GetWorkloadStatus\x12).persys.agent.v1.GetWorkloadStatusRequest\x1a*.persys.agent.v1.GetWorkloadStatusResponse\x12^\n" +
 	"\rListWorkloads\x12%.persys.agent.v1.ListWorkloadsRequest\x1a&.persys.agent.v1.ListWorkloadsResponse\x12X\n" +
 	"\vHealthCheck\x12#.persys.agent.v1.HealthCheckRequest\x1a$.persys.agent.v1.HealthCheckResponse\x12X\n" +
-	"\vListActions\x12#.persys.agent.v1.ListActionsRequest\x1a$.persys.agent.v1.ListActionsResponseB/Z-github.com/persys/compute-agent/pkg/api/v1;v1b\x06proto3"
+	"\vListActions\x12#.persys.agent.v1.ListActionsRequest\x1a$.persys.agent.v1.ListActionsResponseB3Z1github.com/persys-dev/compute-agent/pkg/api/v1;v1b\x06proto3"
 
 var (
 	file_agent_proto_rawDescOnce sync.Once
@@ -2048,7 +2320,7 @@ func file_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
+var file_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_agent_proto_goTypes = []any{
 	(WorkloadType)(0),                 // 0: persys.agent.v1.WorkloadType
 	(DesiredState)(0),                 // 1: persys.agent.v1.DesiredState
@@ -2071,65 +2343,71 @@ var file_agent_proto_goTypes = []any{
 	(*ComposeSpec)(nil),               // 18: persys.agent.v1.ComposeSpec
 	(*VMSpec)(nil),                    // 19: persys.agent.v1.VMSpec
 	(*CloudInitConfig)(nil),           // 20: persys.agent.v1.CloudInitConfig
-	(*VolumeMount)(nil),               // 21: persys.agent.v1.VolumeMount
-	(*PortMapping)(nil),               // 22: persys.agent.v1.PortMapping
-	(*ResourceLimits)(nil),            // 23: persys.agent.v1.ResourceLimits
-	(*RestartPolicy)(nil),             // 24: persys.agent.v1.RestartPolicy
-	(*DiskConfig)(nil),                // 25: persys.agent.v1.DiskConfig
-	(*NetworkConfig)(nil),             // 26: persys.agent.v1.NetworkConfig
-	(*WorkloadStatus)(nil),            // 27: persys.agent.v1.WorkloadStatus
-	nil,                               // 28: persys.agent.v1.HealthCheckResponse.RuntimeStatusEntry
-	nil,                               // 29: persys.agent.v1.ContainerSpec.EnvEntry
-	nil,                               // 30: persys.agent.v1.ContainerSpec.LabelsEntry
-	nil,                               // 31: persys.agent.v1.ComposeSpec.EnvEntry
-	nil,                               // 32: persys.agent.v1.VMSpec.MetadataEntry
-	nil,                               // 33: persys.agent.v1.WorkloadStatus.MetadataEntry
+	(*ManagedVolumeSpec)(nil),         // 21: persys.agent.v1.ManagedVolumeSpec
+	(*VolumeMount)(nil),               // 22: persys.agent.v1.VolumeMount
+	(*PortMapping)(nil),               // 23: persys.agent.v1.PortMapping
+	(*ResourceLimits)(nil),            // 24: persys.agent.v1.ResourceLimits
+	(*RestartPolicy)(nil),             // 25: persys.agent.v1.RestartPolicy
+	(*DiskConfig)(nil),                // 26: persys.agent.v1.DiskConfig
+	(*NetworkConfig)(nil),             // 27: persys.agent.v1.NetworkConfig
+	(*WorkloadStatus)(nil),            // 28: persys.agent.v1.WorkloadStatus
+	(*WorkloadUsageSnapshot)(nil),     // 29: persys.agent.v1.WorkloadUsageSnapshot
+	nil,                               // 30: persys.agent.v1.HealthCheckResponse.RuntimeStatusEntry
+	nil,                               // 31: persys.agent.v1.ContainerSpec.EnvEntry
+	nil,                               // 32: persys.agent.v1.ContainerSpec.LabelsEntry
+	nil,                               // 33: persys.agent.v1.ComposeSpec.EnvEntry
+	nil,                               // 34: persys.agent.v1.VMSpec.MetadataEntry
+	nil,                               // 35: persys.agent.v1.WorkloadStatus.MetadataEntry
 }
 var file_agent_proto_depIdxs = []int32{
 	0,  // 0: persys.agent.v1.ApplyWorkloadRequest.type:type_name -> persys.agent.v1.WorkloadType
 	1,  // 1: persys.agent.v1.ApplyWorkloadRequest.desired_state:type_name -> persys.agent.v1.DesiredState
 	16, // 2: persys.agent.v1.ApplyWorkloadRequest.spec:type_name -> persys.agent.v1.WorkloadSpec
-	27, // 3: persys.agent.v1.ApplyWorkloadResponse.status:type_name -> persys.agent.v1.WorkloadStatus
-	27, // 4: persys.agent.v1.GetWorkloadStatusResponse.status:type_name -> persys.agent.v1.WorkloadStatus
+	28, // 3: persys.agent.v1.ApplyWorkloadResponse.status:type_name -> persys.agent.v1.WorkloadStatus
+	28, // 4: persys.agent.v1.GetWorkloadStatusResponse.status:type_name -> persys.agent.v1.WorkloadStatus
 	0,  // 5: persys.agent.v1.ListWorkloadsRequest.type:type_name -> persys.agent.v1.WorkloadType
-	27, // 6: persys.agent.v1.ListWorkloadsResponse.workloads:type_name -> persys.agent.v1.WorkloadStatus
-	28, // 7: persys.agent.v1.HealthCheckResponse.runtime_status:type_name -> persys.agent.v1.HealthCheckResponse.RuntimeStatusEntry
+	28, // 6: persys.agent.v1.ListWorkloadsResponse.workloads:type_name -> persys.agent.v1.WorkloadStatus
+	30, // 7: persys.agent.v1.HealthCheckResponse.runtime_status:type_name -> persys.agent.v1.HealthCheckResponse.RuntimeStatusEntry
 	14, // 8: persys.agent.v1.ListActionsResponse.actions:type_name -> persys.agent.v1.AgentAction
 	17, // 9: persys.agent.v1.WorkloadSpec.container:type_name -> persys.agent.v1.ContainerSpec
 	18, // 10: persys.agent.v1.WorkloadSpec.compose:type_name -> persys.agent.v1.ComposeSpec
 	19, // 11: persys.agent.v1.WorkloadSpec.vm:type_name -> persys.agent.v1.VMSpec
-	29, // 12: persys.agent.v1.ContainerSpec.env:type_name -> persys.agent.v1.ContainerSpec.EnvEntry
-	21, // 13: persys.agent.v1.ContainerSpec.volumes:type_name -> persys.agent.v1.VolumeMount
-	22, // 14: persys.agent.v1.ContainerSpec.ports:type_name -> persys.agent.v1.PortMapping
-	23, // 15: persys.agent.v1.ContainerSpec.resources:type_name -> persys.agent.v1.ResourceLimits
-	24, // 16: persys.agent.v1.ContainerSpec.restart_policy:type_name -> persys.agent.v1.RestartPolicy
-	30, // 17: persys.agent.v1.ContainerSpec.labels:type_name -> persys.agent.v1.ContainerSpec.LabelsEntry
-	31, // 18: persys.agent.v1.ComposeSpec.env:type_name -> persys.agent.v1.ComposeSpec.EnvEntry
-	25, // 19: persys.agent.v1.VMSpec.disks:type_name -> persys.agent.v1.DiskConfig
-	26, // 20: persys.agent.v1.VMSpec.networks:type_name -> persys.agent.v1.NetworkConfig
-	32, // 21: persys.agent.v1.VMSpec.metadata:type_name -> persys.agent.v1.VMSpec.MetadataEntry
-	20, // 22: persys.agent.v1.VMSpec.cloud_init_config:type_name -> persys.agent.v1.CloudInitConfig
-	0,  // 23: persys.agent.v1.WorkloadStatus.type:type_name -> persys.agent.v1.WorkloadType
-	1,  // 24: persys.agent.v1.WorkloadStatus.desired_state:type_name -> persys.agent.v1.DesiredState
-	2,  // 25: persys.agent.v1.WorkloadStatus.actual_state:type_name -> persys.agent.v1.ActualState
-	33, // 26: persys.agent.v1.WorkloadStatus.metadata:type_name -> persys.agent.v1.WorkloadStatus.MetadataEntry
-	3,  // 27: persys.agent.v1.AgentService.ApplyWorkload:input_type -> persys.agent.v1.ApplyWorkloadRequest
-	5,  // 28: persys.agent.v1.AgentService.DeleteWorkload:input_type -> persys.agent.v1.DeleteWorkloadRequest
-	7,  // 29: persys.agent.v1.AgentService.GetWorkloadStatus:input_type -> persys.agent.v1.GetWorkloadStatusRequest
-	9,  // 30: persys.agent.v1.AgentService.ListWorkloads:input_type -> persys.agent.v1.ListWorkloadsRequest
-	11, // 31: persys.agent.v1.AgentService.HealthCheck:input_type -> persys.agent.v1.HealthCheckRequest
-	13, // 32: persys.agent.v1.AgentService.ListActions:input_type -> persys.agent.v1.ListActionsRequest
-	4,  // 33: persys.agent.v1.AgentService.ApplyWorkload:output_type -> persys.agent.v1.ApplyWorkloadResponse
-	6,  // 34: persys.agent.v1.AgentService.DeleteWorkload:output_type -> persys.agent.v1.DeleteWorkloadResponse
-	8,  // 35: persys.agent.v1.AgentService.GetWorkloadStatus:output_type -> persys.agent.v1.GetWorkloadStatusResponse
-	10, // 36: persys.agent.v1.AgentService.ListWorkloads:output_type -> persys.agent.v1.ListWorkloadsResponse
-	12, // 37: persys.agent.v1.AgentService.HealthCheck:output_type -> persys.agent.v1.HealthCheckResponse
-	15, // 38: persys.agent.v1.AgentService.ListActions:output_type -> persys.agent.v1.ListActionsResponse
-	33, // [33:39] is the sub-list for method output_type
-	27, // [27:33] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	31, // 12: persys.agent.v1.ContainerSpec.env:type_name -> persys.agent.v1.ContainerSpec.EnvEntry
+	22, // 13: persys.agent.v1.ContainerSpec.volumes:type_name -> persys.agent.v1.VolumeMount
+	23, // 14: persys.agent.v1.ContainerSpec.ports:type_name -> persys.agent.v1.PortMapping
+	24, // 15: persys.agent.v1.ContainerSpec.resources:type_name -> persys.agent.v1.ResourceLimits
+	25, // 16: persys.agent.v1.ContainerSpec.restart_policy:type_name -> persys.agent.v1.RestartPolicy
+	32, // 17: persys.agent.v1.ContainerSpec.labels:type_name -> persys.agent.v1.ContainerSpec.LabelsEntry
+	21, // 18: persys.agent.v1.ContainerSpec.managed_volumes:type_name -> persys.agent.v1.ManagedVolumeSpec
+	33, // 19: persys.agent.v1.ComposeSpec.env:type_name -> persys.agent.v1.ComposeSpec.EnvEntry
+	26, // 20: persys.agent.v1.VMSpec.disks:type_name -> persys.agent.v1.DiskConfig
+	27, // 21: persys.agent.v1.VMSpec.networks:type_name -> persys.agent.v1.NetworkConfig
+	34, // 22: persys.agent.v1.VMSpec.metadata:type_name -> persys.agent.v1.VMSpec.MetadataEntry
+	20, // 23: persys.agent.v1.VMSpec.cloud_init_config:type_name -> persys.agent.v1.CloudInitConfig
+	21, // 24: persys.agent.v1.VMSpec.managed_volumes:type_name -> persys.agent.v1.ManagedVolumeSpec
+	0,  // 25: persys.agent.v1.WorkloadStatus.type:type_name -> persys.agent.v1.WorkloadType
+	1,  // 26: persys.agent.v1.WorkloadStatus.desired_state:type_name -> persys.agent.v1.DesiredState
+	2,  // 27: persys.agent.v1.WorkloadStatus.actual_state:type_name -> persys.agent.v1.ActualState
+	35, // 28: persys.agent.v1.WorkloadStatus.metadata:type_name -> persys.agent.v1.WorkloadStatus.MetadataEntry
+	29, // 29: persys.agent.v1.WorkloadStatus.usage:type_name -> persys.agent.v1.WorkloadUsageSnapshot
+	0,  // 30: persys.agent.v1.WorkloadUsageSnapshot.type:type_name -> persys.agent.v1.WorkloadType
+	3,  // 31: persys.agent.v1.AgentService.ApplyWorkload:input_type -> persys.agent.v1.ApplyWorkloadRequest
+	5,  // 32: persys.agent.v1.AgentService.DeleteWorkload:input_type -> persys.agent.v1.DeleteWorkloadRequest
+	7,  // 33: persys.agent.v1.AgentService.GetWorkloadStatus:input_type -> persys.agent.v1.GetWorkloadStatusRequest
+	9,  // 34: persys.agent.v1.AgentService.ListWorkloads:input_type -> persys.agent.v1.ListWorkloadsRequest
+	11, // 35: persys.agent.v1.AgentService.HealthCheck:input_type -> persys.agent.v1.HealthCheckRequest
+	13, // 36: persys.agent.v1.AgentService.ListActions:input_type -> persys.agent.v1.ListActionsRequest
+	4,  // 37: persys.agent.v1.AgentService.ApplyWorkload:output_type -> persys.agent.v1.ApplyWorkloadResponse
+	6,  // 38: persys.agent.v1.AgentService.DeleteWorkload:output_type -> persys.agent.v1.DeleteWorkloadResponse
+	8,  // 39: persys.agent.v1.AgentService.GetWorkloadStatus:output_type -> persys.agent.v1.GetWorkloadStatusResponse
+	10, // 40: persys.agent.v1.AgentService.ListWorkloads:output_type -> persys.agent.v1.ListWorkloadsResponse
+	12, // 41: persys.agent.v1.AgentService.HealthCheck:output_type -> persys.agent.v1.HealthCheckResponse
+	15, // 42: persys.agent.v1.AgentService.ListActions:output_type -> persys.agent.v1.ListActionsResponse
+	37, // [37:43] is the sub-list for method output_type
+	31, // [31:37] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_agent_proto_init() }
@@ -2148,7 +2426,7 @@ func file_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_agent_proto_rawDesc), len(file_agent_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   31,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

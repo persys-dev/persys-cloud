@@ -13,6 +13,7 @@ import (
 	cfgpkg "github.com/persys-dev/persys-cloud/persys-scheduler/internal/config"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/logging"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/models"
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
@@ -31,6 +32,7 @@ var schedulerLogger = logging.C("scheduler.core")
 type Scheduler struct {
 	cfg              *cfgpkg.Config
 	etcdClient       *clientv3.Client
+	redisClient      *redis.Client
 	domain           string
 	agentsDomain     string
 	schedulerShard   string
@@ -86,6 +88,7 @@ func NewScheduler(cfg *cfgpkg.Config) (*Scheduler, error) {
 	}
 
 	// Initialize monitor and reconciler
+	scheduler.initRedisStore()
 	scheduler.monitor = NewMonitor(scheduler)
 	scheduler.reconciler = NewReconciler(scheduler, scheduler.monitor)
 
@@ -95,7 +98,10 @@ func NewScheduler(cfg *cfgpkg.Config) (*Scheduler, error) {
 // Close shuts down the scheduler gracefully.
 func (s *Scheduler) Close() error {
 	if s.etcdClient != nil {
-		return s.etcdClient.Close()
+		_ = s.etcdClient.Close()
+	}
+	if s.redisClient != nil {
+		_ = s.redisClient.Close()
 	}
 	return nil
 }
@@ -131,15 +137,16 @@ func (s *Scheduler) RegisterNode(node models.Node) error {
 	node.Labels["scheduler_shard"] = s.schedulerShard
 
 	schedulerLogger.WithFields(logrus.Fields{
-		"node_id":          node.NodeID,
-		"endpoint":         node.AgentEndpoint,
-		"status":           node.Status,
-		"scheduler_shard":  s.cfg.SchedulerShardKey,
-		"supported_types":  node.SupportedWorkloadTypes,
-		"total_cpu":        node.TotalCPU,
-		"total_memory_mb":  node.TotalMemory,
-		"available_cpu":    node.AvailableCPU,
-		"available_memory": node.AvailableMemory,
+		"node_id":           node.NodeID,
+		"endpoint":          node.AgentEndpoint,
+		"status":            node.Status,
+		"scheduler_shard":   s.cfg.SchedulerShardKey,
+		"supported_types":   node.SupportedWorkloadTypes,
+		"supported_storage": node.SupportedStorageDrivers,
+		"total_cpu":         node.TotalCPU,
+		"total_memory_mb":   node.TotalMemory,
+		"available_cpu":     node.AvailableCPU,
+		"available_memory":  node.AvailableMemory,
 	}).Info("registering node")
 
 	nodeJSON, err := json.Marshal(node)
@@ -228,6 +235,72 @@ func nodeSupportsWorkloadType(node models.Node, workloadType string) bool {
 	return true
 }
 
+func requiredStorageDrivers(workload models.Workload) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0)
+	add := func(driver string) {
+		canon := strings.ToLower(strings.TrimSpace(driver))
+		switch canon {
+		case "":
+			return
+		case "ceph_rbd":
+			canon = "ceph-rbd"
+		}
+		if _, ok := seen[canon]; ok {
+			return
+		}
+		seen[canon] = struct{}{}
+		out = append(out, canon)
+	}
+	for _, mv := range workload.ManagedVolumes {
+		add(mv.Driver)
+	}
+	if workload.VM != nil {
+		for _, mv := range workload.VM.ManagedVolumes {
+			add(mv.Driver)
+		}
+	}
+	return out
+}
+
+func nodeSupportsStorageDrivers(node models.Node, required []string) bool {
+	if len(required) == 0 {
+		return true
+	}
+	supported := make(map[string]struct{}, len(node.SupportedStorageDrivers)+1)
+	supported["local"] = struct{}{}
+	for _, driver := range node.SupportedStorageDrivers {
+		canon := strings.ToLower(strings.TrimSpace(driver))
+		if canon == "" {
+			continue
+		}
+		supported[canon] = struct{}{}
+	}
+	for k, v := range node.Labels {
+		if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(k)), "storage.") {
+			continue
+		}
+		if !strings.EqualFold(strings.TrimSpace(v), "true") {
+			continue
+		}
+		driver := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(k)), "storage.")
+		switch driver {
+		case "ceph_rbd":
+			driver = "ceph-rbd"
+		}
+		if driver != "" {
+			supported[driver] = struct{}{}
+		}
+	}
+
+	for _, needed := range required {
+		if _, ok := supported[strings.ToLower(strings.TrimSpace(needed))]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 func isNodeStatusSubKey(key string) bool {
 	return strings.HasSuffix(key, "/status")
 }
@@ -246,6 +319,7 @@ func (s *Scheduler) selectNodeForWorkload(workload models.Workload) (models.Node
 
 	candidates := make([]models.Node, 0)
 	rejections := make([]string, 0)
+	neededStorageDrivers := requiredStorageDrivers(workload)
 	for _, kv := range resp.Kvs {
 		if isNodeStatusSubKey(string(kv.Key)) {
 			continue
@@ -273,6 +347,10 @@ func (s *Scheduler) selectNodeForWorkload(workload models.Workload) (models.Node
 		}
 		if !nodeSupportsWorkloadType(node, workload.Type) {
 			rejections = append(rejections, fmt.Sprintf("%s: workload_type_unsupported need=%s supports=%v", node.NodeID, canonicalWorkloadType(workload.Type), node.SupportedWorkloadTypes))
+			continue
+		}
+		if !nodeSupportsStorageDrivers(node, neededStorageDrivers) {
+			rejections = append(rejections, fmt.Sprintf("%s: storage_driver_unsupported need=%v supports=%v", node.NodeID, neededStorageDrivers, node.SupportedStorageDrivers))
 			continue
 		}
 		if workload.Resources.CPUUsage > 0 && node.AvailableCPU < workload.Resources.CPUUsage {
@@ -491,7 +569,7 @@ func (s *Scheduler) DeleteNode(nodeID string) error {
 
 // GetWorkloads retrieves all workloads from etcd.
 func (s *Scheduler) GetWorkloads() ([]models.Workload, error) {
-	resp, err := s.RetryableEtcdGet("/workloads/", clientv3.WithPrefix())
+	specResp, err := s.RetryableEtcdGet(workloadSpecPrefix, clientv3.WithPrefix())
 	if err != nil {
 		if s.currentMode() != ModeNormal {
 			return s.getCachedWorkloads(), nil
@@ -500,15 +578,42 @@ func (s *Scheduler) GetWorkloads() ([]models.Workload, error) {
 	}
 
 	workloads := make([]models.Workload, 0)
-	if resp == nil {
+	if specResp == nil {
 		return workloads, nil
 	}
 
-	for _, kv := range resp.Kvs {
-		var workload models.Workload
-		if err := json.Unmarshal(kv.Value, &workload); err != nil {
-			schedulerLogger.WithError(err).WithField("key", string(kv.Key)).Warn("failed to unmarshal workload data")
+	statusResp, _ := s.RetryableEtcdGet(workloadStatusPrefix, clientv3.WithPrefix())
+	statusMap := map[string]workloadStatus{}
+	if statusResp != nil {
+		for _, kv := range statusResp.Kvs {
+			var st workloadStatus
+			if err := json.Unmarshal(kv.Value, &st); err == nil {
+				statusMap[st.ID] = st
+			}
+		}
+	}
+
+	for _, kv := range specResp.Kvs {
+		var spec workloadSpec
+		if err := json.Unmarshal(kv.Value, &spec); err != nil {
+			schedulerLogger.WithError(err).WithField("key", string(kv.Key)).Warn("failed to unmarshal workload spec data")
 			continue
+		}
+		workload := models.Workload{
+			ID: spec.ID, Name: spec.Name, Type: spec.Type, RevisionID: spec.RevisionID, Image: spec.Image, Command: spec.Command,
+			CommandList: spec.CommandList, Compose: spec.Compose, ComposeYAML: spec.ComposeYAML, ProjectName: spec.ProjectName,
+			GitRepo: spec.GitRepo, GitBranch: spec.GitBranch, GitToken: spec.GitToken, EnvVars: spec.EnvVars, Resources: spec.Resources,
+			DesiredState: spec.DesiredState, Labels: spec.Labels, LocalPath: spec.LocalPath, Ports: spec.Ports, Volumes: spec.Volumes,
+			Network: spec.Network, RestartPolicy: spec.RestartPolicy, VM: spec.VM,
+		}
+		if st, ok := statusMap[workload.ID]; ok {
+			workload.AssignedNode = st.AssignedNode
+			workload.NodeID = st.NodeID
+			workload.Status = st.Status
+			workload.Logs = st.Logs
+			workload.Metadata = st.Metadata
+			workload.Retry = st.Retry
+			workload.StatusInfo = st.StatusInfo
 		}
 		workloads = append(workloads, workload)
 	}
@@ -529,7 +634,7 @@ func (s *Scheduler) GetWorkloads() ([]models.Workload, error) {
 
 // GetWorkloadByID retrieves a specific workload by ID.
 func (s *Scheduler) GetWorkloadByID(workloadID string) (models.Workload, error) {
-	resp, err := s.RetryableEtcdGet("/workloads/" + workloadID)
+	specResp, err := s.RetryableEtcdGet(workloadSpecKey(workloadID))
 	if err != nil {
 		if s.currentMode() != ModeNormal {
 			if workload, ok := s.getCachedWorkload(workloadID); ok {
@@ -539,13 +644,46 @@ func (s *Scheduler) GetWorkloadByID(workloadID string) (models.Workload, error) 
 		return models.Workload{}, fmt.Errorf("failed to get workload %s: %v", workloadID, err)
 	}
 
-	if len(resp.Kvs) == 0 {
-		return models.Workload{}, fmt.Errorf("workload %s not found", workloadID)
+	if specResp == nil || len(specResp.Kvs) == 0 {
+		// compatibility shim for legacy persisted full objects.
+		resp, legacyErr := s.RetryableEtcdGet("/workloads/" + workloadID)
+		if legacyErr != nil || len(resp.Kvs) == 0 {
+			return models.Workload{}, fmt.Errorf("workload %s not found", workloadID)
+		}
+		var legacy models.Workload
+		if err := json.Unmarshal(resp.Kvs[0].Value, &legacy); err != nil {
+			return models.Workload{}, fmt.Errorf("failed to unmarshal legacy workload %s: %v", workloadID, err)
+		}
+		s.cacheWorkload(legacy)
+		return legacy, nil
 	}
 
-	var workload models.Workload
-	if err := json.Unmarshal(resp.Kvs[0].Value, &workload); err != nil {
-		return models.Workload{}, fmt.Errorf("failed to unmarshal workload %s: %v", workloadID, err)
+	var spec workloadSpec
+	if err := json.Unmarshal(specResp.Kvs[0].Value, &spec); err != nil {
+		return models.Workload{}, fmt.Errorf("failed to unmarshal workload spec %s: %v", workloadID, err)
+	}
+
+	statusResp, _ := s.RetryableEtcdGet(workloadStatusKey(workloadID))
+	var st workloadStatus
+	if statusResp != nil && len(statusResp.Kvs) > 0 {
+		_ = json.Unmarshal(statusResp.Kvs[0].Value, &st)
+	}
+
+	workload := models.Workload{
+		ID: spec.ID, Name: spec.Name, Type: spec.Type, RevisionID: spec.RevisionID, Image: spec.Image, Command: spec.Command,
+		CommandList: spec.CommandList, Compose: spec.Compose, ComposeYAML: spec.ComposeYAML, ProjectName: spec.ProjectName,
+		GitRepo: spec.GitRepo, GitBranch: spec.GitBranch, GitToken: spec.GitToken, EnvVars: spec.EnvVars, Resources: spec.Resources,
+		DesiredState: spec.DesiredState, Labels: spec.Labels, LocalPath: spec.LocalPath, Ports: spec.Ports, Volumes: spec.Volumes,
+		Network: spec.Network, RestartPolicy: spec.RestartPolicy, VM: spec.VM,
+	}
+	if st.ID != "" {
+		workload.AssignedNode = st.AssignedNode
+		workload.NodeID = st.NodeID
+		workload.Status = st.Status
+		workload.Logs = st.Logs
+		workload.Metadata = st.Metadata
+		workload.Retry = st.Retry
+		workload.StatusInfo = st.StatusInfo
 	}
 	s.cacheWorkload(workload)
 
@@ -561,6 +699,13 @@ func (s *Scheduler) DeleteWorkloadWithContext(ctx context.Context, workloadID st
 		ctx = context.Background()
 	}
 	workload, err := s.GetWorkloadByID(workloadID)
+	if err == nil {
+		if shouldSyncManagedStorage(workload) {
+			if err := s.cleanupManagedStorageForWorkload(workloadID); err != nil {
+				return fmt.Errorf("failed to cleanup managed storage state for workload %s: %v", workloadID, err)
+			}
+		}
+	}
 	if err == nil && workload.NodeID != "" {
 		node, nodeErr := s.GetNodeByID(workload.NodeID)
 		if nodeErr == nil {
@@ -591,9 +736,11 @@ func (s *Scheduler) DeleteWorkloadWithContext(ctx context.Context, workloadID st
 		}
 	}
 
-	if err := s.RetryableEtcdDelete("/workloads/" + workloadID); err != nil {
+	if err := s.RetryableEtcdDelete(workloadSpecKey(workloadID)); err != nil {
 		return fmt.Errorf("failed to delete workload %s: %v", workloadID, err)
 	}
+	_ = s.RetryableEtcdDelete(workloadStatusKey(workloadID))
+	_ = s.RetryableEtcdDelete("/workloads/" + workloadID)
 	_ = s.RetryableEtcdDelete(assignmentKey(workloadID))
 	_ = s.RetryableEtcdDelete(retryKey(workloadID))
 	_ = s.RetryableEtcdDelete(reconciliationKey(workloadID))
@@ -616,6 +763,10 @@ func (s *Scheduler) UpdateWorkloadStatus(workloadID, status string) error {
 	workload, err := s.GetWorkloadByID(workloadID)
 	if err != nil {
 		return err
+	}
+
+	if strings.EqualFold(workload.Status, status) && strings.EqualFold(workload.StatusInfo.ActualState, status) {
+		return nil
 	}
 
 	workload.Status = status
@@ -652,6 +803,10 @@ func (s *Scheduler) UpdateWorkloadLogs(workloadID, logs string) error {
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 	logEntry := fmt.Sprintf("[%s] %s\n", timestamp, logs)
 
+	if strings.TrimSpace(logs) == "" {
+		return nil
+	}
+
 	if workload.Logs == "" {
 		workload.Logs = logEntry
 	} else {
@@ -681,16 +836,90 @@ func (s *Scheduler) UpdateWorkloadMetadata(workloadID string, metadata map[strin
 	if workload.Metadata == nil {
 		workload.Metadata = map[string]interface{}{}
 	}
+	changed := false
 	for k, v := range metadata {
 		key := strings.TrimSpace(k)
 		if key == "" {
 			continue
 		}
-		workload.Metadata[key] = strings.TrimSpace(v)
+		cleanVal := strings.TrimSpace(v)
+		if existing, ok := workload.Metadata[key]; !ok || fmt.Sprintf("%v", existing) != cleanVal {
+			changed = true
+		}
+		workload.Metadata[key] = cleanVal
+		if key == "container.stderr" || key == "container.runtime_error" {
+			if cleanVal != "" {
+				workload.Metadata["last_runtime_error"] = cleanVal
+				if strings.TrimSpace(workload.StatusInfo.FailureReason) == "" || isInfrastructureFailureReason(workload.StatusInfo.FailureReason) {
+					workload.StatusInfo.FailureReason = cleanVal
+				}
+			}
+		}
+	}
+	if !changed {
+		return nil
 	}
 	workload.StatusInfo.LastUpdated = time.Now().UTC()
 	if err := s.saveWorkload(workload); err != nil {
 		return fmt.Errorf("failed to update workload %s metadata: %v", workloadID, err)
+	}
+	return nil
+}
+
+// UpdateWorkloadRuntimeDetails stores structured reason and latest usage for a workload.
+func (s *Scheduler) UpdateWorkloadRuntimeDetails(workloadID string, reason *models.WorkloadReason, usage *models.WorkloadUsage) error {
+	if err := s.requireWritable(); err != nil {
+		return err
+	}
+	workload, err := s.GetWorkloadByID(workloadID)
+	if err != nil {
+		return err
+	}
+	if workload.Metadata == nil {
+		workload.Metadata = map[string]interface{}{}
+	}
+
+	if reason != nil {
+		copied := *reason
+		workload.StatusInfo.Reason = &copied
+		if strings.TrimSpace(copied.Message) != "" {
+			workload.StatusInfo.FailureReason = copied.Message
+		}
+		if strings.TrimSpace(copied.Code) != "" {
+			workload.Metadata["reason_code"] = copied.Code
+		}
+		if strings.TrimSpace(copied.Message) != "" {
+			workload.Metadata["reason_message"] = copied.Message
+		}
+		if !copied.LastTransition.IsZero() {
+			workload.Metadata["reason_last_transition"] = copied.LastTransition.UTC().Format(time.RFC3339)
+		}
+		if !copied.NextRetryAt.IsZero() {
+			workload.Metadata["reason_next_retry_at"] = copied.NextRetryAt.UTC().Format(time.RFC3339)
+		}
+		workload.Metadata["reason_retryable"] = fmt.Sprintf("%t", copied.Retryable)
+	}
+
+	if usage != nil {
+		copied := *usage
+		workload.Usage = &copied
+		workload.Metadata["usage_cpu_percent"] = fmt.Sprintf("%.4f", copied.CPUPercent)
+		workload.Metadata["usage_memory_bytes"] = fmt.Sprintf("%d", copied.MemoryBytes)
+		workload.Metadata["usage_disk_read_bytes"] = fmt.Sprintf("%d", copied.DiskReadBytes)
+		workload.Metadata["usage_disk_write_bytes"] = fmt.Sprintf("%d", copied.DiskWriteBytes)
+		workload.Metadata["usage_net_rx_bytes"] = fmt.Sprintf("%d", copied.NetRXBytes)
+		workload.Metadata["usage_net_tx_bytes"] = fmt.Sprintf("%d", copied.NetTXBytes)
+		if !copied.CollectedAt.IsZero() {
+			workload.Metadata["usage_collected_at"] = copied.CollectedAt.UTC().Format(time.RFC3339)
+		}
+		if strings.TrimSpace(copied.Source) != "" {
+			workload.Metadata["usage_source"] = copied.Source
+		}
+	}
+
+	workload.StatusInfo.LastUpdated = time.Now().UTC()
+	if err := s.saveWorkload(workload); err != nil {
+		return fmt.Errorf("failed to update workload %s runtime details: %v", workloadID, err)
 	}
 	return nil
 }

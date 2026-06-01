@@ -3,7 +3,7 @@
     "list": [
       {
         "builtIn": 1,
-        "datasource": "-- Grafana --",
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
         "enable": true,
         "hide": true,
         "iconColor": "rgba(0, 211, 255, 1)",
@@ -13,766 +13,228 @@
     ]
   },
   "editable": true,
-  "gnetId": null,
-  "graphTooltip": 0,
-  "id": 1,
-  "links": [],
+  "graphTooltip": 1,
+  "schemaVersion": 38,
+  "version": 2,
+  "uid": "persys-gateway-overview",
+  "title": "Persys Gateway Comprehensive Observability",
+  "tags": ["persys", "gateway", "http", "slo"],
+  "refresh": "5s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "interval",
+        "type": "custom",
+        "query": "1m,5m,15m,30m,1h",
+        "current": { "text": "5m", "value": "5m" },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "label": "Rate Interval"
+      }
+    ]
+  },
   "panels": [
     {
-      "collapsed": false,
+      "type": "row",
+      "title": "Service Health",
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
-      "id": 1,
-      "panels": [],
-      "title": "API Gateway HTTP Metrics",
-      "type": "row"
+      "collapsed": false,
+      "panels": []
     },
     {
-      "aliasColors": {
-        "200": "green",
-        "500": "red",
-        "503": "orange"
-      },
-      "breakPoint": "50%",
-      "cacheTimeout": null,
-      "combine": {
-        "label": "Others",
-        "threshold": 0
-      },
+      "type": "stat",
+      "title": "Gateway Up",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
       "datasource": "prometheus",
-      "description": "Distribution of Prometheus scrape requests by HTTP status code.",
+      "targets": [{ "expr": "max(up{job='persys-gateway'})", "refId": "A" }],
       "fieldConfig": {
         "defaults": {
-          "custom": { "align": null, "filterable": false },
-          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 80 }
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
             ]
           },
           "unit": "none"
         },
         "overrides": []
-      },
-      "fontSize": "80%",
-      "format": "none",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
-      "id": 30,
-      "interval": null,
-      "legend": {
-        "show": true,
-        "values": true
-      },
-      "legendType": "Right side",
-      "links": [],
-      "nullPointMode": "connected",
-      "pieType": "pie",
-      "pluginVersion": "7.2.0",
-      "strokeWidth": 1,
-      "targets": [
-        {
-          "expr": "sum by(code) (promhttp_metric_handler_requests_total)",
-          "format": "time_series",
-          "instant": false,
-          "interval": "",
-          "legendFormat": "{{code}}",
-          "refId": "A"
-        }
-      ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Scrape Requests by Status Code",
-      "type": "piechart",
-      "valueName": "current"
+      }
     },
     {
-      "cacheTimeout": null,
+      "type": "stat",
+      "title": "Total Requests",
+      "gridPos": { "h": 4, "w": 5, "x": 4, "y": 1 },
       "datasource": "prometheus",
-      "description": "Detailed counts and percentages of Prometheus scrape requests by HTTP status code.",
+      "targets": [{ "expr": "sum(persys_gateway_requests_total)", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "Requests/s",
+      "gridPos": { "h": 4, "w": 5, "x": 9, "y": 1 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "sum(rate(persys_gateway_requests_total[$interval]))", "refId": "A" }],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
+      "type": "stat",
+      "title": "5xx Error Rate",
+      "gridPos": { "h": 4, "w": 5, "x": 14, "y": 1 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "sum(rate(persys_gateway_requests_total{code=~'5..'}[$interval])) / clamp_min(sum(rate(persys_gateway_requests_total[$interval])), 1)", "refId": "A" }],
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "align": "left",
-            "displayMode": "auto",
-            "filterable": false
-          },
-          "mappings": [],
+          "unit": "percentunit",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               { "color": "green", "value": null },
-              { "color": "red", "value": 80 }
-            ]
-          },
-          "unit": "none"
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "Count" },
-            "properties": [{ "id": "unit", "value": "none" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "Percentage" },
-            "properties": [{ "id": "unit", "value": "percent" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "Status Code" },
-            "properties": [
-              {
-                "id": "custom.displayMode",
-                "value": "color-text"
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    { "color": "green", "value": null },
-                    { "color": "red", "value": 500 },
-                    { "color": "orange", "value": 503 }
-                  ]
-                }
-              }
+              { "color": "orange", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
             ]
           }
-        ]
-      },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
-      "id": 31,
-      "interval": null,
-      "links": [],
-      "options": {
-        "frameMode": "show",
-        "showHeader": true,
-        "sortBy": [
-          { "desc": true, "displayName": "Count" }
-        ]
-      },
-      "pluginVersion": "7.2.0",
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Success Rate",
+      "gridPos": { "h": 4, "w": 5, "x": 19, "y": 1 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "sum(rate(persys_gateway_requests_total{code=~'2..|3..'}[$interval])) / clamp_min(sum(rate(persys_gateway_requests_total[$interval])), 1)", "refId": "A" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 0.90 },
+              { "color": "green", "value": 0.98 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "type": "row",
+      "title": "Traffic & Errors",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "type": "timeseries",
+      "title": "RPS by Status Code",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "sum by(code) (rate(persys_gateway_requests_total[$interval]))", "legendFormat": "{{code}}", "refId": "A" }],
+      "options": { "legend": { "showLegend": true, "displayMode": "table", "placement": "right" } },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "RPS by HTTP Method",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "datasource": "prometheus",
+      "targets": [{ "expr": "sum by(method) (rate(persys_gateway_requests_total[$interval]))", "legendFormat": "{{method}}", "refId": "A" }],
+      "options": { "legend": { "showLegend": true, "displayMode": "table", "placement": "right" } },
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "4xx / 5xx Trend",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 14 },
+      "datasource": "prometheus",
+      "targets": [
+        { "expr": "sum(rate(persys_gateway_requests_total{code=~'4..'}[$interval]))", "legendFormat": "4xx", "refId": "A" },
+        { "expr": "sum(rate(persys_gateway_requests_total{code=~'5..'}[$interval]))", "legendFormat": "5xx", "refId": "B" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] }
+    },
+    {
+      "type": "table",
+      "title": "Top Endpoints (RPS)",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 14 },
+      "datasource": "prometheus",
       "targets": [
         {
-          "expr": "sum by(code) (promhttp_metric_handler_requests_total)",
+          "expr": "topk(15, sum by(url) (rate(persys_gateway_requests_total[$interval])))",
           "format": "table",
           "instant": true,
-          "interval": "",
-          "legendFormat": "",
           "refId": "A"
-        },
-        {
-          "expr": "sum by(code) (promhttp_metric_handler_requests_total) / sum(promhttp_metric_handler_requests_total) * 100",
-          "format": "table",
-          "instant": true,
-          "interval": "",
-          "legendFormat": "",
-          "refId": "B"
         }
       ],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Scrape Requests by Status Code (Details)",
       "transformations": [
         {
           "id": "organize",
           "options": {
             "excludeByName": { "Time": true, "__name__": true },
-            "indexByName": {},
-            "renameByName": {
-              "Value #A": "Count",
-              "Value #B": "Percentage",
-              "code": "Status Code"
-            }
+            "renameByName": { "Value": "RPS", "url": "Endpoint" }
           }
         }
-      ],
-      "type": "table"
+      ]
+    },
+
+    {
+      "type": "row",
+      "title": "Latency & Payload",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 },
+      "collapsed": false,
+      "panels": []
     },
     {
-      "aliasColors": {
-        "200": "green",
-        "500": "red",
-        "503": "orange"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
+      "type": "timeseries",
+      "title": "Latency Percentiles (p50/p95/p99)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
       "datasource": "prometheus",
-      "description": "Request rate by HTTP status code for Prometheus scrapes.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 9 },
-      "hiddenSeries": false,
-      "id": 32,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "nullPointMode": "null",
-      "options": { "alertThreshold": true },
-      "percentage": false,
-      "pluginVersion": "7.2.0",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
       "targets": [
-        {
-          "expr": "rate(promhttp_metric_handler_requests_total{code=\"200\"}[5m])",
-          "interval": "",
-          "legendFormat": "200 OK",
-          "refId": "A"
-        },
-        {
-          "expr": "rate(promhttp_metric_handler_requests_total{code=\"500\"}[5m])",
-          "interval": "",
-          "legendFormat": "500 Error",
-          "refId": "B"
-        },
-        {
-          "expr": "rate(promhttp_metric_handler_requests_total{code=\"503\"}[5m])",
-          "interval": "",
-          "legendFormat": "503 Error",
-          "refId": "C"
-        }
+        { "expr": "histogram_quantile(0.50, sum(rate(persys_gateway_request_duration_seconds_bucket[$interval])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(persys_gateway_request_duration_seconds_bucket[$interval])) by (le))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum(rate(persys_gateway_request_duration_seconds_bucket[$interval])) by (le))", "legendFormat": "p99", "refId": "C" }
       ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Request Rate by Status Code",
-      "tooltip": { "shared": true, "sort": 0, "value_type": "individual" },
-      "type": "graph",
-      "xaxis": { "buckets": null, "mode": "time", "name": null, "show": true, "values": [] },
-      "yaxes": [
-        { "format": "reqps", "label": null, "logBase": 1, "max": null, "min": null, "show": true },
-        { "format": "reqps", "label": null, "logBase": 1, "max": null, "min": null, "show": true }
-      ],
-      "yaxis": { "align": false, "alignLevel": null }
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
     },
     {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
+      "type": "timeseries",
+      "title": "Average Latency by Endpoint (Top 10)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
       "datasource": "prometheus",
-      "description": "Request duration percentiles for API Gateway.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 17 },
-      "hiddenSeries": false,
-      "id": 16,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "nullPointMode": "null",
-      "options": { "alertThreshold": true },
-      "percentage": false,
-      "pluginVersion": "7.2.0",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
       "targets": [
         {
-          "expr": "rate(api_gateway_request_duration_seconds_sum[5m]) / rate(api_gateway_request_duration_seconds_count[5m])",
-          "interval": "",
-          "legendFormat": "Avg Request Duration",
+          "expr": "topk(10, sum by(url) (rate(persys_gateway_request_duration_seconds_sum[$interval])) / clamp_min(sum by(url) (rate(persys_gateway_request_duration_seconds_count[$interval])), 1))",
+          "legendFormat": "{{url}}",
           "refId": "A"
-        },
-        {
-          "expr": "api_gateway_request_duration_seconds{quantile=\"0.5\"}",
-          "interval": "",
-          "legendFormat": "50th Percentile",
-          "refId": "B"
-        },
-        {
-          "expr": "api_gateway_request_duration_seconds{quantile=\"0.75\"}",
-          "interval": "",
-          "legendFormat": "75th Percentile",
-          "refId": "C"
-        },
-        {
-          "expr": "api_gateway_request_duration_seconds{quantile=\"0.99\"}",
-          "interval": "",
-          "legendFormat": "99th Percentile",
-          "refId": "D"
-        },
-        {
-          "expr": "api_gateway_request_duration_seconds{quantile=\"1\"}",
-          "interval": "",
-          "legendFormat": "Max Duration",
-          "refId": "E"
         }
       ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Request Duration Percentiles",
-      "tooltip": { "shared": true, "sort": 0, "value_type": "individual" },
-      "type": "graph",
-      "xaxis": { "buckets": null, "mode": "time", "name": null, "show": true, "values": [] },
-      "yaxes": [
-        { "format": "s", "label": null, "logBase": 1, "max": null, "min": null, "show": true },
-        { "format": "s", "label": null, "logBase": 1, "max": null, "min": null, "show": true }
-      ],
-      "yaxis": { "align": false, "alignLevel": null }
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
     },
     {
-      "aliasColors": {},
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
+      "type": "timeseries",
+      "title": "Avg Request / Response Size",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 30 },
       "datasource": "prometheus",
-      "description": "Average request and response sizes for API Gateway.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "unit": "bytes"
-        },
-        "overrides": []
-      },
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 17 },
-      "hiddenSeries": false,
-      "id": 12,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "nullPointMode": "null",
-      "options": { "alertThreshold": true },
-      "percentage": false,
-      "pluginVersion": "7.2.0",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
       "targets": [
-        {
-          "expr": "rate(api_gateway_request_size_bytes_sum[5m]) / rate(api_gateway_request_size_bytes_count[5m])",
-          "interval": "",
-          "legendFormat": "Avg Request Size",
-          "refId": "A"
-        },
-        {
-          "expr": "rate(api_gateway_response_size_bytes_sum[5m]) / rate(api_gateway_response_size_bytes_count[5m])",
-          "interval": "",
-          "legendFormat": "Avg Response Size",
-          "refId": "B"
-        }
+        { "expr": "rate(persys_gateway_request_size_bytes_sum[$interval]) / clamp_min(rate(persys_gateway_request_size_bytes_count[$interval]), 1)", "legendFormat": "request", "refId": "A" },
+        { "expr": "rate(persys_gateway_response_size_bytes_sum[$interval]) / clamp_min(rate(persys_gateway_response_size_bytes_count[$interval]), 1)", "legendFormat": "response", "refId": "B" }
       ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Request/Response Sizes",
-      "tooltip": { "shared": true, "sort": 0, "value_type": "individual" },
-      "type": "graph",
-      "xaxis": { "buckets": null, "mode": "time", "name": null, "show": true, "values": [] },
-      "yaxes": [
-        { "format": "bytes", "label": null, "logBase": 1, "max": null, "min": null, "show": true },
-        { "format": "bytes", "label": null, "logBase": 1, "max": null, "min": null, "show": true }
-      ],
-      "yaxis": { "align": false, "alignLevel": null }
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] }
     },
     {
-      "aliasColors": {
-        "500": "red",
-        "503": "orange"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
+      "type": "timeseries",
+      "title": "Latency Distribution (per bucket)",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 30 },
       "datasource": "prometheus",
-      "description": "Error rate (500 and 503) for Prometheus scrape requests.",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 25 },
-      "hiddenSeries": false,
-      "id": 33,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "nullPointMode": "null",
-      "options": { "alertThreshold": true },
-      "percentage": false,
-      "pluginVersion": "7.2.0",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
       "targets": [
-        {
-          "expr": "rate(promhttp_metric_handler_requests_total{code=\"500\"}[5m])",
-          "interval": "",
-          "legendFormat": "500 Error",
-          "refId": "A"
-        },
-        {
-          "expr": "rate(promhttp_metric_handler_requests_total{code=\"503\"}[5m])",
-          "interval": "",
-          "legendFormat": "503 Error",
-          "refId": "B"
-        }
+        { "expr": "sum by(le) (rate(persys_gateway_request_duration_seconds_bucket[$interval]))", "legendFormat": "<= {{le}}s", "refId": "A" }
       ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Error Rate (500 & 503)",
-      "tooltip": { "shared": true, "sort": 0, "value_type": "individual" },
-      "type": "graph",
-      "xaxis": { "buckets": null, "mode": "time", "name": null, "show": true, "values": [] },
-      "yaxes": [
-        { "format": "reqps", "label": null, "logBase": 1, "max": null, "min": null, "show": true },
-        { "format": "reqps", "label": null, "logBase": 1, "max": null, "min": null, "show": true }
-      ],
-      "yaxis": { "align": false, "alignLevel": null }
-    },
-    {
-      "aliasColors": {
-        "/api/v1/users": "blue",
-        "/api/v1/orders": "green",
-        "/api/v1/products": "purple",
-        "/api/v1/health": "yellow"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "prometheus",
-      "description": "Total request counts by endpoint (requires api_gateway_requests_total metric).",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 33 },
-      "hiddenSeries": false,
-      "id": 28,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "nullPointMode": "null",
-      "options": { "alertThreshold": true },
-      "percentage": false,
-      "pluginVersion": "7.2.0",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "sum(api_gateway_requests_total{url=\"/api/v1/users\"})",
-          "interval": "",
-          "legendFormat": "/api/v1/users",
-          "refId": "A"
-        },
-        {
-          "expr": "sum(api_gateway_requests_total{url=\"/api/v1/orders\"})",
-          "interval": "",
-          "legendFormat": "/api/v1/orders",
-          "refId": "B"
-        },
-        {
-          "expr": "sum(api_gateway_requests_total{url=\"/api/v1/products\"})",
-          "interval": "",
-          "legendFormat": "/api/v1/products",
-          "refId": "C"
-        },
-        {
-          "expr": "sum(api_gateway_requests_total{url=\"/api/v1/health\"})",
-          "interval": "",
-          "legendFormat": "/api/v1/health",
-          "refId": "D"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Request Counts by Endpoint",
-      "tooltip": { "shared": true, "sort": 0, "value_type": "individual" },
-      "type": "graph",
-      "xaxis": { "buckets": null, "mode": "time", "name": null, "show": true, "values": [] },
-      "yaxes": [
-        { "format": "short", "label": null, "logBase": 1, "max": null, "min": null, "show": true },
-        { "format": "short", "label": null, "logBase": 1, "max": null, "min": null, "show": true }
-      ],
-      "yaxis": { "align": false, "alignLevel": null }
-    },
-    {
-      "aliasColors": {
-        "200": "green",
-        "404": "orange",
-        "500": "red"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "prometheus",
-      "description": "Request counts by endpoint and status code (requires api_gateway_requests_total metric).",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 33 },
-      "hiddenSeries": false,
-      "id": 29,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "nullPointMode": "null",
-      "options": { "alertThreshold": true },
-      "percentage": false,
-      "pluginVersion": "7.2.0",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "sum(api_gateway_requests_total{url=\"/api/v1/users\", code=\"200\"})",
-          "interval": "",
-          "legendFormat": "/api/v1/users (200)",
-          "refId": "A"
-        },
-        {
-          "expr": "sum(api_gateway_requests_total{url=\"/api/v1/orders\", code=\"200\"})",
-          "interval": "",
-          "legendFormat": "/api/v1/orders (200)",
-          "refId": "B"
-        },
-        {
-          "expr": "sum(api_gateway_requests_total{url=\"/api/v1/products\", code=\"200\"})",
-          "interval": "",
-          "legendFormat": "/api/v1/products (200)",
-          "refId": "C"
-        },
-        {
-          "expr": "sum(api_gateway_requests_total{url=\"/api/v1/health\", code=\"200\"})",
-          "interval": "",
-          "legendFormat": "/api/v1/health (200)",
-          "refId": "D"
-        },
-        {
-          "expr": "sum(api_gateway_requests_total{url=\"/api/v1/users\", code=\"404\"})",
-          "interval": "",
-          "legendFormat": "/api/v1/users (404)",
-          "refId": "E"
-        },
-        {
-          "expr": "sum(api_gateway_requests_total{url=\"/api/v1/orders\", code=\"500\"})",
-          "interval": "",
-          "legendFormat": "/api/v1/orders (500)",
-          "refId": "F"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Request Counts by Endpoint and Status Code",
-      "tooltip": { "shared": true, "sort": 0, "value_type": "individual" },
-      "type": "graph",
-      "xaxis": { "buckets": null, "mode": "time", "name": null, "show": true, "values": [] },
-      "yaxes": [
-        { "format": "short", "label": null, "logBase": 1, "max": null, "min": null, "show": true },
-        { "format": "short", "label": null, "logBase": 1, "max": null, "min": null, "show": true }
-      ],
-      "yaxis": { "align": false, "alignLevel": null }
-    },
-    {
-      "aliasColors": {
-        "GET": "blue",
-        "POST": "green",
-        "PUT": "purple",
-        "DELETE": "red"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "prometheus",
-      "description": "Request counts by HTTP method (requires api_gateway_requests_total metric).",
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "unit": "none"
-        },
-        "overrides": []
-      },
-      "fill": 1,
-      "fillGradient": 0,
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 41 },
-      "hiddenSeries": false,
-      "id": 34,
-      "legend": {
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": true,
-      "linewidth": 1,
-      "nullPointMode": "null",
-      "options": { "alertThreshold": true },
-      "percentage": false,
-      "pluginVersion": "7.2.0",
-      "pointradius": 2,
-      "points": false,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "expr": "sum by(method) (api_gateway_requests_total{method=\"GET\"})",
-          "interval": "",
-          "legendFormat": "GET",
-          "refId": "A"
-        },
-        {
-          "expr": "sum by(method) (api_gateway_requests_total{method=\"POST\"})",
-          "interval": "",
-          "legendFormat": "POST",
-          "refId": "B"
-        },
-        {
-          "expr": "sum by(method) (api_gateway_requests_total{method=\"PUT\"})",
-          "interval": "",
-          "legendFormat": "PUT",
-          "refId": "C"
-        },
-        {
-          "expr": "sum by(method) (api_gateway_requests_total{method=\"DELETE\"})",
-          "interval": "",
-          "legendFormat": "DELETE",
-          "refId": "D"
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeRegions": [],
-      "timeShift": null,
-      "title": "Request Counts by HTTP Method",
-      "tooltip": { "shared": true, "sort": 0, "value_type": "individual" },
-      "type": "graph",
-      "xaxis": { "buckets": null, "mode": "time", "name": null, "show": true, "values": [] },
-      "yaxes": [
-        { "format": "short", "label": null, "logBase": 1, "max": null, "min": null, "show": true },
-        { "format": "short", "label": null, "logBase": 1, "max": null, "min": null, "show": true }
-      ],
-      "yaxis": { "align": false, "alignLevel": null }
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] }
     }
-  ],
-  "refresh": "5s",
-  "schemaVersion": 26,
-  "style": "dark",
-  "tags": ["api-gateway", "monitoring"],
-  "templating": { "list": [] },
-  "time": { "from": "now-1h", "to": "now" },
-  "timepicker": {},
-  "timezone": "",
-  "title": "API Gateway Detailed HTTP Monitoring",
-  "uid": "api_gateway_monitoring_detailed_http",
-  "version": 6
+  ]
 }

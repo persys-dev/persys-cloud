@@ -27,6 +27,7 @@ func NewGithubService(_ *mongo.Collection, _ context.Context, cfg *config.Config
 func (g *GithubServiceImpl) SetAccessToken(user *models.DBResponse) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	ctx = injectTraceContext(ctx)
 	client, conn, err := g.forgeryClient(ctx)
 	if err != nil {
 		return err
@@ -44,6 +45,7 @@ func (g *GithubServiceImpl) SetAccessToken(user *models.DBResponse) error {
 func (g *GithubServiceImpl) ListRepos(user *models.DBResponse) ([]map[string]interface{}, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
+	ctx = injectTraceContext(ctx)
 	client, conn, err := g.forgeryClient(ctx)
 	if err != nil {
 		return nil, err
@@ -76,6 +78,7 @@ func (g *GithubServiceImpl) ListRepos(user *models.DBResponse) ([]map[string]int
 func (g *GithubServiceImpl) SetWebhook(user *models.DBResponse, repository string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	ctx = injectTraceContext(ctx)
 	client, conn, err := g.forgeryClient(ctx)
 	if err != nil {
 		return err

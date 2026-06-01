@@ -14,6 +14,7 @@ service ForgeryControl {
   rpc ListUserRepositories(ListUserRepositoriesRequest) returns (ListUserRepositoriesResponse);
   rpc RegisterWebhook(RegisterWebhookRequest) returns (OperationStatus);
   rpc TriggerBuild(TriggerBuildRequest) returns (OperationStatus);
+  rpc ListPipelineStatus(ListPipelineStatusRequest) returns (ListPipelineStatusResponse);
 }
 
 message ForwardWebhookRequest {
@@ -130,4 +131,22 @@ message TriggerBuildRequest {
 message OperationStatus {
   bool ok = 1;
   string message = 2;
+}
+
+message ListPipelineStatusRequest {
+  string delivery_id = 1;
+  string repository = 2;
+  uint32 limit = 3;
+}
+
+message PipelineStatusEntry {
+  string delivery_id = 1;
+  string repository = 2;
+  string status = 3;
+  string message = 4;
+  string timestamp = 5;
+}
+
+message ListPipelineStatusResponse {
+  repeated PipelineStatusEntry entries = 1;
 }

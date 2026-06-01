@@ -11,6 +11,32 @@ scrape_configs:
     static_configs:
       - targets: ['persys-scheduler:8084']
 
+  - job_name: 'persys-automation'
+    static_configs:
+      - targets: ['persys-automation:8092']
+
+  - job_name: 'persys-forgery'
+    static_configs:
+      - targets: ['persys-forgery:8095']
+
+  - job_name: 'persys-intelligence'
+    static_configs:
+      - targets: ['persys-intelligence:8094']
+
+  - job_name: 'persys-federation'
+    static_configs:
+      - targets: ['persys-federation:8096']
+
+  - job_name: 'compute-agent'
+    static_configs:
+      - targets: ['compute-agent:8089']
+  
+  - job_name: "etcd"
+    scrape_interval: 15s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['etcd:2379']
+
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['node_exporter:9100'] 

@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.1
 // - protoc             v3.21.12
-// source: api/proto/forgery.proto
+// source: forgery.proto
 
 package forgeryv1
 
@@ -28,6 +28,7 @@ const (
 	ForgeryControl_ListUserRepositories_FullMethodName  = "/persys.forgery.v1.ForgeryControl/ListUserRepositories"
 	ForgeryControl_RegisterWebhook_FullMethodName       = "/persys.forgery.v1.ForgeryControl/RegisterWebhook"
 	ForgeryControl_TriggerBuild_FullMethodName          = "/persys.forgery.v1.ForgeryControl/TriggerBuild"
+	ForgeryControl_ListPipelineStatus_FullMethodName    = "/persys.forgery.v1.ForgeryControl/ListPipelineStatus"
 )
 
 // ForgeryControlClient is the client API for ForgeryControl service.
@@ -43,6 +44,7 @@ type ForgeryControlClient interface {
 	ListUserRepositories(ctx context.Context, in *ListUserRepositoriesRequest, opts ...grpc.CallOption) (*ListUserRepositoriesResponse, error)
 	RegisterWebhook(ctx context.Context, in *RegisterWebhookRequest, opts ...grpc.CallOption) (*OperationStatus, error)
 	TriggerBuild(ctx context.Context, in *TriggerBuildRequest, opts ...grpc.CallOption) (*OperationStatus, error)
+	ListPipelineStatus(ctx context.Context, in *ListPipelineStatusRequest, opts ...grpc.CallOption) (*ListPipelineStatusResponse, error)
 }
 
 type forgeryControlClient struct {
@@ -143,6 +145,16 @@ func (c *forgeryControlClient) TriggerBuild(ctx context.Context, in *TriggerBuil
 	return out, nil
 }
 
+func (c *forgeryControlClient) ListPipelineStatus(ctx context.Context, in *ListPipelineStatusRequest, opts ...grpc.CallOption) (*ListPipelineStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPipelineStatusResponse)
+	err := c.cc.Invoke(ctx, ForgeryControl_ListPipelineStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ForgeryControlServer is the server API for ForgeryControl service.
 // All implementations must embed UnimplementedForgeryControlServer
 // for forward compatibility.
@@ -156,6 +168,7 @@ type ForgeryControlServer interface {
 	ListUserRepositories(context.Context, *ListUserRepositoriesRequest) (*ListUserRepositoriesResponse, error)
 	RegisterWebhook(context.Context, *RegisterWebhookRequest) (*OperationStatus, error)
 	TriggerBuild(context.Context, *TriggerBuildRequest) (*OperationStatus, error)
+	ListPipelineStatus(context.Context, *ListPipelineStatusRequest) (*ListPipelineStatusResponse, error)
 	mustEmbedUnimplementedForgeryControlServer()
 }
 
@@ -192,6 +205,9 @@ func (UnimplementedForgeryControlServer) RegisterWebhook(context.Context, *Regis
 }
 func (UnimplementedForgeryControlServer) TriggerBuild(context.Context, *TriggerBuildRequest) (*OperationStatus, error) {
 	return nil, status.Error(codes.Unimplemented, "method TriggerBuild not implemented")
+}
+func (UnimplementedForgeryControlServer) ListPipelineStatus(context.Context, *ListPipelineStatusRequest) (*ListPipelineStatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPipelineStatus not implemented")
 }
 func (UnimplementedForgeryControlServer) mustEmbedUnimplementedForgeryControlServer() {}
 func (UnimplementedForgeryControlServer) testEmbeddedByValue()                        {}
@@ -376,6 +392,24 @@ func _ForgeryControl_TriggerBuild_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ForgeryControl_ListPipelineStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPipelineStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForgeryControlServer).ListPipelineStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForgeryControl_ListPipelineStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForgeryControlServer).ListPipelineStatus(ctx, req.(*ListPipelineStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ForgeryControl_ServiceDesc is the grpc.ServiceDesc for ForgeryControl service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -419,7 +453,11 @@ var ForgeryControl_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "TriggerBuild",
 			Handler:    _ForgeryControl_TriggerBuild_Handler,
 		},
+		{
+			MethodName: "ListPipelineStatus",
+			Handler:    _ForgeryControl_ListPipelineStatus_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "api/proto/forgery.proto",
+	Metadata: "forgery.proto",
 }

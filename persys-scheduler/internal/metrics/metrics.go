@@ -109,6 +109,15 @@ var (
 		},
 		[]string{"desired_state"},
 	)
+	stateStoreWritesTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: "persys",
+			Subsystem: "scheduler",
+			Name:      "state_store_writes_total",
+			Help:      "Number of scheduler state-store writes by category.",
+		},
+		[]string{"category"},
+	)
 )
 
 var defaultNodeStatuses = []string{"ready", "active", "notready", "unknown"}
@@ -132,6 +141,7 @@ func Register() {
 			nodeStatusGauge,
 			workloadStatusGauge,
 			workloadDesiredGauge,
+			stateStoreWritesTotal,
 		)
 
 		for _, s := range defaultNodeStatuses {
@@ -156,7 +166,9 @@ func GRPCUnaryServerInterceptor() grpc.UnaryServerInterceptor {
 		return resp, err
 	}
 }
-
+func IncStateStoreWrite(category string) {
+	stateStoreWritesTotal.WithLabelValues(category).Inc()
+}
 func GRPCStreamServerInterceptor() grpc.StreamServerInterceptor {
 	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 		start := time.Now()

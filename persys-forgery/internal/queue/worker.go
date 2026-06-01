@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/persys-dev/persys-cloud/persys-forgery/internal/build"
+	"github.com/persys-dev/persys-cloud/persys-forgery/internal/metrics"
 	"github.com/persys-dev/persys-cloud/persys-forgery/internal/models"
 	"github.com/persys-dev/persys-cloud/persys-forgery/utils"
 	"github.com/redis/go-redis/v9"
@@ -25,6 +26,7 @@ func StartRedisWorker(cfg *utils.Config, orchestrator *build.Orchestrator) {
 			log.Println("Redis error:", err)
 			continue
 		}
+		updateBuildQueueDepth(ctx, rdb, cfg.Redis.BuildQueueKey)
 		if len(res) < 2 {
 			continue
 		}
@@ -34,6 +36,7 @@ func StartRedisWorker(cfg *utils.Config, orchestrator *build.Orchestrator) {
 			continue
 		}
 		log.Printf("Dequeued build job: %+v", req)
+		metrics.IncBuildsStarted()
 		publishPipelineStatus(ctx, rdb, cfg.Redis.PipelineStatusQueue, PipelineStatusEvent{
 			DeliveryID: req.ID,
 			Repository: req.ProjectName,
@@ -49,6 +52,9 @@ func StartRedisWorker(cfg *utils.Config, orchestrator *build.Orchestrator) {
 			if err != nil {
 				status = "build_failed"
 				msg = err.Error()
+				metrics.IncBuildsFailed()
+			} else {
+				metrics.IncBuildsSucceeded()
 			}
 			publishPipelineStatus(ctx, rdb, cfg.Redis.PipelineStatusQueue, PipelineStatusEvent{
 				DeliveryID: r.ID,
@@ -69,6 +75,14 @@ func StartRedisWorker(cfg *utils.Config, orchestrator *build.Orchestrator) {
 			}
 		}(req)
 	}
+}
+
+func updateBuildQueueDepth(ctx context.Context, rdb *redis.Client, key string) {
+	n, err := rdb.LLen(ctx, key).Result()
+	if err != nil {
+		return
+	}
+	metrics.SetBuildQueueDepth(n)
 }
 
 func autoDeployEnabled(req models.BuildRequest) bool {

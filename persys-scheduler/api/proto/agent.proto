@@ -139,6 +139,7 @@ message ContainerSpec {
   ResourceLimits resources = 7;
   RestartPolicy restart_policy = 8;
   map<string, string> labels = 9;
+  repeated ManagedVolumeSpec managed_volumes = 10;
 }
 
 message ComposeSpec {
@@ -156,6 +157,7 @@ message VMSpec {
   string cloud_init = 6; // optional cloud-init user-data (YAML content)
   map<string, string> metadata = 7;
   CloudInitConfig cloud_init_config = 8; // advanced cloud-init settings
+  repeated ManagedVolumeSpec managed_volumes = 9;
 }
 
 message CloudInitConfig {
@@ -163,6 +165,17 @@ message CloudInitConfig {
   string meta_data = 2; // cloud-init meta-data (JSON)
   string network_config = 3; // cloud-init network config (YAML)
   string vendor_data = 4; // cloud-init vendor-data
+}
+
+message ManagedVolumeSpec {
+  string name = 1;
+  string driver = 2; // local|nfs|ceph-rbd
+  int64 size_gb = 3;
+  string access_mode = 4;
+  string fs_type = 5;
+  string mount_path = 6;
+  bool read_only = 7;
+  string retain_policy = 8; // Delete|Retain
 }
 
 message VolumeMount {
@@ -213,4 +226,18 @@ message WorkloadStatus {
   int64 created_at = 7;
   int64 updated_at = 8;
   map<string, string> metadata = 9;
+  WorkloadUsageSnapshot usage = 10;
+}
+
+message WorkloadUsageSnapshot {
+  string workload_id = 1;
+  WorkloadType type = 2;
+  double cpu_percent = 3;
+  int64 memory_bytes = 4;
+  int64 disk_read_bytes = 5;
+  int64 disk_write_bytes = 6;
+  int64 net_rx_bytes = 7;
+  int64 net_tx_bytes = 8;
+  int64 collected_at = 9; // unix timestamp
+  string source = 10;
 }

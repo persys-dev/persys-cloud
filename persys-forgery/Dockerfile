@@ -18,6 +18,8 @@ WORKDIR /app
 COPY --from=builder /app/persys-forgery /app/persys-forgery
 COPY config.yaml /app/config.yaml
 
+RUN apk add git
+
 EXPOSE 8080
 
 CMD ["/app/persys-forgery"] 

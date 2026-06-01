@@ -19,17 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentControl_RegisterNode_FullMethodName      = "/persys.control.v1.AgentControl/RegisterNode"
-	AgentControl_Heartbeat_FullMethodName         = "/persys.control.v1.AgentControl/Heartbeat"
-	AgentControl_ApplyWorkload_FullMethodName     = "/persys.control.v1.AgentControl/ApplyWorkload"
-	AgentControl_DeleteWorkload_FullMethodName    = "/persys.control.v1.AgentControl/DeleteWorkload"
-	AgentControl_RetryWorkload_FullMethodName     = "/persys.control.v1.AgentControl/RetryWorkload"
-	AgentControl_ListNodes_FullMethodName         = "/persys.control.v1.AgentControl/ListNodes"
-	AgentControl_GetNode_FullMethodName           = "/persys.control.v1.AgentControl/GetNode"
-	AgentControl_ListWorkloads_FullMethodName     = "/persys.control.v1.AgentControl/ListWorkloads"
-	AgentControl_GetWorkload_FullMethodName       = "/persys.control.v1.AgentControl/GetWorkload"
-	AgentControl_GetClusterSummary_FullMethodName = "/persys.control.v1.AgentControl/GetClusterSummary"
-	AgentControl_ControlStream_FullMethodName     = "/persys.control.v1.AgentControl/ControlStream"
+	AgentControl_RegisterNode_FullMethodName               = "/persys.control.v1.AgentControl/RegisterNode"
+	AgentControl_Heartbeat_FullMethodName                  = "/persys.control.v1.AgentControl/Heartbeat"
+	AgentControl_ApplyWorkload_FullMethodName              = "/persys.control.v1.AgentControl/ApplyWorkload"
+	AgentControl_DeleteWorkload_FullMethodName             = "/persys.control.v1.AgentControl/DeleteWorkload"
+	AgentControl_RetryWorkload_FullMethodName              = "/persys.control.v1.AgentControl/RetryWorkload"
+	AgentControl_SubmitAutomationSuggestion_FullMethodName = "/persys.control.v1.AgentControl/SubmitAutomationSuggestion"
+	AgentControl_ListNodes_FullMethodName                  = "/persys.control.v1.AgentControl/ListNodes"
+	AgentControl_GetNode_FullMethodName                    = "/persys.control.v1.AgentControl/GetNode"
+	AgentControl_ListWorkloads_FullMethodName              = "/persys.control.v1.AgentControl/ListWorkloads"
+	AgentControl_GetWorkload_FullMethodName                = "/persys.control.v1.AgentControl/GetWorkload"
+	AgentControl_GetClusterSummary_FullMethodName          = "/persys.control.v1.AgentControl/GetClusterSummary"
+	AgentControl_ControlStream_FullMethodName              = "/persys.control.v1.AgentControl/ControlStream"
 )
 
 // AgentControlClient is the client API for AgentControl service.
@@ -45,6 +46,7 @@ type AgentControlClient interface {
 	DeleteWorkload(ctx context.Context, in *DeleteWorkloadRequest, opts ...grpc.CallOption) (*DeleteWorkloadResponse, error)
 	// Retry trigger
 	RetryWorkload(ctx context.Context, in *RetryWorkloadRequest, opts ...grpc.CallOption) (*RetryWorkloadResponse, error)
+	SubmitAutomationSuggestion(ctx context.Context, in *SubmitAutomationSuggestionRequest, opts ...grpc.CallOption) (*SubmitAutomationSuggestionResponse, error)
 	// Cluster and node management visibility
 	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
 	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error)
@@ -107,6 +109,16 @@ func (c *agentControlClient) RetryWorkload(ctx context.Context, in *RetryWorkloa
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RetryWorkloadResponse)
 	err := c.cc.Invoke(ctx, AgentControl_RetryWorkload_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) SubmitAutomationSuggestion(ctx context.Context, in *SubmitAutomationSuggestionRequest, opts ...grpc.CallOption) (*SubmitAutomationSuggestionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SubmitAutomationSuggestionResponse)
+	err := c.cc.Invoke(ctx, AgentControl_SubmitAutomationSuggestion_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +201,7 @@ type AgentControlServer interface {
 	DeleteWorkload(context.Context, *DeleteWorkloadRequest) (*DeleteWorkloadResponse, error)
 	// Retry trigger
 	RetryWorkload(context.Context, *RetryWorkloadRequest) (*RetryWorkloadResponse, error)
+	SubmitAutomationSuggestion(context.Context, *SubmitAutomationSuggestionRequest) (*SubmitAutomationSuggestionResponse, error)
 	// Cluster and node management visibility
 	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
 	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
@@ -221,6 +234,9 @@ func (UnimplementedAgentControlServer) DeleteWorkload(context.Context, *DeleteWo
 }
 func (UnimplementedAgentControlServer) RetryWorkload(context.Context, *RetryWorkloadRequest) (*RetryWorkloadResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RetryWorkload not implemented")
+}
+func (UnimplementedAgentControlServer) SubmitAutomationSuggestion(context.Context, *SubmitAutomationSuggestionRequest) (*SubmitAutomationSuggestionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitAutomationSuggestion not implemented")
 }
 func (UnimplementedAgentControlServer) ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListNodes not implemented")
@@ -351,6 +367,24 @@ func _AgentControl_RetryWorkload_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentControl_SubmitAutomationSuggestion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitAutomationSuggestionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).SubmitAutomationSuggestion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_SubmitAutomationSuggestion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).SubmitAutomationSuggestion(ctx, req.(*SubmitAutomationSuggestionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _AgentControl_ListNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListNodesRequest)
 	if err := dec(in); err != nil {
@@ -474,6 +508,10 @@ var AgentControl_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RetryWorkload",
 			Handler:    _AgentControl_RetryWorkload_Handler,
+		},
+		{
+			MethodName: "SubmitAutomationSuggestion",
+			Handler:    _AgentControl_SubmitAutomationSuggestion_Handler,
 		},
 		{
 			MethodName: "ListNodes",
