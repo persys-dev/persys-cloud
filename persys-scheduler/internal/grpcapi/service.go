@@ -64,15 +64,16 @@ func (s *Service) RegisterNode(ctx context.Context, in *controlv1.RegisterNodeRe
 	}
 
 	node := models.Node{
-		NodeID:                 in.GetNodeId(),
-		Status:                 "Ready",
-		Labels:                 in.GetLabels(),
-		Timestamp:              in.GetTimestamp().AsTime().UTC().Format(time.RFC3339),
-		AvailableCPU:           float64(in.GetCapabilities().GetCpuTotalMillicores()) / 1000.0,
-		TotalCPU:               float64(in.GetCapabilities().GetCpuTotalMillicores()) / 1000.0,
-		AvailableMemory:        in.GetCapabilities().GetMemoryTotalMb(),
-		TotalMemory:            in.GetCapabilities().GetMemoryTotalMb(),
-		SupportedWorkloadTypes: normalizeSupportedWorkloadTypes(in.GetCapabilities().GetSupportedWorkloadTypes()),
+		NodeID:                  in.GetNodeId(),
+		Status:                  "Ready",
+		Labels:                  in.GetLabels(),
+		Timestamp:               in.GetTimestamp().AsTime().UTC().Format(time.RFC3339),
+		AvailableCPU:            float64(in.GetCapabilities().GetCpuTotalMillicores()) / 1000.0,
+		TotalCPU:                float64(in.GetCapabilities().GetCpuTotalMillicores()) / 1000.0,
+		AvailableMemory:         in.GetCapabilities().GetMemoryTotalMb(),
+		TotalMemory:             in.GetCapabilities().GetMemoryTotalMb(),
+		SupportedWorkloadTypes:  normalizeSupportedWorkloadTypes(in.GetCapabilities().GetSupportedWorkloadTypes()),
+		SupportedStorageDrivers: normalizeSupportedStorageDrivers(in.GetCapabilities().GetSupportedStorageDrivers()),
 	}
 
 	if endpoint := strings.TrimSpace(in.GetGrpcEndpoint()); endpoint != "" {
@@ -175,6 +176,22 @@ func (s *Service) Heartbeat(ctx context.Context, in *controlv1.HeartbeatRequest)
 		_ = s.sched.UpdateWorkloadStatus(ws.GetWorkloadId(), ws.GetState())
 		if msg := strings.TrimSpace(ws.GetMessage()); msg != "" {
 			_ = s.sched.UpdateWorkloadLogs(ws.GetWorkloadId(), msg)
+		}
+		reason := reasonFromProto(ws.GetReason(), ws.GetLastTransition())
+		usage := usageFromProto(ws.GetUsage(), ws.GetWorkloadId(), "")
+		if reason != nil || usage != nil {
+			_ = s.sched.UpdateWorkloadRuntimeDetails(ws.GetWorkloadId(), reason, usage)
+		}
+	}
+
+	for _, usage := range in.GetWorkloadUsage() {
+		workloadID := strings.TrimSpace(usage.GetWorkloadId())
+		if workloadID == "" {
+			continue
+		}
+		modelUsage := usageFromProto(usage, workloadID, "")
+		if modelUsage != nil {
+			_ = s.sched.UpdateWorkloadRuntimeDetails(workloadID, nil, modelUsage)
 		}
 	}
 
@@ -279,6 +296,134 @@ func (s *Service) RetryWorkload(ctx context.Context, in *controlv1.RetryWorkload
 		return &controlv1.RetryWorkloadResponse{Accepted: false}, nil
 	}
 	return &controlv1.RetryWorkloadResponse{Accepted: true}, nil
+}
+
+func (s *Service) SubmitAutomationSuggestion(ctx context.Context, in *controlv1.SubmitAutomationSuggestionRequest) (*controlv1.SubmitAutomationSuggestionResponse, error) {
+	if !s.sched.IsWritable() {
+		return &controlv1.SubmitAutomationSuggestionResponse{
+			Accepted:      false,
+			Decision:      "rejected",
+			Reason:        "scheduler degraded/recovery mode",
+			AppliedAction: "",
+			DecidedAt:     timestamppb.Now(),
+		}, nil
+	}
+	if in == nil || in.GetSuggestion() == nil {
+		err := status.Error(codes.InvalidArgument, "suggestion is required")
+		recordRPCError(ctx, err)
+		return nil, err
+	}
+	suggestion := in.GetSuggestion()
+	target := strings.TrimSpace(suggestion.GetTargetWorkload())
+	if target == "" {
+		return &controlv1.SubmitAutomationSuggestionResponse{
+			Accepted:      false,
+			Decision:      "rejected",
+			Reason:        "target_workload is required",
+			AppliedAction: "",
+			DecidedAt:     timestamppb.Now(),
+		}, nil
+	}
+
+	action := suggestion.GetActionType()
+	policyID := strings.TrimSpace(suggestion.GetPolicyId())
+	policyName := strings.TrimSpace(suggestion.GetPolicyName())
+	logPrefix := fmt.Sprintf("automation suggestion policy_id=%s policy_name=%s workload=%s action=%s", policyID, policyName, target, action.String())
+
+	switch action {
+	case controlv1.AutomationActionType_AUTOMATION_ACTION_SET_DESIRED_STATE:
+		desired := normalizeDesiredStateString(suggestion.GetDesiredState())
+		if desired == "" {
+			return &controlv1.SubmitAutomationSuggestionResponse{
+				Accepted:      false,
+				Decision:      "rejected",
+				Reason:        "desired_state is required for set_desired_state action",
+				AppliedAction: "",
+				DecidedAt:     timestamppb.Now(),
+			}, nil
+		}
+		updated, err := s.sched.UpdateWorkloadSpec(target, models.Workload{DesiredState: desired})
+		if err != nil {
+			return &controlv1.SubmitAutomationSuggestionResponse{
+				Accepted:      false,
+				Decision:      "rejected",
+				Reason:        err.Error(),
+				AppliedAction: "",
+				DecidedAt:     timestamppb.Now(),
+			}, nil
+		}
+		if _, err := s.sched.ReconcileWorkloadWithContext(ctx, updated); err != nil {
+			return &controlv1.SubmitAutomationSuggestionResponse{
+				Accepted:      false,
+				Decision:      "rejected",
+				Reason:        err.Error(),
+				AppliedAction: "",
+				DecidedAt:     timestamppb.Now(),
+			}, nil
+		}
+		_ = s.sched.UpdateWorkloadLogs(target, logPrefix+" decision=accepted")
+		return &controlv1.SubmitAutomationSuggestionResponse{
+			Accepted:      true,
+			Decision:      "accepted",
+			Reason:        "desired state change accepted",
+			AppliedAction: "set_desired_state",
+			DecidedAt:     timestamppb.Now(),
+		}, nil
+	case controlv1.AutomationActionType_AUTOMATION_ACTION_RETRY_WORKLOAD:
+		if _, err := s.sched.TriggerWorkloadRetry(target); err != nil {
+			return &controlv1.SubmitAutomationSuggestionResponse{
+				Accepted:      false,
+				Decision:      "rejected",
+				Reason:        err.Error(),
+				AppliedAction: "",
+				DecidedAt:     timestamppb.Now(),
+			}, nil
+		}
+		_ = s.sched.UpdateWorkloadLogs(target, logPrefix+" decision=accepted")
+		return &controlv1.SubmitAutomationSuggestionResponse{
+			Accepted:      true,
+			Decision:      "accepted",
+			Reason:        "retry accepted",
+			AppliedAction: "retry_workload",
+			DecidedAt:     timestamppb.Now(),
+		}, nil
+	case controlv1.AutomationActionType_AUTOMATION_ACTION_DELETE_WORKLOAD:
+		if err := s.sched.MarkWorkloadDeleted(target); err != nil {
+			return &controlv1.SubmitAutomationSuggestionResponse{
+				Accepted:      false,
+				Decision:      "rejected",
+				Reason:        err.Error(),
+				AppliedAction: "",
+				DecidedAt:     timestamppb.Now(),
+			}, nil
+		}
+		_ = s.sched.UpdateWorkloadLogs(target, logPrefix+" decision=accepted")
+		return &controlv1.SubmitAutomationSuggestionResponse{
+			Accepted:      true,
+			Decision:      "accepted",
+			Reason:        "delete accepted",
+			AppliedAction: "delete_workload",
+			DecidedAt:     timestamppb.Now(),
+		}, nil
+	case controlv1.AutomationActionType_AUTOMATION_ACTION_SCALE_REPLICAS:
+		// Scheduler remains authoritative and can reject unsupported/unsafe requests.
+		_ = s.sched.UpdateWorkloadLogs(target, logPrefix+" decision=rejected reason=replica updates not supported yet")
+		return &controlv1.SubmitAutomationSuggestionResponse{
+			Accepted:      false,
+			Decision:      "rejected",
+			Reason:        "replica updates are not supported by scheduler contract yet",
+			AppliedAction: "",
+			DecidedAt:     timestamppb.Now(),
+		}, nil
+	default:
+		return &controlv1.SubmitAutomationSuggestionResponse{
+			Accepted:      false,
+			Decision:      "rejected",
+			Reason:        "unsupported automation action type",
+			AppliedAction: "",
+			DecidedAt:     timestamppb.Now(),
+		}, nil
+	}
 }
 
 func (s *Service) ListNodes(ctx context.Context, in *controlv1.ListNodesRequest) (*controlv1.ListNodesResponse, error) {
@@ -451,8 +596,10 @@ func workloadToView(workload models.Workload) *controlv1.WorkloadView {
 		RetryAttempts:    int32(workload.Retry.Attempts),
 		RetryMaxAttempts: int32(workload.Retry.MaxAttempts),
 		RetryNextAt:      timestampPtr(workload.Retry.NextRetryAt),
-		FailureReason:    workload.StatusInfo.FailureReason,
+		FailureReason:    workloadFailureReasonForView(workload),
 		LastUpdated:      workloadLastUpdated(workload),
+		Reason:           reasonToProto(workload.StatusInfo.Reason, workload.StatusInfo.LastUpdated),
+		Usage:            usageToProto(workload.Usage, workload.ID, workload.Type),
 	}
 }
 
@@ -471,6 +618,37 @@ func workloadStatusForView(workload models.Workload) string {
 		}
 	}
 	return status
+}
+
+func workloadFailureReasonForView(workload models.Workload) string {
+	reason := strings.TrimSpace(workload.StatusInfo.FailureReason)
+	if reason == "" {
+		if lastErr, ok := metadataString(workload.Metadata, "last_error"); ok {
+			reason = strings.TrimSpace(lastErr)
+		}
+	}
+
+	runtimeReason := ""
+	for _, key := range []string{"container.stderr", "last_runtime_error", "container.runtime_error"} {
+		if val, ok := metadataString(workload.Metadata, key); ok {
+			clean := strings.TrimSpace(val)
+			if clean != "" {
+				runtimeReason = clean
+				break
+			}
+		}
+	}
+
+	if runtimeReason == "" {
+		return reason
+	}
+	if reason == "" || strings.EqualFold(reason, runtimeReason) {
+		return runtimeReason
+	}
+	if isInfrastructureFailureReasonText(reason) {
+		return runtimeReason + "\n" + reason
+	}
+	return reason + "\n" + runtimeReason
 }
 
 func assignedNodeID(workload models.Workload) string {
@@ -497,6 +675,115 @@ func timestampPtr(t time.Time) *timestamppb.Timestamp {
 	return timestamppb.New(t.UTC())
 }
 
+func reasonToProto(reason *models.WorkloadReason, fallback time.Time) *controlv1.ReasonDetail {
+	if reason == nil {
+		return nil
+	}
+	out := &controlv1.ReasonDetail{
+		Code:      strings.TrimSpace(reason.Code),
+		Message:   strings.TrimSpace(reason.Message),
+		Retryable: reason.Retryable,
+	}
+	if !reason.LastTransition.IsZero() {
+		out.LastTransition = timestamppb.New(reason.LastTransition.UTC())
+	} else if !fallback.IsZero() {
+		out.LastTransition = timestamppb.New(fallback.UTC())
+	}
+	if !reason.NextRetryAt.IsZero() {
+		out.NextRetryAt = timestamppb.New(reason.NextRetryAt.UTC())
+	}
+	if out.Code == "" && out.Message == "" && out.LastTransition == nil && out.NextRetryAt == nil && !out.Retryable {
+		return nil
+	}
+	return out
+}
+
+func usageToProto(usage *models.WorkloadUsage, workloadID, workloadType string) *controlv1.WorkloadUsageSnapshot {
+	if usage == nil {
+		return nil
+	}
+	id := strings.TrimSpace(usage.WorkloadID)
+	if id == "" {
+		id = strings.TrimSpace(workloadID)
+	}
+	typ := strings.TrimSpace(usage.Type)
+	if typ == "" {
+		typ = strings.TrimSpace(workloadType)
+	}
+	out := &controlv1.WorkloadUsageSnapshot{
+		WorkloadId:     id,
+		Type:           typ,
+		CpuPercent:     usage.CPUPercent,
+		MemoryBytes:    usage.MemoryBytes,
+		DiskReadBytes:  usage.DiskReadBytes,
+		DiskWriteBytes: usage.DiskWriteBytes,
+		NetRxBytes:     usage.NetRXBytes,
+		NetTxBytes:     usage.NetTXBytes,
+		Source:         strings.TrimSpace(usage.Source),
+	}
+	if !usage.CollectedAt.IsZero() {
+		out.CollectedAt = timestamppb.New(usage.CollectedAt.UTC())
+	}
+	return out
+}
+
+func reasonFromProto(reason *controlv1.ReasonDetail, fallback *timestamppb.Timestamp) *models.WorkloadReason {
+	if reason == nil {
+		return nil
+	}
+	out := &models.WorkloadReason{
+		Code:      strings.TrimSpace(reason.GetCode()),
+		Message:   strings.TrimSpace(reason.GetMessage()),
+		Retryable: reason.GetRetryable(),
+	}
+	if reason.GetLastTransition() != nil {
+		out.LastTransition = reason.GetLastTransition().AsTime().UTC()
+	} else if fallback != nil {
+		out.LastTransition = fallback.AsTime().UTC()
+	}
+	if reason.GetNextRetryAt() != nil {
+		out.NextRetryAt = reason.GetNextRetryAt().AsTime().UTC()
+	}
+	if out.Code == "" && out.Message == "" && out.LastTransition.IsZero() && out.NextRetryAt.IsZero() && !out.Retryable {
+		return nil
+	}
+	return out
+}
+
+func usageFromProto(usage *controlv1.WorkloadUsageSnapshot, workloadID, workloadType string) *models.WorkloadUsage {
+	if usage == nil {
+		return nil
+	}
+	id := strings.TrimSpace(usage.GetWorkloadId())
+	if id == "" {
+		id = strings.TrimSpace(workloadID)
+	}
+	typ := strings.TrimSpace(usage.GetType())
+	if typ == "" {
+		typ = strings.TrimSpace(workloadType)
+	}
+	out := &models.WorkloadUsage{
+		WorkloadID:     id,
+		Type:           typ,
+		CPUPercent:     usage.GetCpuPercent(),
+		MemoryBytes:    usage.GetMemoryBytes(),
+		DiskReadBytes:  usage.GetDiskReadBytes(),
+		DiskWriteBytes: usage.GetDiskWriteBytes(),
+		NetRXBytes:     usage.GetNetRxBytes(),
+		NetTXBytes:     usage.GetNetTxBytes(),
+		Source:         strings.TrimSpace(usage.GetSource()),
+	}
+	if usage.GetCollectedAt() != nil {
+		out.CollectedAt = usage.GetCollectedAt().AsTime().UTC()
+	}
+	if out.WorkloadID == "" && out.Type == "" && out.CPUPercent == 0 && out.MemoryBytes == 0 &&
+		out.DiskReadBytes == 0 && out.DiskWriteBytes == 0 && out.NetRXBytes == 0 &&
+		out.NetTXBytes == 0 && out.CollectedAt.IsZero() && out.Source == "" {
+		return nil
+	}
+	return out
+}
+
 func copyStringMap(in map[string]string) map[string]string {
 	if len(in) == 0 {
 		return nil
@@ -506,6 +793,35 @@ func copyStringMap(in map[string]string) map[string]string {
 		out[k] = v
 	}
 	return out
+}
+
+func metadataString(metadata map[string]interface{}, key string) (string, bool) {
+	if metadata == nil {
+		return "", false
+	}
+	raw, ok := metadata[key]
+	if !ok {
+		return "", false
+	}
+	switch v := raw.(type) {
+	case string:
+		return v, true
+	default:
+		return fmt.Sprintf("%v", v), true
+	}
+}
+
+func isInfrastructureFailureReasonText(reason string) bool {
+	lower := strings.ToLower(strings.TrimSpace(reason))
+	if lower == "" {
+		return false
+	}
+	return (strings.Contains(lower, "node") && strings.Contains(lower, "unavailable")) ||
+		strings.Contains(lower, "no failover target") ||
+		strings.Contains(lower, "heartbeat expired") ||
+		strings.Contains(lower, "connection refused") ||
+		strings.Contains(lower, "deadline exceeded") ||
+		strings.Contains(lower, "transport: error while dialing")
 }
 
 func splitHostPort(endpoint string) (string, int, error) {
@@ -588,6 +904,7 @@ func controlApplyToModel(in *controlv1.ApplyWorkloadRequest) (models.Workload, e
 			}
 			w.Volumes = append(w.Volumes, vol)
 		}
+		w.ManagedVolumes = toModelManagedVolumes(cs.GetManagedVolumes())
 	case "compose":
 		cp := in.GetSpec().GetCompose()
 		if cp == nil {
@@ -621,8 +938,10 @@ func controlApplyToModel(in *controlv1.ApplyWorkloadRequest) (models.Workload, e
 				UserData:      ci.GetUserData(),
 				MetaData:      ci.GetMetaData(),
 				NetworkConfig: ci.GetNetworkConfig(),
+				VendorData:    ci.GetVendorData(),
 			}
 		}
+		w.VM.ManagedVolumes = toModelManagedVolumes(vm.GetManagedVolumes())
 		for _, d := range vm.GetDisks() {
 			device := strings.TrimSpace(d.GetMountPoint())
 			if device == "" {
@@ -684,6 +1003,16 @@ func parseEmbeddedVMSpec(metadata map[string]interface{}) (*models.VMSpec, bool)
 			NetworkConfig string `json:"network_config"`
 			VendorData    string `json:"vendor_data"`
 		} `json:"cloud_init_config"`
+		ManagedVolumes []struct {
+			Name         string `json:"name"`
+			Driver       string `json:"driver"`
+			SizeGB       int64  `json:"size_gb"`
+			AccessMode   string `json:"access_mode"`
+			FSType       string `json:"fs_type"`
+			MountPath    string `json:"mount_path"`
+			ReadOnly     bool   `json:"read_only"`
+			RetainPolicy string `json:"retain_policy"`
+		} `json:"managed_volumes"`
 	}
 	if err := json.Unmarshal(payload, &spec); err != nil {
 		return nil, false
@@ -721,7 +1050,42 @@ func parseEmbeddedVMSpec(metadata map[string]interface{}) (*models.VMSpec, bool)
 			IPAddress: n.IPAddress,
 		})
 	}
+	for _, mv := range spec.ManagedVolumes {
+		out.ManagedVolumes = append(out.ManagedVolumes, models.ManagedVolumeSpec{
+			Name:         mv.Name,
+			Driver:       mv.Driver,
+			SizeGB:       mv.SizeGB,
+			AccessMode:   mv.AccessMode,
+			FSType:       mv.FSType,
+			MountPath:    mv.MountPath,
+			ReadOnly:     mv.ReadOnly,
+			RetainPolicy: mv.RetainPolicy,
+		})
+	}
 	return out, true
+}
+
+func toModelManagedVolumes(in []*controlv1.ManagedVolumeSpec) []models.ManagedVolumeSpec {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]models.ManagedVolumeSpec, 0, len(in))
+	for _, mv := range in {
+		if mv == nil {
+			continue
+		}
+		out = append(out, models.ManagedVolumeSpec{
+			Name:         strings.TrimSpace(mv.GetName()),
+			Driver:       strings.TrimSpace(mv.GetDriver()),
+			SizeGB:       mv.GetSizeGb(),
+			AccessMode:   strings.TrimSpace(mv.GetAccessMode()),
+			FSType:       strings.TrimSpace(mv.GetFsType()),
+			MountPath:    strings.TrimSpace(mv.GetMountPath()),
+			ReadOnly:     mv.GetReadOnly(),
+			RetainPolicy: strings.TrimSpace(mv.GetRetainPolicy()),
+		})
+	}
+	return out
 }
 
 func normalizeDesiredStateString(v string) string {
@@ -748,6 +1112,32 @@ func normalizeSupportedWorkloadTypes(types []string) []string {
 			canon = "container"
 		case "docker-compose":
 			canon = "compose"
+		}
+		if canon == "" {
+			continue
+		}
+		if _, ok := seen[canon]; ok {
+			continue
+		}
+		seen[canon] = struct{}{}
+		out = append(out, canon)
+	}
+	return out
+}
+
+func normalizeSupportedStorageDrivers(drivers []string) []string {
+	if len(drivers) == 0 {
+		return []string{"local"}
+	}
+	out := make([]string, 0, len(drivers))
+	seen := make(map[string]struct{}, len(drivers)+1)
+	seen["local"] = struct{}{}
+	out = append(out, "local")
+	for _, driver := range drivers {
+		canon := strings.ToLower(strings.TrimSpace(driver))
+		switch canon {
+		case "ceph_rbd":
+			canon = "ceph-rbd"
 		}
 		if canon == "" {
 			continue
