@@ -243,9 +243,10 @@ func (s *Scheduler) buildApplyWorkloadRequest(workload models.Workload) (*agentp
 	case "docker-container", "container":
 		req.Type = agentpb.WorkloadType_WORKLOAD_TYPE_CONTAINER
 		containerSpec := &agentpb.ContainerSpec{
-			Image:  workload.Image,
-			Env:    workload.EnvVars,
-			Labels: workload.Labels,
+			Image:          workload.Image,
+			Env:            workload.EnvVars,
+			Labels:         workload.Labels,
+			ManagedVolumes: toAgentManagedVolumes(workload.ManagedVolumes),
 			RestartPolicy: &agentpb.RestartPolicy{
 				Policy: workload.RestartPolicy,
 			},
@@ -310,11 +311,12 @@ func (s *Scheduler) buildApplyWorkloadRequest(workload models.Workload) (*agentp
 			return nil, fmt.Errorf("vm spec is required for vm workloads")
 		}
 		vmSpec := &agentpb.VMSpec{
-			Name:      workload.VM.Name,
-			Vcpus:     workload.VM.VCPUs,
-			MemoryMb:  workload.VM.MemoryMB,
-			CloudInit: workload.VM.CloudInit,
-			Metadata:  workload.VM.Metadata,
+			Name:           workload.VM.Name,
+			Vcpus:          workload.VM.VCPUs,
+			MemoryMb:       workload.VM.MemoryMB,
+			CloudInit:      workload.VM.CloudInit,
+			Metadata:       workload.VM.Metadata,
+			ManagedVolumes: toAgentManagedVolumes(workload.VM.ManagedVolumes),
 		}
 		if workload.VM.CloudInitConfig != nil {
 			vmSpec.CloudInitConfig = &agentpb.CloudInitConfig{
@@ -373,6 +375,26 @@ func normalizeVMDiskForAgent(workloadID string, disk models.VMDiskConfig) models
 		disk.Path = filepath.Join("/var/lib/libvirt/images", fmt.Sprintf("%s-%s%s", strings.TrimSpace(workloadID), safeDevice, ext))
 	}
 	return disk
+}
+
+func toAgentManagedVolumes(in []models.ManagedVolumeSpec) []*agentpb.ManagedVolumeSpec {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]*agentpb.ManagedVolumeSpec, 0, len(in))
+	for _, mv := range in {
+		out = append(out, &agentpb.ManagedVolumeSpec{
+			Name:         strings.TrimSpace(mv.Name),
+			Driver:       strings.TrimSpace(mv.Driver),
+			SizeGb:       mv.SizeGB,
+			AccessMode:   strings.TrimSpace(mv.AccessMode),
+			FsType:       strings.TrimSpace(mv.FSType),
+			MountPath:    strings.TrimSpace(mv.MountPath),
+			ReadOnly:     mv.ReadOnly,
+			RetainPolicy: strings.TrimSpace(mv.RetainPolicy),
+		})
+	}
+	return out
 }
 
 func (s *Scheduler) applyWorkloadOnNode(ctx context.Context, node models.Node, workload models.Workload) (resp *agentpb.ApplyWorkloadResponse, err error) {
