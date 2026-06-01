@@ -61,6 +61,9 @@ func (m *Monitor) syncWorkloadStatus(workloadID string) error {
 	}
 	if msg := strings.TrimSpace(statusResp.GetMessage()); msg != "" {
 		_ = m.scheduler.UpdateWorkloadLogs(workload.ID, msg)
+		if strings.EqualFold(newStatus, "Failed") {
+			_ = m.scheduler.UpdateWorkloadMetadata(workload.ID, map[string]string{"last_runtime_error": msg})
+		}
 	}
 	if len(statusResp.GetMetadata()) > 0 {
 		_ = m.scheduler.UpdateWorkloadMetadata(workload.ID, statusResp.GetMetadata())
