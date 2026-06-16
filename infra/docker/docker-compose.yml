@@ -1,9 +1,8 @@
 # Persys Cloud Full Stack Docker Compose
 #
 # This file defines all core services for local development and integration:
-# - API Gateway, Prow Scheduler, CoreDNS, CFSSL, MongoDB, Prometheus, Grafana, Jaeger, etcd, Node Exporter
-# - All services are connected via the 'milx-cloud-net' bridge network
-# - Certificates are shared via the 'certs' volume
+# - Persys Gateway, Persys Scheduler, Persys Automation, Persys Forgery, Persys Federation, Persys Intelligence,CoreDNS, Hashicorp Vault, MongoDB, MySQL, Postgres, Prometheus, Grafana, Jaeger, etcd, Node Exporter
+# - All services are connected via the 'persys-cloud-net' bridge network
 
 services:
 
@@ -38,34 +37,6 @@ services:
     networks:
       - persys-cloud-net
 
-  # --- Persys Forgery (Internal build orchestration only) ---
-  persys-forgery:
-    build: ../../persys-forgery
-    ports:
-      - 8087:8087
-    depends_on:
-      - vault
-      - mysql
-      - redis
-    environment:
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
-      - OTEL_SERVICE_NAME=${PERSYS_FORGERY_OTEL_SERVICE_NAME:-persys-forgery}
-      - PERSYS_FORGERY_MYSQL_DSN=${PERSYS_FORGERY_MYSQL_DSN:-forgery:password@tcp(mysql:3306)/forgery_db?parseTime=true}
-      - PERSYS_FORGERY_REDIS_ADDR=${PERSYS_FORGERY_REDIS_ADDR:-redis:6379}
-      - PERSYS_FORGERY_REDIS_PASSWORD=${PERSYS_FORGERY_REDIS_PASSWORD:-}
-      - PERSYS_FORGERY_REDIS_PASSWORD_FILE=${PERSYS_FORGERY_REDIS_PASSWORD_FILE:-}
-      - PERSYS_FORGERY_PIPELINE_STATUS_KEY=${PERSYS_FORGERY_PIPELINE_STATUS_KEY:-pipeline_status}
-      - PERSYS_FORGERY_VAULT_ADDR=${PERSYS_FORGERY_VAULT_ADDR:-http://vault:8200}
-      - PERSYS_FORGERY_VAULT_AUTH_METHOD=${PERSYS_FORGERY_VAULT_AUTH_METHOD:-approle}
-      - PERSYS_FORGERY_VAULT_TOKEN=${PERSYS_FORGERY_VAULT_TOKEN:-}
-      - PERSYS_FORGERY_VAULT_TOKEN_FILE=${PERSYS_FORGERY_VAULT_TOKEN_FILE:-}
-      - PERSYS_FORGERY_VAULT_ROLE_ID=${PERSYS_FORGERY_VAULT_ROLE_ID:-}
-      - PERSYS_FORGERY_VAULT_SECRET_ID=${PERSYS_FORGERY_VAULT_SECRET_ID:-}
-      - PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET=${PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET:-}
-      - PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET_FILE=${PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET_FILE:-}
-    networks:
-      - persys-cloud-net
-
   # --- Persys Scheduler (Workload scheduler and reconciler) ---
   persys-scheduler:
     build: ../../persys-scheduler
@@ -96,6 +67,34 @@ services:
       - REDIS_ADDR=redis:6379
       - REDIS_PASSWORD=
       - REDIS_DB=1
+    networks:
+      - persys-cloud-net
+
+  # --- Persys Forgery (Internal build orchestration only) ---
+  persys-forgery:
+    build: ../../persys-forgery
+    ports:
+      - 8087:8087
+    depends_on:
+      - vault
+      - mysql
+      - redis
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
+      - OTEL_SERVICE_NAME=${PERSYS_FORGERY_OTEL_SERVICE_NAME:-persys-forgery}
+      - PERSYS_FORGERY_MYSQL_DSN=${PERSYS_FORGERY_MYSQL_DSN:-forgery:password@tcp(mysql:3306)/forgery_db?parseTime=true}
+      - PERSYS_FORGERY_REDIS_ADDR=${PERSYS_FORGERY_REDIS_ADDR:-redis:6379}
+      - PERSYS_FORGERY_REDIS_PASSWORD=${PERSYS_FORGERY_REDIS_PASSWORD:-}
+      - PERSYS_FORGERY_REDIS_PASSWORD_FILE=${PERSYS_FORGERY_REDIS_PASSWORD_FILE:-}
+      - PERSYS_FORGERY_PIPELINE_STATUS_KEY=${PERSYS_FORGERY_PIPELINE_STATUS_KEY:-pipeline_status}
+      - PERSYS_FORGERY_VAULT_ADDR=${PERSYS_FORGERY_VAULT_ADDR:-http://vault:8200}
+      - PERSYS_FORGERY_VAULT_AUTH_METHOD=${PERSYS_FORGERY_VAULT_AUTH_METHOD:-approle}
+      - PERSYS_FORGERY_VAULT_TOKEN=${PERSYS_FORGERY_VAULT_TOKEN:-}
+      - PERSYS_FORGERY_VAULT_TOKEN_FILE=${PERSYS_FORGERY_VAULT_TOKEN_FILE:-}
+      - PERSYS_FORGERY_VAULT_ROLE_ID=${PERSYS_FORGERY_VAULT_ROLE_ID:-}
+      - PERSYS_FORGERY_VAULT_SECRET_ID=${PERSYS_FORGERY_VAULT_SECRET_ID:-}
+      - PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET=${PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET:-}
+      - PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET_FILE=${PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET_FILE:-}
     networks:
       - persys-cloud-net
 
@@ -357,7 +356,7 @@ services:
     networks:
       - persys-cloud-net
 
-  # --- Redis (Forgery internal queues) ---
+  # --- Redis (Persys Scheduler/Forgery internal queues) ---
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -370,8 +369,8 @@ services:
       - persys-cloud-net
 
 #  --- Postgres (Automation policy and audit store) ---
-  automation-postgres:
-    image: postgres:16-alpine
+  postgres:
+    image: postgres:17-alpine
     restart: unless-stopped
     environment:
       - POSTGRES_DB=${AUTOMATION_POSTGRES_DB:-persys_automation}
@@ -399,7 +398,7 @@ services:
     networks:
       - persys-cloud-net
 
-  # --- etcd (Key-value store for Prow and CoreDNS) ---
+  # --- etcd (Key-value store for Persys Scheduler and CoreDNS) ---
   etcd:
     image: quay.io/coreos/etcd:v3.5.0
     command: etcd --advertise-client-urls http://etcd:2379 --listen-client-urls http://0.0.0.0:2379 --auto-compaction-retention=1h

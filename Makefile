@@ -73,7 +73,7 @@ init:
 	@./init.sh
 
 certs:
-	@./generate-certs.sh
+	@./hack/generate-certs.sh
 
 deps:
 	@mkdir -p "$(ROOT_BIN_DIR)"
