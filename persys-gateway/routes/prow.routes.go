@@ -42,6 +42,12 @@ func (rc *ProwRouteController) ProwRoute(rg *gin.RouterGroup) {
 	{
 		nodes.GET("", rc.prowController.ListNodesHandler())
 		nodes.GET("/:id", rc.prowController.GetNodeHandler())
+		nodes.POST("/:id/drain", rc.prowController.DrainNodeHandler())
+		nodes.POST("/:id/undrain", rc.prowController.UndrainNodeHandler())
+		nodes.POST("/:id/taint", rc.prowController.TaintNodeHandler())
+		nodes.POST("/:id/untaint", rc.prowController.UntaintNodeHandler())
+		nodes.POST("/:id/labels", rc.prowController.SetNodeLabelHandler())
+		nodes.DELETE("/:id/labels", rc.prowController.DeleteNodeLabelHandler())
 	}
 
 	cluster := router.Group("/cluster")
@@ -58,6 +64,12 @@ func (rc *ProwRouteController) ProwRoute(rg *gin.RouterGroup) {
 		clusters.POST("/workloads/:id/retry", rc.prowController.RetryWorkloadHandler())
 		clusters.GET("/nodes", rc.prowController.ListNodesHandler())
 		clusters.GET("/nodes/:id", rc.prowController.GetNodeHandler())
+		clusters.POST("/nodes/:id/drain", rc.prowController.DrainNodeHandler())
+		clusters.POST("/nodes/:id/undrain", rc.prowController.UndrainNodeHandler())
+		clusters.POST("/nodes/:id/taint", rc.prowController.TaintNodeHandler())
+		clusters.POST("/nodes/:id/untaint", rc.prowController.UntaintNodeHandler())
+		clusters.POST("/nodes/:id/labels", rc.prowController.SetNodeLabelHandler())
+		clusters.DELETE("/nodes/:id/labels", rc.prowController.DeleteNodeLabelHandler())
 		clusters.GET("/cluster/metrics", rc.prowController.ClusterMetricsHandler())
 		clusters.POST("/forgery/projects/upsert", rc.prowController.UpsertProjectHandler())
 		clusters.POST("/forgery/builds/trigger", rc.prowController.TriggerBuildHandler())

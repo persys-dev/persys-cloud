@@ -33,6 +33,9 @@ func (s *Scheduler) UpdateNodeHeartbeat(nodeID, status string, availableCPU floa
 	node.LastHeartbeat = time.Now().UTC()
 	if strings.TrimSpace(status) != "" {
 		previousStatus := node.Status
+		if strings.EqualFold(previousStatus, "Draining") && strings.EqualFold(status, "Ready") {
+			status = "Draining"
+		}
 		node.Status = status
 		if strings.EqualFold(status, "Ready") {
 			if strings.EqualFold(previousStatus, "Ready") {
@@ -66,6 +69,140 @@ func (s *Scheduler) UpdateNodeHeartbeat(nodeID, status string, availableCPU floa
 	_ = s.RetryableEtcdPut("/nodes/"+nodeID+"/status", node.Status)
 	s.cacheNode(node)
 	return nil
+}
+
+func (s *Scheduler) MarkNodeDraining(nodeID, reason, source string) (int, error) {
+	node, err := s.updateNode(nodeID, func(node *models.Node) {
+		node.Status = "Draining"
+		node.StatusReason = defaultString(reason, "node drain requested")
+		node.StatusUpdatedBy = defaultString(source, "operator")
+		node.StatusUpdatedAt = time.Now().UTC()
+	})
+	if err != nil {
+		return 0, err
+	}
+	relocated, err := s.RelocateWorkloadsFromNode(node.NodeID, "node draining")
+	if err != nil {
+		return relocated, err
+	}
+	return relocated, nil
+}
+
+func (s *Scheduler) MarkNodeReady(nodeID, reason, source string) error {
+	_, err := s.updateNode(nodeID, func(node *models.Node) {
+		node.Status = "Ready"
+		node.StatusReason = defaultString(reason, "node returned to service")
+		node.StatusUpdatedBy = defaultString(source, "operator")
+		node.StatusUpdatedAt = time.Now().UTC()
+	})
+	return err
+}
+
+func (s *Scheduler) TaintNode(nodeID string, taint models.NodeTaint, source string) error {
+	_, err := s.updateNode(nodeID, func(node *models.Node) {
+		taint.Key = strings.TrimSpace(taint.Key)
+		taint.Effect = normalizeTaintEffect(taint.Effect)
+		replaced := false
+		for i := range node.Taints {
+			if node.Taints[i].Key == taint.Key && strings.EqualFold(node.Taints[i].Effect, taint.Effect) {
+				node.Taints[i] = taint
+				replaced = true
+				break
+			}
+		}
+		if !replaced {
+			node.Taints = append(node.Taints, taint)
+		}
+		node.StatusReason = fmt.Sprintf("taint %s=%s:%s set", taint.Key, taint.Value, taint.Effect)
+		node.StatusUpdatedBy = defaultString(source, "operator")
+		node.StatusUpdatedAt = time.Now().UTC()
+	})
+	return err
+}
+
+func (s *Scheduler) UntaintNode(nodeID, key, effect, source string) error {
+	_, err := s.updateNode(nodeID, func(node *models.Node) {
+		effect = strings.TrimSpace(effect)
+		key = strings.TrimSpace(key)
+		filtered := node.Taints[:0]
+		for _, taint := range node.Taints {
+			if taint.Key == key && (effect == "" || strings.EqualFold(taint.Effect, effect)) {
+				continue
+			}
+			filtered = append(filtered, taint)
+		}
+		node.Taints = filtered
+		node.StatusReason = fmt.Sprintf("taint %s:%s removed", key, effect)
+		node.StatusUpdatedBy = defaultString(source, "operator")
+		node.StatusUpdatedAt = time.Now().UTC()
+	})
+	return err
+}
+
+func (s *Scheduler) SetNodeLabel(nodeID, key, value, source string) error {
+	_, err := s.updateNode(nodeID, func(node *models.Node) {
+		if node.Labels == nil {
+			node.Labels = map[string]string{}
+		}
+		node.Labels[strings.TrimSpace(key)] = strings.TrimSpace(value)
+		node.StatusReason = fmt.Sprintf("label %s set", strings.TrimSpace(key))
+		node.StatusUpdatedBy = defaultString(source, "operator")
+		node.StatusUpdatedAt = time.Now().UTC()
+	})
+	return err
+}
+
+func (s *Scheduler) DeleteNodeLabel(nodeID, key, source string) error {
+	_, err := s.updateNode(nodeID, func(node *models.Node) {
+		delete(node.Labels, strings.TrimSpace(key))
+		node.StatusReason = fmt.Sprintf("label %s deleted", strings.TrimSpace(key))
+		node.StatusUpdatedBy = defaultString(source, "operator")
+		node.StatusUpdatedAt = time.Now().UTC()
+	})
+	return err
+}
+
+func (s *Scheduler) updateNode(nodeID string, mutate func(*models.Node)) (models.Node, error) {
+	if err := s.requireWritable(); err != nil {
+		return models.Node{}, err
+	}
+	resp, err := s.RetryableEtcdGet("/nodes/" + nodeID)
+	if err != nil {
+		return models.Node{}, fmt.Errorf("failed to get node %s from etcd: %w", nodeID, err)
+	}
+	if resp == nil || len(resp.Kvs) == 0 {
+		return models.Node{}, fmt.Errorf("node %s not found", nodeID)
+	}
+	var node models.Node
+	if err := json.Unmarshal(resp.Kvs[0].Value, &node); err != nil {
+		return models.Node{}, fmt.Errorf("failed to unmarshal node %s: %w", nodeID, err)
+	}
+	mutate(&node)
+	payload, err := json.Marshal(node)
+	if err != nil {
+		return models.Node{}, fmt.Errorf("failed to marshal node %s: %w", nodeID, err)
+	}
+	if err := s.RetryableEtcdPut("/nodes/"+nodeID, string(payload)); err != nil {
+		return models.Node{}, fmt.Errorf("failed to persist node %s: %w", nodeID, err)
+	}
+	_ = s.RetryableEtcdPut("/nodes/"+nodeID+"/status", node.Status)
+	s.cacheNode(node)
+	return node, nil
+}
+
+func normalizeTaintEffect(effect string) string {
+	effect = strings.TrimSpace(effect)
+	if effect == "" {
+		return "NoSchedule"
+	}
+	return effect
+}
+
+func defaultString(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return strings.TrimSpace(value)
 }
 
 func (s *Scheduler) MarkNodeNotReady(nodeID, reason string) error {

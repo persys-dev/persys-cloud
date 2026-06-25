@@ -345,6 +345,10 @@ func (s *Scheduler) selectNodeForWorkload(workload models.Workload) (models.Node
 			rejections = append(rejections, fmt.Sprintf("%s: label_mismatch", node.NodeID))
 			continue
 		}
+		if blocksScheduling(node.Taints) {
+			rejections = append(rejections, fmt.Sprintf("%s: tainted taints=%v", node.NodeID, node.Taints))
+			continue
+		}
 		if !nodeSupportsWorkloadType(node, workload.Type) {
 			rejections = append(rejections, fmt.Sprintf("%s: workload_type_unsupported need=%s supports=%v", node.NodeID, canonicalWorkloadType(workload.Type), node.SupportedWorkloadTypes))
 			continue
@@ -380,6 +384,53 @@ func (s *Scheduler) selectNodeForWorkload(workload models.Workload) (models.Node
 
 	reason := fmt.Sprintf("selected by lowest utilization score %.4f", nodeUtilizationScore(candidates[0]))
 	return candidates[0], reason, nil
+}
+
+func blocksScheduling(taints []models.NodeTaint) bool {
+	for _, taint := range taints {
+		effect := strings.TrimSpace(taint.Effect)
+		if effect == "" || strings.EqualFold(effect, "NoSchedule") {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Scheduler) RelocateWorkloadsFromNode(nodeID, reason string) (int, error) {
+	if err := s.requireWritable(); err != nil {
+		return 0, err
+	}
+	workloads, err := s.GetWorkloadsByNode(nodeID)
+	if err != nil {
+		return 0, err
+	}
+	relocated := 0
+	for i := range workloads {
+		workload := workloads[i]
+		nextNode, selectionReason, selErr := s.selectNodeForWorkload(workload)
+		if selErr != nil {
+			_ = s.UpdateWorkloadRetryOnFailure(workload.ID, fmt.Sprintf("%s; no relocation target: %v", reason, selErr))
+			continue
+		}
+		if strings.EqualFold(nextNode.NodeID, nodeID) {
+			_ = s.UpdateWorkloadRetryOnFailure(workload.ID, fmt.Sprintf("%s; selected same node", reason))
+			continue
+		}
+		if workload.Metadata == nil {
+			workload.Metadata = map[string]interface{}{}
+		}
+		workload.Metadata["previous_node"] = nodeID
+		workload.Metadata["last_action"] = "Relocated"
+		workload.Retry.Attempts = 0
+		workload.Retry.NextRetryAt = time.Time{}
+		if err := s.assignWorkload(&workload, nextNode, fmt.Sprintf("%s; %s", reason, selectionReason)); err != nil {
+			return relocated, err
+		}
+		relocated++
+		_ = s.UpdateWorkloadLogs(workload.ID, fmt.Sprintf("Relocated from node %s to %s: %s", nodeID, nextNode.NodeID, reason))
+		s.emitEvent("Relocated", workload.ID, nextNode.NodeID, reason, map[string]interface{}{"previous_node": nodeID})
+	}
+	return relocated, nil
 }
 
 func (s *Scheduler) assignWorkload(workload *models.Workload, node models.Node, reason string) error {

@@ -19,6 +19,14 @@ service AgentControl {
 
   // Retry trigger
   rpc RetryWorkload(RetryWorkloadRequest) returns (RetryWorkloadResponse);
+
+  // Node management
+  rpc DrainNode(DrainNodeRequest) returns (DrainNodeResponse);
+  rpc UndrainNode(UndrainNodeRequest) returns (UndrainNodeResponse);
+  rpc TaintNode(TaintNodeRequest) returns (TaintNodeResponse);
+  rpc UntaintNode(UntaintNodeRequest) returns (UntaintNodeResponse);
+  rpc SetNodeLabel(SetNodeLabelRequest) returns (SetNodeLabelResponse);
+  rpc DeleteNodeLabel(DeleteNodeLabelRequest) returns (DeleteNodeLabelResponse);
   rpc SubmitAutomationSuggestion(SubmitAutomationSuggestionRequest) returns (SubmitAutomationSuggestionResponse);
 
   // Cluster and node management visibility
@@ -284,6 +292,81 @@ message RetryWorkloadResponse {
   bool accepted = 1;
 }
 
+message DrainNodeRequest {
+  string node_id = 1;
+  string reason = 2;
+}
+
+message DrainNodeResponse {
+  bool accepted = 1;
+  string message = 2;
+  int32 relocated_workloads = 3;
+  NodeView node = 4;
+}
+
+message UndrainNodeRequest {
+  string node_id = 1;
+  string reason = 2;
+}
+
+message UndrainNodeResponse {
+  bool accepted = 1;
+  string message = 2;
+  NodeView node = 3;
+}
+
+message NodeTaint {
+  string key = 1;
+  string value = 2;
+  string effect = 3; // NoSchedule | PreferNoSchedule
+}
+
+message TaintNodeRequest {
+  string node_id = 1;
+  NodeTaint taint = 2;
+}
+
+message TaintNodeResponse {
+  bool accepted = 1;
+  string message = 2;
+  NodeView node = 3;
+}
+
+message UntaintNodeRequest {
+  string node_id = 1;
+  string key = 2;
+  string effect = 3;
+}
+
+message UntaintNodeResponse {
+  bool accepted = 1;
+  string message = 2;
+  NodeView node = 3;
+}
+
+message SetNodeLabelRequest {
+  string node_id = 1;
+  string key = 2;
+  string value = 3;
+}
+
+message SetNodeLabelResponse {
+  bool accepted = 1;
+  string message = 2;
+  NodeView node = 3;
+}
+
+message DeleteNodeLabelRequest {
+  string node_id = 1;
+  string key = 2;
+}
+
+message DeleteNodeLabelResponse {
+  bool accepted = 1;
+  string message = 2;
+  NodeView node = 3;
+}
+
 message ListNodesRequest {
   string status = 1; // optional filter: Ready | NotReady | Draining
 }
@@ -314,6 +397,7 @@ message NodeView {
   int64 available_memory_mb = 11;
   repeated string supported_workload_types = 12;
   map<string, string> labels = 13;
+  repeated NodeTaint taints = 14;
 }
 
 message ListWorkloadsRequest {

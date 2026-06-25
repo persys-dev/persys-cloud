@@ -196,7 +196,8 @@ func (s *Service) Heartbeat(ctx context.Context, in *controlv1.HeartbeatRequest)
 	}
 
 	lease := time.Now().UTC().Add(3 * time.Minute)
-	return &controlv1.HeartbeatResponse{Acknowledged: true, DrainNode: false, LeaseExpiresAt: timestamppb.New(lease)}, nil
+	node, _ := s.sched.GetNodeByID(in.GetNodeId())
+	return &controlv1.HeartbeatResponse{Acknowledged: true, DrainNode: strings.EqualFold(node.Status, "Draining"), LeaseExpiresAt: timestamppb.New(lease)}, nil
 }
 
 func (s *Service) ApplyWorkload(ctx context.Context, in *controlv1.ApplyWorkloadRequest) (*controlv1.ApplyWorkloadResponse, error) {
@@ -466,6 +467,73 @@ func (s *Service) GetNode(ctx context.Context, in *controlv1.GetNodeRequest) (*c
 	return &controlv1.GetNodeResponse{Node: nodeToView(node)}, nil
 }
 
+func (s *Service) DrainNode(ctx context.Context, in *controlv1.DrainNodeRequest) (*controlv1.DrainNodeResponse, error) {
+	if in == nil || strings.TrimSpace(in.GetNodeId()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "node_id is required")
+	}
+	relocated, err := s.sched.MarkNodeDraining(in.GetNodeId(), in.GetReason(), "persysctl")
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	node, _ := s.sched.GetNodeByID(in.GetNodeId())
+	return &controlv1.DrainNodeResponse{Accepted: true, Message: "node draining", RelocatedWorkloads: int32(relocated), Node: nodeToView(node)}, nil
+}
+
+func (s *Service) UndrainNode(ctx context.Context, in *controlv1.UndrainNodeRequest) (*controlv1.UndrainNodeResponse, error) {
+	if in == nil || strings.TrimSpace(in.GetNodeId()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "node_id is required")
+	}
+	if err := s.sched.MarkNodeReady(in.GetNodeId(), in.GetReason(), "persysctl"); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	node, _ := s.sched.GetNodeByID(in.GetNodeId())
+	return &controlv1.UndrainNodeResponse{Accepted: true, Message: "node ready", Node: nodeToView(node)}, nil
+}
+
+func (s *Service) TaintNode(ctx context.Context, in *controlv1.TaintNodeRequest) (*controlv1.TaintNodeResponse, error) {
+	if in == nil || strings.TrimSpace(in.GetNodeId()) == "" || in.GetTaint() == nil || strings.TrimSpace(in.GetTaint().GetKey()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "node_id and taint.key are required")
+	}
+	if err := s.sched.TaintNode(in.GetNodeId(), models.NodeTaint{Key: in.GetTaint().GetKey(), Value: in.GetTaint().GetValue(), Effect: in.GetTaint().GetEffect()}, "persysctl"); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	node, _ := s.sched.GetNodeByID(in.GetNodeId())
+	return &controlv1.TaintNodeResponse{Accepted: true, Message: "node tainted", Node: nodeToView(node)}, nil
+}
+
+func (s *Service) UntaintNode(ctx context.Context, in *controlv1.UntaintNodeRequest) (*controlv1.UntaintNodeResponse, error) {
+	if in == nil || strings.TrimSpace(in.GetNodeId()) == "" || strings.TrimSpace(in.GetKey()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "node_id and key are required")
+	}
+	if err := s.sched.UntaintNode(in.GetNodeId(), in.GetKey(), in.GetEffect(), "persysctl"); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	node, _ := s.sched.GetNodeByID(in.GetNodeId())
+	return &controlv1.UntaintNodeResponse{Accepted: true, Message: "node untainted", Node: nodeToView(node)}, nil
+}
+
+func (s *Service) SetNodeLabel(ctx context.Context, in *controlv1.SetNodeLabelRequest) (*controlv1.SetNodeLabelResponse, error) {
+	if in == nil || strings.TrimSpace(in.GetNodeId()) == "" || strings.TrimSpace(in.GetKey()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "node_id and key are required")
+	}
+	if err := s.sched.SetNodeLabel(in.GetNodeId(), in.GetKey(), in.GetValue(), "persysctl"); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	node, _ := s.sched.GetNodeByID(in.GetNodeId())
+	return &controlv1.SetNodeLabelResponse{Accepted: true, Message: "node label set", Node: nodeToView(node)}, nil
+}
+
+func (s *Service) DeleteNodeLabel(ctx context.Context, in *controlv1.DeleteNodeLabelRequest) (*controlv1.DeleteNodeLabelResponse, error) {
+	if in == nil || strings.TrimSpace(in.GetNodeId()) == "" || strings.TrimSpace(in.GetKey()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "node_id and key are required")
+	}
+	if err := s.sched.DeleteNodeLabel(in.GetNodeId(), in.GetKey(), "persysctl"); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	node, _ := s.sched.GetNodeByID(in.GetNodeId())
+	return &controlv1.DeleteNodeLabelResponse{Accepted: true, Message: "node label deleted", Node: nodeToView(node)}, nil
+}
+
 func (s *Service) ListWorkloads(ctx context.Context, in *controlv1.ListWorkloadsRequest) (*controlv1.ListWorkloadsResponse, error) {
 	if in != nil {
 		annotateRPC(ctx,
@@ -582,7 +650,16 @@ func nodeToView(node models.Node) *controlv1.NodeView {
 		AvailableMemoryMb:      node.AvailableMemory,
 		SupportedWorkloadTypes: append([]string(nil), node.SupportedWorkloadTypes...),
 		Labels:                 copyStringMap(node.Labels),
+		Taints:                 taintsToProto(node.Taints),
 	}
+}
+
+func taintsToProto(taints []models.NodeTaint) []*controlv1.NodeTaint {
+	out := make([]*controlv1.NodeTaint, 0, len(taints))
+	for _, taint := range taints {
+		out = append(out, &controlv1.NodeTaint{Key: taint.Key, Value: taint.Value, Effect: taint.Effect})
+	}
+	return out
 }
 
 func workloadToView(workload models.Workload) *controlv1.WorkloadView {
