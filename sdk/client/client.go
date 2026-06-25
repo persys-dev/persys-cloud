@@ -69,7 +69,7 @@ func New(opts *options.Options) (*Client, error) {
 		c.conn = conn
 		c.grpc = controlv1.NewAgentControlClient(conn)
 	case options.TransportHTTP:
-		// HTTP gateway support is intentionally initialized lazily by endpoint-specific helpers.
+		return nil, fmt.Errorf("http transport is not implemented yet")
 	default:
 		return nil, fmt.Errorf("unsupported transport %q", opts.Transport)
 	}

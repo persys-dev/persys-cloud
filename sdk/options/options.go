@@ -26,5 +26,5 @@ type Options struct {
 
 // DefaultOptions returns SDK defaults compatible with persysctl conventions.
 func DefaultOptions() *Options {
-	return &Options{Transport: TransportGRPC, APIEndpoint: "http://localhost:8080", GRPCEndpoint: "localhost:50051", Timeout: 30 * time.Second, UseCertManager: true}
+	return &Options{Transport: TransportGRPC, APIEndpoint: "http://localhost:8080", GRPCEndpoint: "localhost:50051", Timeout: 30 * time.Second, UseCertManager: false}
 }

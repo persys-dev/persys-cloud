@@ -26,6 +26,23 @@ func TestNewRejectsUnknownTransport(t *testing.T) {
 	}
 }
 
+func TestNewRejectsHTTPTransportUntilImplemented(t *testing.T) {
+	_, err := New(&options.Options{Transport: options.TransportHTTP, APIEndpoint: "http://localhost:8080"})
+	if err == nil {
+		t.Fatal("New() expected error for HTTP transport")
+	}
+}
+
+func TestDefaultOptionsDoNotRequireCertificatePaths(t *testing.T) {
+	opts := options.DefaultOptions()
+	if opts.UseCertManager {
+		t.Fatal("DefaultOptions() should not require certmanager certificate paths")
+	}
+	if _, err := New(opts); err != nil {
+		t.Fatalf("New(DefaultOptions()) error = %v", err)
+	}
+}
+
 func TestLoadTLSConfigInsecure(t *testing.T) {
 	cfg, err := LoadTLSConfig(&options.Options{Insecure: true})
 	if err != nil {
