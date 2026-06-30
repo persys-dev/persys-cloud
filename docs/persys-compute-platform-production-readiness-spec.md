@@ -15,8 +15,6 @@
 
 - sdk/client/ — HTTP + gRPC transport, mTLS, retry, tracing
 - sdk/types/ — Shared models
-- sdk/ingestion/ — YAML, JSON, Docker Compose, base64, Git converters
-- sdk/gitops/ — Watch logic, polling, fsnotify
 
 #### 2\. Major Features to Implement
 
