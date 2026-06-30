@@ -16,3 +16,9 @@ services:
       - "8084:8084"
     environment:
       - ETCD_ENDPOINTS=etcd:2379
+
+  redis:
+    image: redis:6
+    ports:
+      - 6379:6379
+      
