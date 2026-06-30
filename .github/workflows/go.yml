@@ -33,6 +33,12 @@ jobs:
           go mod download
           cd cmd/scheduler && go build -o main
 
+    - name: Build Persys Compute Agent
+      working-directory: ./compute-agent
+      run: |
+          go mod download
+          cd cmd && go build -o main
+
     - name: Build Persys Federation
       working-directory: ./persys-federation
       run: |
@@ -41,6 +47,36 @@ jobs:
 
     - name: Build Persys Forgery
       working-directory: ./persys-forgery
+      run: |
+          go mod download
+          cd cmd && go build -o main
+
+    - name: Build Persys-intelligence
+      working-directory: ./persys-intelligence
+      run: |
+          go mod download
+          cd cmd && go build -o main
+
+    - name: Build Persys-automation
+      working-directory: ./persys-automation
+      run: |
+          go mod download
+          cd cmd && go build -o main
+
+    - name: Build Persys-go-sdk
+      working-directory: ./sdk
+      run: |
+          go mod download
+          cd cmd && go build -o main
+    
+    - name: Build Persys-vault-manager
+      working-directory: ./vault-manager
+      run: |
+          go mod download
+          cd cmd && go build -o main
+
+    - name: Build Persysctl
+      working-directory: ./persysctl
       run: |
           go mod download
           cd cmd && go build -o main
