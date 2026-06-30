@@ -34,6 +34,8 @@ services:
       - PERSYS_GATEWAY_GITHUB_CLIENT_SECRET_FILE=${PERSYS_GATEWAY_GITHUB_CLIENT_SECRET_FILE:-}
       - PERSYS_GATEWAY_FORGERY_GRPC_ADDR=${PERSYS_GATEWAY_FORGERY_GRPC_ADDR:-persys-forgery:8087}
       - PERSYS_GATEWAY_FORGERY_GRPC_SERVER_NAME=${PERSYS_GATEWAY_FORGERY_GRPC_SERVER_NAME:-persys-forgery.persys.local}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     networks:
       - persys-cloud-net
 
@@ -67,6 +69,8 @@ services:
       - REDIS_ADDR=redis:6379
       - REDIS_PASSWORD=
       - REDIS_DB=1
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     networks:
       - persys-cloud-net
 
@@ -95,6 +99,8 @@ services:
       - PERSYS_FORGERY_VAULT_SECRET_ID=${PERSYS_FORGERY_VAULT_SECRET_ID:-}
       - PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET=${PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET:-}
       - PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET_FILE=${PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET_FILE:-}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     networks:
       - persys-cloud-net
 
@@ -107,7 +113,7 @@ services:
     depends_on:
       - persys-scheduler
       - prometheus
-      - automation-postgres
+      - postgres
       - persys-intelligence
     environment:
       - AUTOMATION_GRPC_ADDR=0.0.0.0
@@ -146,6 +152,8 @@ services:
       - AUTOMATION_LEADER_ELECTION_ENABLED=${AUTOMATION_LEADER_ELECTION_ENABLED:-true}
       - AUTOMATION_LEADER_ELECTION_LOCK_ID=${AUTOMATION_LEADER_ELECTION_LOCK_ID:-771001}
       - AUTOMATION_LEADER_ELECTION_POLL_INTERVAL=${AUTOMATION_LEADER_ELECTION_POLL_INTERVAL:-5s}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     networks:
       - persys-cloud-net
 
@@ -191,6 +199,8 @@ services:
       - INTELLIGENCE_MODEL_ENDPOINT=${INTELLIGENCE_MODEL_ENDPOINT:-}
       - INTELLIGENCE_MODEL_API_KEY=${INTELLIGENCE_MODEL_API_KEY:-}
       - INTELLIGENCE_MODEL_NAME=${INTELLIGENCE_MODEL_NAME:-}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     networks:
       - persys-cloud-net
     
@@ -201,11 +211,13 @@ services:
     environment:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
       - OTEL_SERVICE_NAME=${COMPUTE_AGENT_OTEL_SERVICE_NAME:-compute-agent}
+      - PERSYS_VAULT_ENABLED=true
       - PERSYS_VAULT_ADDR=${COMPUTE_AGENT_VAULT_ADDR:-http://vault:8200}
       - PERSYS_VAULT_AUTH_METHOD=${COMPUTE_AGENT_VAULT_AUTH_METHOD:-approle}
       - PERSYS_VAULT_TOKEN=${COMPUTE_AGENT_VAULT_TOKEN:-}
-      - PERSYS_VAULT_ROLE_ID=${COMPUTE_AGENT_VAULT_ROLE_ID:-}
-      - PERSYS_VAULT_SECRET_ID=${COMPUTE_AGENT_VAULT_SECRET_ID:-}
+      - PERSYS_VAULT_APPROLE_ROLE_ID=${COMPUTE_AGENT_VAULT_ROLE_ID:-}
+      - PERSYS_VAULT_APPROLE_SECRET_ID=${COMPUTE_AGENT_VAULT_SECRET_ID:-}
+      - PERSYS_VAULT_SERVICE_NAME=${COMPUTE_AGENT_VAULT_SERVICE_NAME:-compute-agent}
       - PERSYS_TLS_ENABLED=${PERSYS_TLS_ENABLED:-true}
       - PERSYS_GRPC_PORT=${PERSYS_GRPC_PORT:-50051}
       - PERSYS_LOG_LEVEL=${PERSYS_LOG_LEVEL:-info}
@@ -215,6 +227,7 @@ services:
       - PERSYS_SCHEDULER_ADDR=${PERSYS_SCHEDULER_ADDR:-persys-scheduler:8085}
     user: "0:0"
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ${DOCKER_SOCK_PATH:-/var/run/docker.sock}:/var/run/docker.sock
     depends_on:
       - vault
@@ -241,20 +254,23 @@ services:
     volumes:
       - ./vault:/vault/config
       - vault_data:/vault/file
+      - /etc/localtime:/etc/localtime:ro
     networks:
       - persys-cloud-net
       
   # --- Vault Bootstrap (runs once to initialize/provision Vault) ---
-  vault-manager-setup:
+  vault-manager:
     build: ../../vault-manager
-    container_name: vault-manager-setup
     restart: "no"
-    profiles: ["setup"]
+    ports:
+      - 50069:50069
     depends_on:
       - vault
     environment:
       - VAULT_ROOT_TOKEN=${VAULT_ROOT_TOKEN:-}
     command: ["--vault-addr=${PERSYS_VAULT_ADDR:-http://vault:8200}"]
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     networks:
       - persys-cloud-net
 
@@ -263,6 +279,7 @@ services:
     image: coredns/coredns:latest
     command: -conf /etc/coredns/Corefile
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./coredns:/etc/coredns
     ports:
       - "53531:53"
@@ -277,6 +294,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
@@ -294,6 +312,7 @@ services:
     image: grafana/grafana:latest
     container_name: grafana_container
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - ./grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
     environment:
@@ -323,6 +342,8 @@ services:
       - "14269:14269"
       - "4317:4317"
       - "4318:4318"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
     networks:
       - persys-cloud-net
 
@@ -352,6 +373,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - mysql_data:/var/lib/mysql
     networks:
       - persys-cloud-net
@@ -364,6 +386,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - redis_data:/data
     networks:
       - persys-cloud-net
@@ -379,6 +402,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - automation_postgres_data:/var/lib/postgresql/data
     networks:
       - persys-cloud-net
@@ -394,6 +418,7 @@ services:
     ports:
       - 27017:27017
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - mongodb_data_container:/data/db
     networks:
       - persys-cloud-net
@@ -404,6 +429,7 @@ services:
     command: etcd --advertise-client-urls http://etcd:2379 --listen-client-urls http://0.0.0.0:2379 --auto-compaction-retention=1h
     restart: unless-stopped
     volumes:
+      - /etc/localtime:/etc/localtime:ro
       - etcd_data:/etcd-data
     environment:
       - ETCD_DATA_DIR=/etcd-data
