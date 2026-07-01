@@ -61,8 +61,8 @@ github.com/mitchellh/go-homedir v1.1.0 h1:lukF9ziXFxDFPkA1vsr5zpc1XuPDn/wFntq5mG
 github.com/mitchellh/go-homedir v1.1.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrkLzIz1N1q0pr0=
 github.com/mitchellh/mapstructure v1.5.0 h1:jeMsZIYE/09sWLaz43PL7Gy6RuMjD2eJVyuac5Z2hdY=
 github.com/mitchellh/mapstructure v1.5.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
-github.com/persys-dev/persys-cloud/pkg v0.0.0-20260616200211-83ce5addcc97 h1:s+dbk+f19Zu/H2c7AuaKXBceQj0L4CQZBKVSXTF/CbE=
-github.com/persys-dev/persys-cloud/pkg v0.0.0-20260616200211-83ce5addcc97/go.mod h1:BKpHun2lgyknFnBmitTCxZ9pNXiF91HO2Kd2WDJAH8w=
+github.com/persys-dev/persys-cloud/pkg v0.0.0-20260701204740-5403281df5a5 h1:RinJDszkwulkkYlsZaM+WWDHwBr3DiD3NSzF59MsdLs=
+github.com/persys-dev/persys-cloud/pkg v0.0.0-20260701204740-5403281df5a5/go.mod h1:BKpHun2lgyknFnBmitTCxZ9pNXiF91HO2Kd2WDJAH8w=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/redis/go-redis/v9 v9.18.0 h1:pMkxYPkEbMPwRdenAzUNyFNrDgHx9U+DrBabWNfSRQs=

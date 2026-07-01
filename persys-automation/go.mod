@@ -5,7 +5,7 @@ go 1.24.13
 require (
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
-	github.com/persys-dev/persys-cloud/pkg v0.0.0-20260616200211-83ce5addcc97
+	github.com/persys-dev/persys-cloud/pkg v0.0.0-20260701204740-5403281df5a5
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.4
