@@ -5,7 +5,7 @@ go 1.24.13
 require (
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
-	github.com/persys-dev/persys-cloud/pkg v0.0.0-00010101000000-000000000000
+	github.com/persys-dev/persys-cloud/pkg v0.0.0-20260616200211-83ce5addcc97
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/sirupsen/logrus v1.9.4
@@ -38,9 +38,3 @@ require (
 	golang.org/x/time v0.12.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 )
-
-replace github.com/persys-dev/persys-cloud/pkg => ../pkg
-
-replace github.com/lib/pq => ./third_party/libpq
-
-replace github.com/redis/go-redis/v9 => ./third_party/go-redis-v9

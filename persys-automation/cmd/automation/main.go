@@ -192,6 +192,7 @@ func initCertificates(ctx context.Context, cfg *config.Config) error {
 		TLSCAPath:   cfg.SchedulerCAPath,
 
 		VaultEnabled:       cfg.VaultEnabled,
+		VaultManagerAddr: 	cfg.VaultManagerAddr,
 		VaultAddr:          cfg.VaultAddr,
 		VaultAuthMethod:    cfg.VaultAuthMethod,
 		VaultToken:         cfg.VaultToken,

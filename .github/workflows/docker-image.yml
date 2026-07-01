@@ -57,8 +57,8 @@ jobs:
           build_image "persys-forgery" "persys-forgery"
         fi
 
-        if echo "$CHANGED_FILES" | grep -q "^persys-cfssl/"; then
-          build_image "persys-cfssl" "persys-cfssl"
+        if echo "$CHANGED_FILES" | grep -q "^compute-agent/"; then
+          build_image "compute-agent" "compute-agent"
         fi
 
     - name: List built images

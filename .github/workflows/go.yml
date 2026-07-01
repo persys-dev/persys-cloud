@@ -14,33 +14,60 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout with Submodules
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
 
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v5
       with:
         go-version: 1.24
-
+        cache: true
+        
+# === Main services (standard layout) ===
     - name: Build API Gateway
       working-directory: ./persys-gateway
-      run: |
-          go mod download
-          cd cmd && go build -o main
+      run: go build -o bin/gateway ./cmd
 
     - name: Build Persys Scheduler
       working-directory: ./persys-scheduler
-      run: |
-          go mod download
-          cd cmd/scheduler && go build -o main
+      run: go build -o bin/scheduler ./cmd/scheduler
 
     - name: Build Persys Federation
       working-directory: ./persys-federation
-      run: |
-          go mod download
-          cd cmd && go build -o main
+      run: go build -o bin/federation ./cmd
 
     - name: Build Persys Forgery
       working-directory: ./persys-forgery
+      run: go build -o bin/forgery ./cmd
+
+    - name: Build Persys Intelligence
+      working-directory: ./persys-intelligence
+      run: go build -o bin/intelligence ./cmd/intelligence
+
+    - name: Build Persys Automation
+      working-directory: ./persys-automation
+      run: go build -o bin/automation ./cmd/automation
+
+    - name: Build Persys Go SDK
+      working-directory: ./sdk
+      run: go build -o bin/sdk .
+
+    - name: Build Persys Vault Manager
+      working-directory: ./vault-manager
+      run: go build -o bin/vault-manager ./cmd
+
+    # === Special handling for submodules ===
+    - name: Build Persys Compute Agent
+      working-directory: ./compute-agent
       run: |
-          go mod download
-          cd cmd && go build -o main
+        go mod download
+        go build -o bin/persys-agent ./cmd/agent
+
+    - name: Build Persysctl
+      working-directory: ./persysctl
+      run: |
+        go mod download
+        go build ./...
