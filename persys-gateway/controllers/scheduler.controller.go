@@ -185,6 +185,112 @@ func (c *ProwController) GetNodeHandler() gin.HandlerFunc {
 	}
 }
 
+type nodeReasonPayload struct {
+	Reason string `json:"reason"`
+}
+
+type nodeTaintPayload struct {
+	Key    string `json:"key" binding:"required"`
+	Value  string `json:"value"`
+	Effect string `json:"effect"`
+}
+
+type nodeLabelPayload struct {
+	Key   string `json:"key" binding:"required"`
+	Value string `json:"value"`
+}
+
+func (c *ProwController) DrainNodeHandler() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var body nodeReasonPayload
+		_ = ctx.ShouldBindJSON(&body)
+		resp, err := c.prowService.DrainNode(ctx.Request.Context(), c.resolveClusterID(ctx), c.resolveSessionKey(ctx), c.resolveWorkloadKey(ctx), &controlv1.DrainNodeRequest{NodeId: ctx.Param("id"), Reason: body.Reason})
+		if err != nil {
+			c.writeProxyError(ctx, err)
+			return
+		}
+		writeProtoJSON(ctx, http.StatusOK, resp)
+	}
+}
+
+func (c *ProwController) UndrainNodeHandler() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var body nodeReasonPayload
+		_ = ctx.ShouldBindJSON(&body)
+		resp, err := c.prowService.UndrainNode(ctx.Request.Context(), c.resolveClusterID(ctx), c.resolveSessionKey(ctx), c.resolveWorkloadKey(ctx), &controlv1.UndrainNodeRequest{NodeId: ctx.Param("id"), Reason: body.Reason})
+		if err != nil {
+			c.writeProxyError(ctx, err)
+			return
+		}
+		writeProtoJSON(ctx, http.StatusOK, resp)
+	}
+}
+
+func (c *ProwController) TaintNodeHandler() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var body nodeTaintPayload
+		if err := ctx.ShouldBindJSON(&body); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid taint payload"})
+			return
+		}
+		req := &controlv1.TaintNodeRequest{NodeId: ctx.Param("id"), Taint: &controlv1.NodeTaint{Key: body.Key, Value: body.Value, Effect: body.Effect}}
+		resp, err := c.prowService.TaintNode(ctx.Request.Context(), c.resolveClusterID(ctx), c.resolveSessionKey(ctx), c.resolveWorkloadKey(ctx), req)
+		if err != nil {
+			c.writeProxyError(ctx, err)
+			return
+		}
+		writeProtoJSON(ctx, http.StatusOK, resp)
+	}
+}
+
+func (c *ProwController) UntaintNodeHandler() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var body nodeTaintPayload
+		if err := ctx.ShouldBindJSON(&body); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid taint payload"})
+			return
+		}
+		resp, err := c.prowService.UntaintNode(ctx.Request.Context(), c.resolveClusterID(ctx), c.resolveSessionKey(ctx), c.resolveWorkloadKey(ctx), &controlv1.UntaintNodeRequest{NodeId: ctx.Param("id"), Key: body.Key, Effect: body.Effect})
+		if err != nil {
+			c.writeProxyError(ctx, err)
+			return
+		}
+		writeProtoJSON(ctx, http.StatusOK, resp)
+	}
+}
+
+func (c *ProwController) SetNodeLabelHandler() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var body nodeLabelPayload
+		if err := ctx.ShouldBindJSON(&body); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid label payload"})
+			return
+		}
+		resp, err := c.prowService.SetNodeLabel(ctx.Request.Context(), c.resolveClusterID(ctx), c.resolveSessionKey(ctx), c.resolveWorkloadKey(ctx), &controlv1.SetNodeLabelRequest{NodeId: ctx.Param("id"), Key: body.Key, Value: body.Value})
+		if err != nil {
+			c.writeProxyError(ctx, err)
+			return
+		}
+		writeProtoJSON(ctx, http.StatusOK, resp)
+	}
+}
+
+func (c *ProwController) DeleteNodeLabelHandler() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		var body nodeLabelPayload
+		if err := ctx.ShouldBindJSON(&body); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid label payload"})
+			return
+		}
+		resp, err := c.prowService.DeleteNodeLabel(ctx.Request.Context(), c.resolveClusterID(ctx), c.resolveSessionKey(ctx), c.resolveWorkloadKey(ctx), &controlv1.DeleteNodeLabelRequest{NodeId: ctx.Param("id"), Key: body.Key})
+		if err != nil {
+			c.writeProxyError(ctx, err)
+			return
+		}
+		writeProtoJSON(ctx, http.StatusOK, resp)
+	}
+}
+
 func (c *ProwController) ClusterMetricsHandler() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		clusterID := c.resolveClusterID(ctx)

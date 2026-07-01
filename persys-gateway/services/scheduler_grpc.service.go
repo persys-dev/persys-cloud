@@ -75,6 +75,66 @@ func (s *ProwService) RetryWorkload(ctx context.Context, clusterID, sessionKey, 
 	return resp.(*controlv1.RetryWorkloadResponse), nil
 }
 
+func (s *ProwService) DrainNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.DrainNodeRequest) (*controlv1.DrainNodeResponse, error) {
+	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
+		return client.DrainNode(ctx, req)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*controlv1.DrainNodeResponse), nil
+}
+
+func (s *ProwService) UndrainNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.UndrainNodeRequest) (*controlv1.UndrainNodeResponse, error) {
+	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
+		return client.UndrainNode(ctx, req)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*controlv1.UndrainNodeResponse), nil
+}
+
+func (s *ProwService) TaintNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.TaintNodeRequest) (*controlv1.TaintNodeResponse, error) {
+	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
+		return client.TaintNode(ctx, req)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*controlv1.TaintNodeResponse), nil
+}
+
+func (s *ProwService) UntaintNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.UntaintNodeRequest) (*controlv1.UntaintNodeResponse, error) {
+	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
+		return client.UntaintNode(ctx, req)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*controlv1.UntaintNodeResponse), nil
+}
+
+func (s *ProwService) SetNodeLabel(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.SetNodeLabelRequest) (*controlv1.SetNodeLabelResponse, error) {
+	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
+		return client.SetNodeLabel(ctx, req)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*controlv1.SetNodeLabelResponse), nil
+}
+
+func (s *ProwService) DeleteNodeLabel(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.DeleteNodeLabelRequest) (*controlv1.DeleteNodeLabelResponse, error) {
+	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
+		return client.DeleteNodeLabel(ctx, req)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*controlv1.DeleteNodeLabelResponse), nil
+}
+
 func (s *ProwService) GetNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.GetNodeRequest) (*controlv1.GetNodeResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.GetNode(ctx, req)

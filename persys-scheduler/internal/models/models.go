@@ -39,6 +39,15 @@ type DockerSwarm struct {
 }
 
 // Node represents a registered node
+
+// NodeTaint represents a scheduler taint attached to a node.
+type NodeTaint struct {
+	Key    string `json:"key"`
+	Value  string `json:"value,omitempty"`
+	Effect string `json:"effect"`
+}
+
+// Node represents a compute node
 type Node struct {
 	NodeID                  string            `json:"nodeId" binding:"required"`
 	IPAddress               string            `json:"ipAddress" binding:"required"`
@@ -61,6 +70,7 @@ type Node struct {
 	StatusUpdatedBy         string            `json:"statusUpdatedBy,omitempty"`
 	StatusUpdatedAt         time.Time         `json:"statusUpdatedAt,omitempty"`
 	Labels                  map[string]string `json:"labels,omitempty"`
+	Taints                  []NodeTaint       `json:"taints,omitempty"`
 	AgentPort               int               `json:"agentPort"` // Added for agent communication
 	AgentGRPCPort           int               `json:"agentGrpcPort,omitempty"`
 	AgentEndpoint           string            `json:"agentEndpoint,omitempty"`
