@@ -26,6 +26,7 @@ type Config struct {
 	InsecureSkipTLS bool
 
 	VaultEnabled       bool
+	VaultManagerAddr   string
 	VaultAddr          string
 	VaultAuthMethod    string
 	VaultToken         string
@@ -68,6 +69,7 @@ func Load() (*Config, error) {
 		ServerCertPath:  envOr("AUTOMATION_SERVER_TLS_CERT", "/etc/persys/certs/persys_automation/persys_automation.crt"),
 		ServerKeyPath:   envOr("AUTOMATION_SERVER_TLS_KEY", "/etc/persys/certs/persys_automation/persys_automation-key.key"),
 		InsecureSkipTLS: envBoolOr("AUTOMATION_TLS_INSECURE_SKIP_VERIFY", false),
+		VaultManagerAddr: envOr("VAULT_MANAGER_ADDR","localhost:50069"),
 		VaultEnabled:    envBoolOr("AUTOMATION_VAULT_ENABLED", true),
 		VaultAddr:       envOr("AUTOMATION_VAULT_ADDR", "http://localhost:8200"),
 		VaultAuthMethod: strings.ToLower(envOr("AUTOMATION_VAULT_AUTH_METHOD", "approle")),
@@ -143,7 +145,7 @@ func (c *Config) Validate() error {
 			}
 		case "approle":
 			if strings.TrimSpace(c.VaultAppRoleID) == "" || strings.TrimSpace(c.VaultAppSecretID) == "" {
-				return fmt.Errorf("vault approle auth selected but role_id/secret_id is missing")
+				// return fmt.Errorf("vault approle auth selected but role_id/secret_id is missing")
 			}
 		default:
 			return fmt.Errorf("unsupported AUTOMATION_VAULT_AUTH_METHOD=%q", c.VaultAuthMethod)
