@@ -15,7 +15,9 @@ import (
 	"time"
 
 	vault "github.com/hashicorp/vault/api"
+	pb "github.com/persys-dev/persys-cloud/pkg/vaultmanager/vaultmanagerv1"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -25,13 +27,14 @@ const (
 )
 
 type Config struct {
-	TLSEnabled bool
-
+	TLSEnabled  bool
+	ExternalIP  string
 	TLSCertPath string
 	TLSKeyPath  string
 	TLSCAPath   string
 
 	VaultEnabled       bool
+	VaultManagerAddr string // e.g. "vault-manager:50069"
 	VaultAddr          string
 	VaultAuthMethod    string
 	VaultToken         string
@@ -67,12 +70,39 @@ func NewManager(cfg Config, logger *logrus.Logger) *Manager {
 	}
 }
 
+func (m *Manager) fetchCredentials(ctx context.Context, rotate bool) error {
+	conn, err := grpc.Dial(m.cfg.VaultManagerAddr, grpc.WithInsecure()) // TODO: add TLS
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	c := pb.NewVaultManagerServiceClient(conn)
+	var resp *pb.ServiceCredentialsResponse
+	if rotate {
+		resp, err = c.RotateServiceSecretID(ctx, &pb.RotateServiceSecretIDRequest{ServiceName: m.cfg.VaultServiceName})
+	} else {
+		resp, err = c.GetServiceCredentials(ctx, &pb.GetServiceCredentialsRequest{ServiceName: m.cfg.VaultServiceName})
+	}
+	if err != nil {
+		return err
+	}
+
+	m.cfg.VaultAppRoleID = resp.RoleId
+	m.cfg.VaultAppSecretID = resp.SecretId
+	m.logger.Info("AppRole credentials obtained/rotated via VaultManager")
+	return nil
+}
+
 func (m *Manager) Validate() error {
 	if !m.cfg.TLSEnabled {
 		return nil
 	}
 	if !m.cfg.VaultEnabled {
 		return nil
+	}
+	if strings.TrimSpace(m.cfg.VaultManagerAddr) == "" {
+		return fmt.Errorf("vault manager address is empty")
 	}
 	if strings.TrimSpace(m.cfg.VaultAddr) == "" {
 		return fmt.Errorf("vault is enabled but PERSYS_VAULT_ADDR is empty")
@@ -87,7 +117,8 @@ func (m *Manager) Validate() error {
 		}
 	case "approle":
 		if strings.TrimSpace(m.cfg.VaultAppRoleID) == "" || strings.TrimSpace(m.cfg.VaultAppSecretID) == "" {
-			return fmt.Errorf("vault approle auth selected but role_id/secret_id is missing")
+			m.logger.Warn("VaultAppRoleID and VaultAppSecretID not provided in config. " +
+            "Will attempt to fetch them dynamically via VaultManager")
 		}
 	default:
 		return fmt.Errorf("unsupported vault auth method %q (expected token|approle)", m.cfg.VaultAuthMethod)
@@ -103,6 +134,7 @@ func (m *Manager) Validate() error {
 
 func (m *Manager) Start(ctx context.Context) error {
 	if !m.cfg.TLSEnabled {
+		m.logger.Info("TLS is not enabled aborting!")
 		return nil
 	}
 	if !m.cfg.VaultEnabled {
@@ -211,6 +243,16 @@ func (m *Manager) newVaultClient() (*vault.Client, error) {
 		return nil, err
 	}
 
+	ctx := context.Background()
+
+	// ONLY PLACE WE FETCH Vault Role_ID + Secret ID from Vault-manager
+	if err := m.fetchCredentials(ctx, false); err != nil {
+		m.logger.WithError(err).Warn("Vault Manager not reachable during credential fetch")
+		return nil, fmt.Errorf("failed to fetch AppRole credentials from VaultManager: %w", err)
+	}
+
+	m.logger.Debug("we sent a request to vault manager at it was successful")
+	
 	switch strings.ToLower(strings.TrimSpace(m.cfg.VaultAuthMethod)) {
 	case "token":
 		client.SetToken(m.cfg.VaultToken)
@@ -322,6 +364,9 @@ func (m *Manager) detectSANs() ([]string, []string) {
 	addDNS("localhost")
 	addIP("127.0.0.1")
 	addIP("::1")
+	if m.cfg.ExternalIP != "" {
+		addIP(m.cfg.ExternalIP)
+	}
 
 	if host, err := os.Hostname(); err == nil {
 		addDNS(host)
@@ -559,7 +604,7 @@ func writeAtomic(path, contents string, mode os.FileMode) error {
 }
 
 func writeCertBundleAtomic(certPath, certPEM, keyPath, keyPEM, caPath, caPEM string) error {
-	// Validate bundle first to avoid publishing broken material.
+	// Validate full bundle before writing so we don't publish an unusable pair.
 	if _, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM)); err != nil {
 		return fmt.Errorf("invalid cert/key pair: %w", err)
 	}
