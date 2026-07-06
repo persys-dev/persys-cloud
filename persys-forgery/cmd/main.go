@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/persys-dev/persys-cloud/persys-forgery/internal/build"
-	"github.com/persys-dev/persys-cloud/persys-forgery/internal/certmanager"
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	"github.com/persys-dev/persys-cloud/persys-forgery/internal/db"
 	forgeryv1 "github.com/persys-dev/persys-cloud/persys-forgery/internal/forgeryv1"
 	"github.com/persys-dev/persys-cloud/persys-forgery/internal/grpcapi"
@@ -63,8 +63,30 @@ func main() {
 	go queue.StartRedisWorker(cfg, orchestrator)
 	go queue.StartWebhookWorker(cfg)
 
-	certMgr, err := certmanager.NewFromConfig(cfg, logrus.New())
-	if err != nil {
+	certcfg := certmanager.Config{
+		TLSEnabled: cfg.TLS.Enabled,
+
+		TLSCertPath: cfg.TLS.CertPath,
+		TLSKeyPath:  cfg.TLS.KeyPath,
+		TLSCAPath:   cfg.TLS.CAPath,
+
+		VaultEnabled:       cfg.Vault.Enabled,
+		VaultManagerAddr:   cfg.Vault.ManagerAddr,
+		VaultAddr:          cfg.Vault.Addr,
+		VaultAuthMethod:    cfg.Vault.AuthMethod,
+		VaultToken:         cfg.Vault.Token,
+		VaultAppRoleID:     cfg.Vault.AppRoleID,
+		VaultAppSecretID:   cfg.Vault.AppSecretID,
+		VaultPKIMount:      cfg.Vault.PKIMount,
+		VaultPKIRole:       cfg.Vault.PKIRole,
+		VaultCertTTL:       cfg.Vault.CertTTL,
+		VaultServiceName:   cfg.Vault.ServiceName,
+		VaultServiceDomain: cfg.Vault.ServiceDomain,
+		VaultRetryInterval: cfg.Vault.RetryInterval,
+	}	
+
+	certMgr := certmanager.NewManager(certcfg, logrus.New())
+	if certMgr == nil {
 		log.Fatalf("failed to initialize cert manager: %v", err)
 	}
 	if err := certMgr.Start(ctx); err != nil {

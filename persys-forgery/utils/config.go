@@ -3,6 +3,7 @@ package utils
 import (
 	"os"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -35,14 +36,15 @@ type TLSConfig struct {
 type VaultConfig struct {
 	Enabled       bool   `yaml:"enabled"`
 	Addr          string `yaml:"addr"`
+	ManagerAddr   string `yaml:"manager_addr"`
 	AuthMethod    string `yaml:"auth_method"`
 	Token         string `yaml:"token"`
 	AppRoleID     string `yaml:"approle_id"`
 	AppSecretID   string `yaml:"approle_secret_id"`
 	PKIMount      string `yaml:"pki_mount"`
 	PKIRole       string `yaml:"pki_role"`
-	CertTTL       string `yaml:"cert_ttl"`
-	RetryInterval string `yaml:"retry_interval"`
+	CertTTL       time.Duration `yaml:"cert_ttl"`
+	RetryInterval time.Duration `yaml:"retry_interval"`
 	ServiceName   string `yaml:"service_name"`
 	ServiceDomain string `yaml:"service_domain"`
 	BindHost      string `yaml:"bind_host"`
@@ -97,11 +99,11 @@ func (c *Config) applyDefaults() {
 	if c.Vault.AuthMethod == "" {
 		c.Vault.AuthMethod = "token"
 	}
-	if c.Vault.CertTTL == "" {
-		c.Vault.CertTTL = "24h"
+	if c.Vault.CertTTL == 0 {
+		c.Vault.CertTTL = 24 * time.Hour
 	}
-	if c.Vault.RetryInterval == "" {
-		c.Vault.RetryInterval = "30s"
+	if c.Vault.RetryInterval == 0 {
+		c.Vault.RetryInterval = 30 * time.Second
 	}
 	if c.Vault.ServiceName == "" {
 		c.Vault.ServiceName = "persys-forgery"
