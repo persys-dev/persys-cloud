@@ -918,7 +918,10 @@ func (s *Scheduler) UpdateWorkloadMetadata(workloadID string, metadata map[strin
 }
 
 // UpdateWorkloadRuntimeDetails stores structured reason and latest usage for a workload.
-func (s *Scheduler) UpdateWorkloadRuntimeDetails(workloadID string, reason *models.WorkloadReason, usage *models.WorkloadUsage) error {
+// nodeID identifies the agent that reported this sample (from the heartbeat
+// envelope) and is used only for the meter usage-stream event; it is not
+// persisted on the workload record.
+func (s *Scheduler) UpdateWorkloadRuntimeDetails(workloadID, nodeID string, reason *models.WorkloadReason, usage *models.WorkloadUsage) error {
 	if err := s.requireWritable(); err != nil {
 		return err
 	}
@@ -972,6 +975,15 @@ func (s *Scheduler) UpdateWorkloadRuntimeDetails(workloadID string, reason *mode
 	if err := s.saveWorkload(workload); err != nil {
 		return fmt.Errorf("failed to update workload %s runtime details: %v", workloadID, err)
 	}
+
+	if usage != nil {
+		reportingNode := strings.TrimSpace(nodeID)
+		if reportingNode == "" {
+			reportingNode = workload.NodeID
+		}
+		s.publishUsageEvent(reportingNode, workload.ID, workload.RevisionID, usage)
+	}
+
 	return nil
 }
 
