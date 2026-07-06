@@ -1,0 +1,10 @@
+{
+  "project_name": "demo-compose",
+  "compose_yaml": "dmVyc2lvbjogIjMuOCIKc2VydmljZXM6CiAgd2ViOgogICAgaW1hZ2U6IG5naW54OjEuMjcKICAgIHBvcnRzOgogICAgICAtICI4MDgwOjgwIgogICAgZW52aXJvbm1lbnQ6CiAgICAgIE5HSU5YX0hPU1Q6IGxvY2FsaG9zdAogICAgICBOR0lOWF9QT1JUOiA4MAogICAgdm9sdW1lczoKICAgICAgLSAvdG1wL25naW54LWRhdGE6L3Vzci9zaGFyZS9uZ2lueC9odG1sCiAgICByZXN0YXJ0OiB1bmxlc3Mtc3RvcHBlZAogIHJlZGlzOgogICAgaW1hZ2U6IHJlZGlzOjctYWxwaW5lCiAgICBjb21tYW5kOiBbInJlZGlzLXNlcnZlciIsICItLWFwcGVuZG9ubHkiLCAieWVzIl0KICAgIHZvbHVtZXM6CiAgICAgIC0gL3RtcC9yZWRpcy1kYXRhOi9kYXRhCg==",
+  "env": {
+    "COMPOSE_PROJECT_NAME": "demo-compose",
+    "WEB_PORT": "8080",
+    "REDIS_APPENDONLY": "yes"
+  }
+}
+

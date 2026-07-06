@@ -1,0 +1,24 @@
+#cloud-config
+hostname: demo-vm
+manage_etc_hosts: true
+
+users:
+  - name: core
+    groups: [wheel]
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+
+packages:
+  - qemu-guest-agent
+  - curl
+  - wget
+
+runcmd:
+  - systemctl enable --now qemu-guest-agent
+  - echo "cloud-init completed" > /tmp/cloud-init.done
+
+write_files:
+  - path: /etc/motd
+    permissions: "0644"
+    content: |
+      Managed by Persys test client
+

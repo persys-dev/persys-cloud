@@ -1,0 +1,18 @@
+version: "3.8"
+services:
+  web:
+    image: nginx:1.27
+    ports:
+      - "8080:80"
+    environment:
+      NGINX_HOST: localhost
+      NGINX_PORT: 80
+    volumes:
+      - /tmp/nginx-data:/usr/share/nginx/html
+    restart: unless-stopped
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - /tmp/redis-data:/data
+

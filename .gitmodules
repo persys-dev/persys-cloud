@@ -1,0 +1,3 @@
+[submodule "persys-operator"]
+	path = persys-operator
+	url = https://github.com/persys-dev/persys-operator.git

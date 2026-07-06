@@ -1,0 +1,22 @@
+{
+  "name": "demo-vm-minimal",
+  "vcpus": 1,
+  "memory_mb": 1024,
+  "disks": [
+    {
+      "path": "/var/lib/libvirt/images/demo-vm-minimal.qcow2",
+      "device": "vda",
+      "format": "qcow2",
+      "size_gb": 10,
+      "type": "disk",
+      "boot": false
+    }
+  ],
+  "networks": [
+    {
+      "network": "default"
+    }
+  ],
+  "cloud_init": "#cloud-config\nhostname: demo-vm-minimal\nruncmd:\n  - echo vm-minimal > /tmp/cloud-init.done\n"
+}
+

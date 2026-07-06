@@ -1,0 +1,14 @@
+api_endpoint: "https://api.persys.dev"
+ca_cert_path: "/path/to/ca.crt"
+cert_path: "/path/to/client.crt"
+key_path: "/path/to/client.key"
+vault_enabled: true
+vault_addr: "http://localhost:8200"
+vault_auth_method: "token"
+vault_token: "root"
+vault_pki_mount: "pki"
+vault_pki_role: "persysctl"
+vault_cert_ttl: "24h"
+vault_service_name: "persysctl"
+vault_retry_interval: "1m"
+verbose: false

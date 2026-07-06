@@ -1,0 +1,21 @@
+{
+  "image": "nginx:1.27-alpine",
+  "command": [
+    "nginx",
+    "-g",
+    "daemon off;"
+  ],
+  "env": {
+    "NGINX_ENTRYPOINT_QUIET_LOGS": "1"
+  },
+  "ports": [
+    {
+      "host_port": 8080,
+      "container_port": 80,
+      "protocol": "tcp"
+    }
+  ],
+  "volumes": [],
+  "restart_policy": "always",
+  "privileged": false
+}
