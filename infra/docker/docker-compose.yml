@@ -1,7 +1,7 @@
 # Persys Cloud Full Stack Docker Compose
 #
 # This file defines all core services for local development and integration:
-# - Persys Gateway, Persys Scheduler, Persys Automation, Persys Forgery, Persys Federation, Persys Intelligence,CoreDNS, Hashicorp Vault, MongoDB, MySQL, Postgres, Prometheus, Grafana, Jaeger, etcd, Node Exporter
+# - Persys Gateway, Persys Scheduler, Persys Automation, Persys Forgery, Persys Federation, Persys Intelligence, CoreDNS, Hashicorp Vault, MongoDB, MySQL, Postgres, etcd
 # - All services are connected via the 'persys-cloud-net' bridge network
 
 services:
@@ -12,10 +12,10 @@ services:
     ports:
       - 8551:8551
     depends_on:
+      - vault-manager
       - mongodb
       - vault
       - coredns
-      - jaeger
     environment:
       - OTEL_EXPORTER_JAEGER_ENDPOINT=${OTEL_EXPORTER_JAEGER_ENDPOINT:-jaeger:4318}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
@@ -47,9 +47,8 @@ services:
       - 8085:8085   # gRPC + mTLS API
     depends_on:
       - etcd
-      - vault
+      - vault-manager
       - coredns
-      - jaeger
       - redis
     environment:
       - ETCD_ENDPOINTS=${ETCD_ENDPOINTS:-etcd:2379}
@@ -80,7 +79,7 @@ services:
     ports:
       - 8087:8087
     depends_on:
-      - vault
+      - vault-manager
       - mysql
       - redis
     environment:
@@ -112,7 +111,6 @@ services:
       - 8092:8092
     depends_on:
       - persys-scheduler
-      - prometheus
       - postgres
       - persys-intelligence
     environment:
@@ -165,7 +163,6 @@ services:
       - 8094:8094
     depends_on:
       - persys-scheduler
-      - prometheus
     environment:
       - INTELLIGENCE_HTTP_ADDR=0.0.0.0
       - INTELLIGENCE_HTTP_PORT=8093
@@ -230,11 +227,11 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ${DOCKER_SOCK_PATH:-/var/run/docker.sock}:/var/run/docker.sock
     depends_on:
-      - vault
+      - vault-manager
       - persys-scheduler
     ports:
       - "50051:50051"
-      - "8089:8080"
+      - "8089:8089"
     networks:
       - persys-cloud-net
 
@@ -258,7 +255,7 @@ services:
     networks:
       - persys-cloud-net
       
-  # --- Vault Bootstrap (runs once to initialize/provision Vault) ---
+  # --- Vault Manager (Vault Automatic Management) ---
   vault-manager:
     build: ../../vault-manager
     restart: "no"
@@ -287,77 +284,6 @@ services:
       - "9153:9153/tcp"
     depends_on:
       - etcd
-    networks:
-      - persys-cloud-net
-
-  # --- Prometheus (Metrics collection) ---
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-    ports:
-      - "9090:9090"
-    networks:
-      - persys-cloud-net
-
-  # --- Grafana (Metrics visualization) ---
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana_container
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - ./grafana/provisioning:/etc/grafana/provisioning
-      - grafana_data:/var/lib/grafana
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-admin}
-      - GF_USERS_ALLOW_SIGN_UP=${GF_USERS_ALLOW_SIGN_UP:-false}
-    ports:
-      - "3000:3000"
-    networks:
-      - persys-cloud-net
-    depends_on:
-      - prometheus
-
-  # --- Jaeger (Distributed tracing) ---
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    environment:
-      - COLLECTOR_OTLP_ENABLED=${COLLECTOR_OTLP_ENABLED:-true}
-    ports:
-      - "5775:5775/udp"
-      - "6831:6831/udp"
-      - "6832:6832/udp"
-      - "5778:5778"
-      - "16686:16686"
-      - "14250:14250"
-      - "14268:14268"
-      - "14269:14269"
-      - "4317:4317"
-      - "4318:4318"
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-    networks:
-      - persys-cloud-net
-
-  # --- Node Exporter (Host metrics for Prometheus) ---
-  node_exporter:
-    container_name: node_exporter_container
-    restart: always
-    image: prom/node-exporter
-    ports:
-      - '9100:9100'
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
     networks:
       - persys-cloud-net
 
@@ -444,8 +370,6 @@ volumes:
   mysql_data:
   redis_data:
   automation_postgres_data:
-  prometheus_data:
-  grafana_data:
   vault_data:
   etcd_data:
 
