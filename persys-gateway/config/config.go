@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -25,6 +26,8 @@ type Config struct {
 	GitHub      GitHubConfig    `yaml:"github"`
 	Webhook     WebhookConfig   `yaml:"webhook"`
 	Forgery     ForgeryConfig   `yaml:"forgery"`
+	Automation  AutomationConfig   `yaml:"automation"`
+	Intelligence IntelligenceConfig `yaml:"intelligence"`
 	Log         LogConfig       `yaml:"log"`
 	Telemetry   TelemetryConfig `yaml:"telemetry"`
 }
@@ -54,6 +57,7 @@ type TLSConfig struct {
 
 type VaultConfig struct {
 	Enabled       bool   `yaml:"enabled"`
+	ManagerAddr   string `yaml:"manager_addr"`
 	Addr          string `yaml:"addr"`
 	AuthMethod    string `yaml:"auth_method"`
 	Token         string `yaml:"token"`
@@ -61,8 +65,8 @@ type VaultConfig struct {
 	AppSecretID   string `yaml:"approle_secret_id"`
 	PKIMount      string `yaml:"pki_mount"`
 	PKIRole       string `yaml:"pki_role"`
-	CertTTL       string `yaml:"cert_ttl"`
-	RetryInterval string `yaml:"retry_interval"`
+	CertTTL       time.Duration `yaml:"cert_ttl"`
+	RetryInterval time.Duration `yaml:"retry_interval"`
 	ServiceName   string `yaml:"service_name"`
 	ServiceDomain string `yaml:"service_domain"`
 	BindHost      string `yaml:"bind_host"`
@@ -123,6 +127,17 @@ type ForgeryConfig struct {
 	GRPCAddr          string `yaml:"grpc_addr"`
 	GRPCServerName    string `yaml:"grpc_server_name"`
 	WebhookForwardURL string `yaml:"webhook_forward_url"`
+}
+
+type AutomationConfig struct {
+	GRPCAddr       string `yaml:"grpc_addr"`
+	GRPCServerName string `yaml:"grpc_server_name"`
+	RequestTimeout string `yaml:"request_timeout"`
+}
+
+type IntelligenceConfig struct {
+	HTTPAddr       string `yaml:"http_addr"`
+	RequestTimeout string `yaml:"request_timeout"`
 }
 
 type LogConfig struct {
@@ -205,17 +220,35 @@ func (c *Config) applyDefaults() {
 	if strings.TrimSpace(c.Forgery.GRPCServerName) == "" {
 		c.Forgery.GRPCServerName = "persys-forgery.persys.local"
 	}
+	if strings.TrimSpace(c.Automation.GRPCAddr) == "" {
+		c.Automation.GRPCAddr = "persys-automation:8091"
+	}
+	if strings.TrimSpace(c.Automation.GRPCServerName) == "" {
+		c.Automation.GRPCServerName = "persys-automation.persys.local"
+	}
+	if strings.TrimSpace(c.Automation.RequestTimeout) == "" {
+		c.Automation.RequestTimeout = "15s"
+	}
+	if strings.TrimSpace(c.Intelligence.HTTPAddr) == "" {
+		c.Intelligence.HTTPAddr = "http://persys-intelligence:8093"
+	}
+	if strings.TrimSpace(c.Intelligence.RequestTimeout) == "" {
+		c.Intelligence.RequestTimeout = "10s"
+	}
 	if strings.TrimSpace(c.App.OAuthRedirectURL) == "" {
-		c.App.OAuthRedirectURL = "http://localhost:8585/auth"
+		c.App.OAuthRedirectURL = "http://persys-gateway:8585/auth"
 	}
 	if strings.TrimSpace(c.Vault.AuthMethod) == "" {
 		c.Vault.AuthMethod = "approle"
 	}
-	if strings.TrimSpace(c.Vault.CertTTL) == "" {
-		c.Vault.CertTTL = "24h"
+	if strings.TrimSpace(c.Vault.ManagerAddr) == "" {
+		c.Vault.ManagerAddr = "vault-manager:50069"
 	}
-	if strings.TrimSpace(c.Vault.RetryInterval) == "" {
-		c.Vault.RetryInterval = "30s"
+	if c.Vault.CertTTL == time.Duration(0) {
+		c.Vault.CertTTL = 24 * time.Hour
+	}
+	if c.Vault.RetryInterval == time.Duration(0) {
+		c.Vault.RetryInterval = 30 * time.Second
 	}
 	if strings.TrimSpace(c.Vault.ServiceName) == "" {
 		c.Vault.ServiceName = c.ServiceName
@@ -281,6 +314,7 @@ func (c *Config) applyEnvOverrides() {
 
 	// Vault
 	c.Vault.Addr = envOrFile("PERSYS_GATEWAY_VAULT_ADDR", c.Vault.Addr)
+	c.Vault.ManagerAddr = envOrFile("PERSYS_VAULT_MANAGER_ADDR", c.Vault.ManagerAddr)
 	c.Vault.AuthMethod = envOrFile("PERSYS_GATEWAY_VAULT_AUTH_METHOD", c.Vault.AuthMethod)
 	c.Vault.Token = envOrFile("PERSYS_GATEWAY_VAULT_TOKEN", c.Vault.Token)
 	c.Vault.AppRoleID = envOrFile("PERSYS_GATEWAY_VAULT_ROLE_ID", c.Vault.AppRoleID)
@@ -294,6 +328,13 @@ func (c *Config) applyEnvOverrides() {
 	// Forgery routing
 	c.Forgery.GRPCAddr = envOrFile("PERSYS_GATEWAY_FORGERY_GRPC_ADDR", c.Forgery.GRPCAddr)
 	c.Forgery.GRPCServerName = envOrFile("PERSYS_GATEWAY_FORGERY_GRPC_SERVER_NAME", c.Forgery.GRPCServerName)
+
+	// Automation routing
+	c.Automation.GRPCAddr = envOrFile("PERSYS_GATEWAY_AUTOMATION_GRPC_ADDR", c.Automation.GRPCAddr)
+	c.Automation.GRPCServerName = envOrFile("PERSYS_GATEWAY_AUTOMATION_GRPC_SERVER_NAME", c.Automation.GRPCServerName)
+
+	// Intelligence routing
+	c.Intelligence.HTTPAddr = envOrFile("PERSYS_GATEWAY_INTELLIGENCE_HTTP_ADDR", c.Intelligence.HTTPAddr)
 
 	// Telemetry
 	c.Telemetry.OTLPEndpoint = envOrFile("PERSYS_GATEWAY_OTLP_ENDPOINT", c.Telemetry.OTLPEndpoint)

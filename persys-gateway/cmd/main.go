@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,7 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/persys-dev/persys-cloud/persys-gateway/config"
 	"github.com/persys-dev/persys-cloud/persys-gateway/controllers"
-	"github.com/persys-dev/persys-cloud/persys-gateway/internal/certmanager"
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	"github.com/persys-dev/persys-cloud/persys-gateway/internal/middleware"
 	"github.com/persys-dev/persys-cloud/persys-gateway/routes"
 	"github.com/persys-dev/persys-cloud/persys-gateway/services"
@@ -36,21 +37,23 @@ import (
 )
 
 type App struct {
-	server            *gin.Engine
-	authCollection    *mongo.Collection
-	sessionCollection *mongo.Collection
-	clusterCollection *mongo.Collection
-	githubCollection  *mongo.Collection
-	prowCollection    *mongo.Collection
-	webhookCollection *mongo.Collection
-	authService       services.AuthService
-	githubService     services.GithubService
-	prowService       *services.ProwService
-	webhookService    services.WebhookService
-	authController    controllers.AuthController
-	githubController  controllers.GithubController
-	prowController    *controllers.ProwController
-	webhookController *controllers.WebhookController
+	server              *gin.Engine
+	authCollection      *mongo.Collection
+	sessionCollection   *mongo.Collection
+	clusterCollection   *mongo.Collection
+	githubCollection    *mongo.Collection
+	prowCollection      *mongo.Collection
+	webhookCollection   *mongo.Collection
+	authService         services.AuthService
+	githubService       services.GithubService
+	prowService         *services.ProwService
+	webhookService      services.WebhookService
+	automationService   *services.AutomationService
+	authController      controllers.AuthController
+	githubController    controllers.GithubController
+	prowController      *controllers.ProwController
+	webhookController   *controllers.WebhookController
+	automationController *controllers.AutomationController
 }
 
 func setupTracer(endpoint string, serviceName string) func() {
@@ -93,7 +96,29 @@ func main() {
 
 	log.Printf("bootstrapping %s", cnf.ServiceName)
 
-	vaultCertManager, err := certmanager.NewFromConfig(cnf, logrus.New())
+	certcnf := certmanager.Config{
+		TLSEnabled: cnf.TLS.Enabled,
+
+		TLSCertPath: cnf.TLS.CertPath,
+		TLSKeyPath:  cnf.TLS.KeyPath,
+		TLSCAPath:   cnf.TLS.CAPath,
+
+		VaultEnabled:       cnf.Vault.Enabled,
+		VaultManagerAddr:   cnf.Vault.ManagerAddr,
+		VaultAddr:          cnf.Vault.Addr,
+		VaultAuthMethod:    cnf.Vault.AuthMethod,
+		VaultToken:         cnf.Vault.Token,
+		VaultAppRoleID:     cnf.Vault.AppRoleID,
+		VaultAppSecretID:   cnf.Vault.AppSecretID,
+		VaultPKIMount:      cnf.Vault.PKIMount,
+		VaultPKIRole:       cnf.Vault.PKIRole,
+		VaultCertTTL:       cnf.Vault.CertTTL,
+		VaultServiceName:   cnf.Vault.ServiceName,
+		VaultServiceDomain: cnf.Vault.ServiceDomain,
+		VaultRetryInterval: cnf.Vault.RetryInterval,
+	}
+
+	vaultCertManager := certmanager.NewManager(certcnf, logrus.New())
 	if err != nil {
 		log.Fatalf("failed to initialize vault cert manager: %v", err)
 	}
@@ -133,10 +158,16 @@ func main() {
 	}
 	app.webhookService.Start(ctx)
 
+	app.automationService, err = services.NewAutomationService(cnf, webhookTLS)
+	if err != nil {
+		log.Fatalf("failed to initialize automation service: %v", err)
+	}
+
 	app.authController = controllers.NewAuthController(app.authService, ctx, app.githubService, app.authCollection, app.sessionCollection)
 	app.githubController = controllers.NewGithubController(app.authService, ctx, app.githubService, app.githubCollection, cnf)
 	app.prowController = controllers.NewProwController(app.prowService, app.authService, ctx)
 	app.webhookController = controllers.NewWebhookController(app.webhookService)
+	app.automationController = controllers.NewAutomationController(app.automationService)
 
 	corsConfig := cors.DefaultConfig()
 	corsConfig.AllowOrigins = []string{"*"}
@@ -170,11 +201,15 @@ func main() {
 	githubRouteController := routes.NewGithubRouteController(app.githubController)
 	prowRouteController := routes.NewProwRouteController(app.prowController)
 	webhookRouteController := routes.NewWebhookRouteController(app.webhookController)
+	automationRouteController := routes.NewAutomationRouteController(app.automationController)
+	intelligenceRouteController := routes.NewIntelligenceRouteController(cnf)
 
 	authRouteController.AuthRoute(mtlsGroup)
 	githubRouteController.GithubRoute(mtlsGroup)
 	prowRouteController.ProwRoute(mtlsGroup)
 	webhookRouteController.WebhookRoute(nonMTLSGroup, cnf.Webhook.PublicPath)
+	automationRouteController.AutomationRoute(mtlsGroup)
+	intelligenceRouteController.IntelligenceRoute(mtlsGroup)
 
 	caCert, err := os.ReadFile(cnf.TLS.CAPath)
 	if err != nil {
@@ -199,6 +234,27 @@ func main() {
 
 	mtlsServer := &http.Server{Addr: cnf.App.HTTPAddr, Handler: mtlsRouter, TLSConfig: tlsConfig}
 	nonMTLSServer := &http.Server{Addr: cnf.App.HTTPAddrPublic, Handler: nonMTLSRouter}
+
+	debugMux := http.NewServeMux()
+	debugMux.HandleFunc("/debug/pprof/", pprof.Index)
+	debugMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	debugMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	debugMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	// goroutine, heap, allocs, block, mutex, threadcreate are served via pprof.Index
+	// through /debug/pprof/{profile-name} automatically once Index is registered
+
+	debugServer := &http.Server{
+		Addr:    "0.0.0.0:6060",
+		Handler: debugMux,
+	}
+
+	go func() {
+		log.Printf("starting debug/pprof server on %s", debugServer.Addr)
+		if err := debugServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("debug server failed: %v", err)
+		}
+	}()
 
 	go func() {
 		log.Printf("starting mTLS server on %s", cnf.App.HTTPAddr)
@@ -227,6 +283,9 @@ func main() {
 	if err := nonMTLSServer.Shutdown(shutdownCtx); err != nil {
 		log.Printf("public server shutdown failed: %v", err)
 	}
+	if err := debugServer.Shutdown(shutdownCtx); err != nil {
+	log.Printf("debug server shutdown failed: %v", err)
+}
 	log.Println("servers exited gracefully")
 }
 
@@ -242,12 +301,12 @@ func setupMongoDB(ctx context.Context, uri string) (*mongo.Client, error) {
 	return client, nil
 }
 
-func buildMTLSClientConfig(cfg *config.Config) (*tls.Config, error) {
-	cert, err := tls.LoadX509KeyPair(cfg.TLS.CertPath, cfg.TLS.KeyPath)
+func buildMTLSClientConfig(cnf *config.Config) (*tls.Config, error) {
+	cert, err := tls.LoadX509KeyPair(cnf.TLS.CertPath, cnf.TLS.KeyPath)
 	if err != nil {
 		return nil, err
 	}
-	caCert, err := os.ReadFile(cfg.TLS.CAPath)
+	caCert, err := os.ReadFile(cnf.TLS.CAPath)
 	if err != nil {
 		return nil, err
 	}
