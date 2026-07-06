@@ -34,6 +34,14 @@ type Config struct {
 	RedisEventTTL        time.Duration
 	RedisEventMaxEntries int64
 
+	// Meter usage stream (Redis Streams ingestion feed for persys-meter).
+	// Publishing is best-effort: if Redis isn't configured/reachable, usage
+	// simply isn't published to the stream, but remains available as always
+	// via the scheduler's own ListWorkloads/GetWorkload gRPC API.
+	MeterStreamEnabled bool
+	MeterStreamName    string
+	MeterStreamMaxLen  int64
+
 	// TLS
 	TLSEnabled  bool
 	TLSCAPath   string
@@ -42,6 +50,7 @@ type Config struct {
 
 	// Vault certificate manager
 	VaultEnabled       bool
+	VaultManagerAddr   string
 	VaultAddr          string
 	VaultAuthMethod    string
 	VaultToken         string
@@ -97,6 +106,9 @@ func Load(insecureFlag bool) (*Config, error) {
 		RedisReconcileTTL:      envDurationOrFlexibleSeconds("REDIS_RECONCILE_TTL", 24*time.Hour),
 		RedisEventTTL:          envDurationOrFlexibleSeconds("REDIS_EVENT_TTL", 24*time.Hour),
 		RedisEventMaxEntries:   int64(envIntOr("REDIS_EVENT_MAX_ENTRIES", 1000)),
+		MeterStreamEnabled:     envBoolOr("METER_REDIS_STREAM_ENABLED", true),
+		MeterStreamName:        envOr("METER_REDIS_STREAM", "persys:usage:stream"),
+		MeterStreamMaxLen:      int64(envIntOr("METER_REDIS_STREAM_MAXLEN", 100000)),
 		Domain:                 envOr("DOMAIN", "persys.local"),
 		AgentsDiscoveryDomain:  envOr("AGENTS_DISCOVERY_DOMAIN", "agents.persys.cloud"),
 		SchedulerShardKey:      envOr("SCHEDULER_SHARD_KEY", "genesis"),
@@ -109,6 +121,7 @@ func Load(insecureFlag bool) (*Config, error) {
 		TLSKeyPath:  envOr("PERSYS_TLS_KEY", "/etc/persys/certs/persys_scheduler/persys_scheduler-key.key"),
 
 		VaultEnabled:       envBoolOr("PERSYS_VAULT_ENABLED", true),
+		VaultManagerAddr: 	envOr("PERSYS_VAULT_MANAGER_ADDR","vault-manager:50069"),
 		VaultAddr:          envOr("PERSYS_VAULT_ADDR", "http://localhost:8200"),
 		VaultAuthMethod:    strings.ToLower(envOr("PERSYS_VAULT_AUTH_METHOD", "token")),
 		VaultToken:         strings.TrimSpace(os.Getenv("PERSYS_VAULT_TOKEN")),

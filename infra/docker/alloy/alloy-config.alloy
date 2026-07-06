@@ -1,0 +1,14 @@
+pyroscope.scrape "persys_cloud" {
+  targets = [
+    {"__address__" = "persys-scheduler:8084", "service_name" = "persys-cloud.persys-scheduler"},
+    {"__address__" = "compute-agent:8089", "service_name" = "persys-cloud.compute-agent"},
+    {"__address__" = "persys-gateway:6060", "service_name" = "persys-cloud.persys-gateway"},
+  ]
+  forward_to = [pyroscope.write.local.receiver]
+}
+
+pyroscope.write "local" {
+  endpoint {
+    url = "http://pyroscope:4040"
+  }
+}

@@ -246,9 +246,10 @@ func (m *Manager) newVaultClient() (*vault.Client, error) {
 	ctx := context.Background()
 
 	// ONLY PLACE WE FETCH Vault Role_ID + Secret ID from Vault-manager
-	if err := m.fetchCredentials(ctx, false); err != nil {
-		m.logger.WithError(err).Warn("Vault Manager not reachable during credential fetch")
-		return nil, fmt.Errorf("failed to fetch AppRole credentials from VaultManager: %w", err)
+	if err := WithRetry(4, 10*time.Second, func() error {
+		return m.fetchCredentials(ctx, false)
+	}); err != nil {
+		return nil, fmt.Errorf("failed to fetch credentials from vault-manager after retries: %w", err)
 	}
 
 	m.logger.Debug("we sent a request to vault manager at it was successful")
@@ -623,4 +624,59 @@ func writeCertBundleAtomic(certPath, certPEM, keyPath, keyPEM, caPath, caPEM str
 		return err
 	}
 	return nil
+}
+
+func WithRetry(attempts int, delay time.Duration, fn func() error) error {
+	if attempts <= 0 {
+		logrus.Warn("WithRetry called with attempts <= 0; treating as a single attempt")
+		attempts = 1
+	}
+
+	var lastErr error
+	start := time.Now()
+
+	for i := 0; i < attempts; i++ {
+		attemptNum := i + 1
+		logrus.WithFields(logrus.Fields{
+			"attempt":       attemptNum,
+			"max_attempts":  attempts,
+		}).Debug("WithRetry: starting attempt")
+
+		attemptStart := time.Now()
+		err := fn()
+		attemptElapsed := time.Since(attemptStart)
+
+		if err == nil {
+			logrus.WithFields(logrus.Fields{
+				"attempt":       attemptNum,
+				"max_attempts":  attempts,
+				"elapsed_ms":    attemptElapsed.Milliseconds(),
+				"total_elapsed_ms": time.Since(start).Milliseconds(),
+			}).Debug("WithRetry: attempt succeeded")
+			return nil
+		}
+
+		lastErr = err
+		logrus.WithError(err).WithFields(logrus.Fields{
+			"attempt":      attemptNum,
+			"max_attempts": attempts,
+			"elapsed_ms":   attemptElapsed.Milliseconds(),
+		}).Warn("WithRetry: attempt failed")
+
+		if i < attempts-1 {
+			logrus.WithFields(logrus.Fields{
+				"attempt":     attemptNum,
+				"next_attempt": attemptNum + 1,
+				"delay":       delay.String(),
+			}).Debug("WithRetry: waiting before next attempt")
+			time.Sleep(delay)
+		}
+	}
+
+	logrus.WithError(lastErr).WithFields(logrus.Fields{
+		"max_attempts":      attempts,
+		"total_elapsed_ms":  time.Since(start).Milliseconds(),
+	}).Error("WithRetry: all attempts exhausted, giving up")
+
+	return fmt.Errorf("all %d attempts failed: %w", attempts, lastErr)
 }

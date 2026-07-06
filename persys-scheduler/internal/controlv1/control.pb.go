@@ -3630,6 +3630,7 @@ type WorkloadView struct {
 	LastUpdated      *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=last_updated,json=lastUpdated,proto3" json:"last_updated,omitempty"`
 	Reason           *ReasonDetail          `protobuf:"bytes,12,opt,name=reason,proto3" json:"reason,omitempty"`
 	Usage            *WorkloadUsageSnapshot `protobuf:"bytes,13,opt,name=usage,proto3" json:"usage,omitempty"`
+	CreatedAt        *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -3751,6 +3752,13 @@ func (x *WorkloadView) GetReason() *ReasonDetail {
 func (x *WorkloadView) GetUsage() *WorkloadUsageSnapshot {
 	if x != nil {
 		return x.Usage
+	}
+	return nil
+}
+
+func (x *WorkloadView) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
 	}
 	return nil
 }
@@ -4314,7 +4322,7 @@ const file_control_proto_rawDesc = "" +
 	"\x15ListWorkloadsResponse\x12=\n" +
 	"\tworkloads\x18\x01 \x03(\v2\x1f.persys.control.v1.WorkloadViewR\tworkloads\"R\n" +
 	"\x13GetWorkloadResponse\x12;\n" +
-	"\bworkload\x18\x01 \x01(\v2\x1f.persys.control.v1.WorkloadViewR\bworkload\"\xbf\x04\n" +
+	"\bworkload\x18\x01 \x01(\v2\x1f.persys.control.v1.WorkloadViewR\bworkload\"\xfa\x04\n" +
 	"\fWorkloadView\x12\x1f\n" +
 	"\vworkload_id\x18\x01 \x01(\tR\n" +
 	"workloadId\x12\x12\n" +
@@ -4331,7 +4339,9 @@ const file_control_proto_rawDesc = "" +
 	" \x01(\tR\rfailureReason\x12=\n" +
 	"\flast_updated\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\vlastUpdated\x127\n" +
 	"\x06reason\x18\f \x01(\v2\x1f.persys.control.v1.ReasonDetailR\x06reason\x12>\n" +
-	"\x05usage\x18\r \x01(\v2(.persys.control.v1.WorkloadUsageSnapshotR\x05usage\"\x1a\n" +
+	"\x05usage\x18\r \x01(\v2(.persys.control.v1.WorkloadUsageSnapshotR\x05usage\x129\n" +
+	"\n" +
+	"created_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x1a\n" +
 	"\x18GetClusterSummaryRequest\"\x9f\x03\n" +
 	"\x19GetClusterSummaryResponse\x12\x1f\n" +
 	"\vtotal_nodes\x18\x01 \x01(\x05R\n" +
@@ -4524,52 +4534,53 @@ var file_control_proto_depIdxs = []int32{
 	63, // 53: persys.control.v1.WorkloadView.last_updated:type_name -> google.protobuf.Timestamp
 	28, // 54: persys.control.v1.WorkloadView.reason:type_name -> persys.control.v1.ReasonDetail
 	27, // 55: persys.control.v1.WorkloadView.usage:type_name -> persys.control.v1.WorkloadUsageSnapshot
-	63, // 56: persys.control.v1.GetClusterSummaryResponse.generated_at:type_name -> google.protobuf.Timestamp
-	5,  // 57: persys.control.v1.ControlMessage.register:type_name -> persys.control.v1.RegisterNodeRequest
-	9,  // 58: persys.control.v1.ControlMessage.heartbeat:type_name -> persys.control.v1.HeartbeatRequest
-	12, // 59: persys.control.v1.ControlMessage.apply:type_name -> persys.control.v1.ApplyWorkloadRequest
-	14, // 60: persys.control.v1.ControlMessage.delete:type_name -> persys.control.v1.DeleteWorkloadRequest
-	5,  // 61: persys.control.v1.AgentControl.RegisterNode:input_type -> persys.control.v1.RegisterNodeRequest
-	9,  // 62: persys.control.v1.AgentControl.Heartbeat:input_type -> persys.control.v1.HeartbeatRequest
-	12, // 63: persys.control.v1.AgentControl.ApplyWorkload:input_type -> persys.control.v1.ApplyWorkloadRequest
-	14, // 64: persys.control.v1.AgentControl.DeleteWorkload:input_type -> persys.control.v1.DeleteWorkloadRequest
-	30, // 65: persys.control.v1.AgentControl.RetryWorkload:input_type -> persys.control.v1.RetryWorkloadRequest
-	32, // 66: persys.control.v1.AgentControl.DrainNode:input_type -> persys.control.v1.DrainNodeRequest
-	34, // 67: persys.control.v1.AgentControl.UndrainNode:input_type -> persys.control.v1.UndrainNodeRequest
-	37, // 68: persys.control.v1.AgentControl.TaintNode:input_type -> persys.control.v1.TaintNodeRequest
-	39, // 69: persys.control.v1.AgentControl.UntaintNode:input_type -> persys.control.v1.UntaintNodeRequest
-	41, // 70: persys.control.v1.AgentControl.SetNodeLabel:input_type -> persys.control.v1.SetNodeLabelRequest
-	43, // 71: persys.control.v1.AgentControl.DeleteNodeLabel:input_type -> persys.control.v1.DeleteNodeLabelRequest
-	3,  // 72: persys.control.v1.AgentControl.SubmitAutomationSuggestion:input_type -> persys.control.v1.SubmitAutomationSuggestionRequest
-	45, // 73: persys.control.v1.AgentControl.ListNodes:input_type -> persys.control.v1.ListNodesRequest
-	46, // 74: persys.control.v1.AgentControl.GetNode:input_type -> persys.control.v1.GetNodeRequest
-	50, // 75: persys.control.v1.AgentControl.ListWorkloads:input_type -> persys.control.v1.ListWorkloadsRequest
-	51, // 76: persys.control.v1.AgentControl.GetWorkload:input_type -> persys.control.v1.GetWorkloadRequest
-	55, // 77: persys.control.v1.AgentControl.GetClusterSummary:input_type -> persys.control.v1.GetClusterSummaryRequest
-	57, // 78: persys.control.v1.AgentControl.ControlStream:input_type -> persys.control.v1.ControlMessage
-	8,  // 79: persys.control.v1.AgentControl.RegisterNode:output_type -> persys.control.v1.RegisterNodeResponse
-	11, // 80: persys.control.v1.AgentControl.Heartbeat:output_type -> persys.control.v1.HeartbeatResponse
-	13, // 81: persys.control.v1.AgentControl.ApplyWorkload:output_type -> persys.control.v1.ApplyWorkloadResponse
-	15, // 82: persys.control.v1.AgentControl.DeleteWorkload:output_type -> persys.control.v1.DeleteWorkloadResponse
-	31, // 83: persys.control.v1.AgentControl.RetryWorkload:output_type -> persys.control.v1.RetryWorkloadResponse
-	33, // 84: persys.control.v1.AgentControl.DrainNode:output_type -> persys.control.v1.DrainNodeResponse
-	35, // 85: persys.control.v1.AgentControl.UndrainNode:output_type -> persys.control.v1.UndrainNodeResponse
-	38, // 86: persys.control.v1.AgentControl.TaintNode:output_type -> persys.control.v1.TaintNodeResponse
-	40, // 87: persys.control.v1.AgentControl.UntaintNode:output_type -> persys.control.v1.UntaintNodeResponse
-	42, // 88: persys.control.v1.AgentControl.SetNodeLabel:output_type -> persys.control.v1.SetNodeLabelResponse
-	44, // 89: persys.control.v1.AgentControl.DeleteNodeLabel:output_type -> persys.control.v1.DeleteNodeLabelResponse
-	4,  // 90: persys.control.v1.AgentControl.SubmitAutomationSuggestion:output_type -> persys.control.v1.SubmitAutomationSuggestionResponse
-	47, // 91: persys.control.v1.AgentControl.ListNodes:output_type -> persys.control.v1.ListNodesResponse
-	48, // 92: persys.control.v1.AgentControl.GetNode:output_type -> persys.control.v1.GetNodeResponse
-	52, // 93: persys.control.v1.AgentControl.ListWorkloads:output_type -> persys.control.v1.ListWorkloadsResponse
-	53, // 94: persys.control.v1.AgentControl.GetWorkload:output_type -> persys.control.v1.GetWorkloadResponse
-	56, // 95: persys.control.v1.AgentControl.GetClusterSummary:output_type -> persys.control.v1.GetClusterSummaryResponse
-	57, // 96: persys.control.v1.AgentControl.ControlStream:output_type -> persys.control.v1.ControlMessage
-	79, // [79:97] is the sub-list for method output_type
-	61, // [61:79] is the sub-list for method input_type
-	61, // [61:61] is the sub-list for extension type_name
-	61, // [61:61] is the sub-list for extension extendee
-	0,  // [0:61] is the sub-list for field type_name
+	63, // 56: persys.control.v1.WorkloadView.created_at:type_name -> google.protobuf.Timestamp
+	63, // 57: persys.control.v1.GetClusterSummaryResponse.generated_at:type_name -> google.protobuf.Timestamp
+	5,  // 58: persys.control.v1.ControlMessage.register:type_name -> persys.control.v1.RegisterNodeRequest
+	9,  // 59: persys.control.v1.ControlMessage.heartbeat:type_name -> persys.control.v1.HeartbeatRequest
+	12, // 60: persys.control.v1.ControlMessage.apply:type_name -> persys.control.v1.ApplyWorkloadRequest
+	14, // 61: persys.control.v1.ControlMessage.delete:type_name -> persys.control.v1.DeleteWorkloadRequest
+	5,  // 62: persys.control.v1.AgentControl.RegisterNode:input_type -> persys.control.v1.RegisterNodeRequest
+	9,  // 63: persys.control.v1.AgentControl.Heartbeat:input_type -> persys.control.v1.HeartbeatRequest
+	12, // 64: persys.control.v1.AgentControl.ApplyWorkload:input_type -> persys.control.v1.ApplyWorkloadRequest
+	14, // 65: persys.control.v1.AgentControl.DeleteWorkload:input_type -> persys.control.v1.DeleteWorkloadRequest
+	30, // 66: persys.control.v1.AgentControl.RetryWorkload:input_type -> persys.control.v1.RetryWorkloadRequest
+	32, // 67: persys.control.v1.AgentControl.DrainNode:input_type -> persys.control.v1.DrainNodeRequest
+	34, // 68: persys.control.v1.AgentControl.UndrainNode:input_type -> persys.control.v1.UndrainNodeRequest
+	37, // 69: persys.control.v1.AgentControl.TaintNode:input_type -> persys.control.v1.TaintNodeRequest
+	39, // 70: persys.control.v1.AgentControl.UntaintNode:input_type -> persys.control.v1.UntaintNodeRequest
+	41, // 71: persys.control.v1.AgentControl.SetNodeLabel:input_type -> persys.control.v1.SetNodeLabelRequest
+	43, // 72: persys.control.v1.AgentControl.DeleteNodeLabel:input_type -> persys.control.v1.DeleteNodeLabelRequest
+	3,  // 73: persys.control.v1.AgentControl.SubmitAutomationSuggestion:input_type -> persys.control.v1.SubmitAutomationSuggestionRequest
+	45, // 74: persys.control.v1.AgentControl.ListNodes:input_type -> persys.control.v1.ListNodesRequest
+	46, // 75: persys.control.v1.AgentControl.GetNode:input_type -> persys.control.v1.GetNodeRequest
+	50, // 76: persys.control.v1.AgentControl.ListWorkloads:input_type -> persys.control.v1.ListWorkloadsRequest
+	51, // 77: persys.control.v1.AgentControl.GetWorkload:input_type -> persys.control.v1.GetWorkloadRequest
+	55, // 78: persys.control.v1.AgentControl.GetClusterSummary:input_type -> persys.control.v1.GetClusterSummaryRequest
+	57, // 79: persys.control.v1.AgentControl.ControlStream:input_type -> persys.control.v1.ControlMessage
+	8,  // 80: persys.control.v1.AgentControl.RegisterNode:output_type -> persys.control.v1.RegisterNodeResponse
+	11, // 81: persys.control.v1.AgentControl.Heartbeat:output_type -> persys.control.v1.HeartbeatResponse
+	13, // 82: persys.control.v1.AgentControl.ApplyWorkload:output_type -> persys.control.v1.ApplyWorkloadResponse
+	15, // 83: persys.control.v1.AgentControl.DeleteWorkload:output_type -> persys.control.v1.DeleteWorkloadResponse
+	31, // 84: persys.control.v1.AgentControl.RetryWorkload:output_type -> persys.control.v1.RetryWorkloadResponse
+	33, // 85: persys.control.v1.AgentControl.DrainNode:output_type -> persys.control.v1.DrainNodeResponse
+	35, // 86: persys.control.v1.AgentControl.UndrainNode:output_type -> persys.control.v1.UndrainNodeResponse
+	38, // 87: persys.control.v1.AgentControl.TaintNode:output_type -> persys.control.v1.TaintNodeResponse
+	40, // 88: persys.control.v1.AgentControl.UntaintNode:output_type -> persys.control.v1.UntaintNodeResponse
+	42, // 89: persys.control.v1.AgentControl.SetNodeLabel:output_type -> persys.control.v1.SetNodeLabelResponse
+	44, // 90: persys.control.v1.AgentControl.DeleteNodeLabel:output_type -> persys.control.v1.DeleteNodeLabelResponse
+	4,  // 91: persys.control.v1.AgentControl.SubmitAutomationSuggestion:output_type -> persys.control.v1.SubmitAutomationSuggestionResponse
+	47, // 92: persys.control.v1.AgentControl.ListNodes:output_type -> persys.control.v1.ListNodesResponse
+	48, // 93: persys.control.v1.AgentControl.GetNode:output_type -> persys.control.v1.GetNodeResponse
+	52, // 94: persys.control.v1.AgentControl.ListWorkloads:output_type -> persys.control.v1.ListWorkloadsResponse
+	53, // 95: persys.control.v1.AgentControl.GetWorkload:output_type -> persys.control.v1.GetWorkloadResponse
+	56, // 96: persys.control.v1.AgentControl.GetClusterSummary:output_type -> persys.control.v1.GetClusterSummaryResponse
+	57, // 97: persys.control.v1.AgentControl.ControlStream:output_type -> persys.control.v1.ControlMessage
+	80, // [80:98] is the sub-list for method output_type
+	62, // [62:80] is the sub-list for method input_type
+	62, // [62:62] is the sub-list for extension type_name
+	62, // [62:62] is the sub-list for extension extendee
+	0,  // [0:62] is the sub-list for field type_name
 }
 
 func init() { file_control_proto_init() }

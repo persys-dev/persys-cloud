@@ -69,14 +69,6 @@ func NewManager(cfg Config, logger *logrus.Logger) *Manager {
 }
 
 func NewFromConfig(cfg *utils.Config, logger *logrus.Logger) (*Manager, error) {
-	certTTL, err := time.ParseDuration(cfg.Vault.CertTTL)
-	if err != nil {
-		return nil, fmt.Errorf("invalid vault.cert_ttl: %w", err)
-	}
-	retryInterval, err := time.ParseDuration(cfg.Vault.RetryInterval)
-	if err != nil {
-		return nil, fmt.Errorf("invalid vault.retry_interval: %w", err)
-	}
 
 	return NewManager(Config{
 		TLSEnabled:         cfg.TLS.Enabled,
@@ -91,10 +83,10 @@ func NewFromConfig(cfg *utils.Config, logger *logrus.Logger) (*Manager, error) {
 		VaultAppSecretID:   cfg.Vault.AppSecretID,
 		VaultPKIMount:      cfg.Vault.PKIMount,
 		VaultPKIRole:       cfg.Vault.PKIRole,
-		VaultCertTTL:       certTTL,
+		VaultCertTTL:       cfg.Vault.CertTTL,
 		VaultServiceName:   cfg.Vault.ServiceName,
 		VaultServiceDomain: cfg.Vault.ServiceDomain,
-		VaultRetryInterval: retryInterval,
+		VaultRetryInterval: cfg.Vault.RetryInterval,
 		BindHost:           cfg.Vault.BindHost,
 	}, logger), nil
 }

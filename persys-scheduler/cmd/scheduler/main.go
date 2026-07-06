@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"strconv"
@@ -16,7 +17,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/auth"
+	// "github.com/persys-dev/persys-cloud/persys-scheduler/internal/auth"
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	cfgpkg "github.com/persys-dev/persys-cloud/persys-scheduler/internal/config"
 	controlv1 "github.com/persys-dev/persys-cloud/persys-scheduler/internal/controlv1"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/grpcapi"
@@ -52,7 +54,7 @@ func main() {
 	var tlsConfig *tls.Config
 	var certCancel context.CancelFunc
 	if !cfg.Insecure {
-		certCfg := auth.Config{
+		certCfg := certmanager.Config{
 			TLSEnabled:  cfg.TLSEnabled,
 			ExternalIP:  cfg.ExternalIP,
 			TLSCertPath: cfg.TLSCertPath,
@@ -60,6 +62,7 @@ func main() {
 			TLSCAPath:   cfg.TLSCAPath,
 
 			VaultEnabled:       cfg.VaultEnabled,
+			VaultManagerAddr:   cfg.VaultManagerAddr,
 			VaultAddr:          cfg.VaultAddr,
 			VaultAuthMethod:    cfg.VaultAuthMethod,
 			VaultToken:         cfg.VaultToken,
@@ -74,7 +77,7 @@ func main() {
 
 			BindHost: cfg.GRPCAddr,
 		}
-		certMgr := auth.NewManager(certCfg, logger.Logger)
+		certMgr := certmanager.NewManager(certCfg, logger.Logger)
 		certCtx, cancel := context.WithCancel(context.Background())
 		certCancel = cancel
 		if err := certMgr.Start(certCtx); err != nil {
@@ -152,6 +155,7 @@ func main() {
 		})
 		_, _ = w.Write(payload)
 	}), "scheduler.health"))
+	metricsMux.Handle("/debug/pprof/", http.DefaultServeMux)
 	metricsServer := &http.Server{Addr: net.JoinHostPort(cfg.GRPCAddr, metricsPort), Handler: metricsMux}
 
 	serverErrCh := make(chan error, 2)
