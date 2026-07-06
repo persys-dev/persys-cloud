@@ -180,7 +180,7 @@ func (s *Service) Heartbeat(ctx context.Context, in *controlv1.HeartbeatRequest)
 		reason := reasonFromProto(ws.GetReason(), ws.GetLastTransition())
 		usage := usageFromProto(ws.GetUsage(), ws.GetWorkloadId(), "")
 		if reason != nil || usage != nil {
-			_ = s.sched.UpdateWorkloadRuntimeDetails(ws.GetWorkloadId(), reason, usage)
+			_ = s.sched.UpdateWorkloadRuntimeDetails(ws.GetWorkloadId(), in.GetNodeId(), reason, usage)
 		}
 	}
 
@@ -191,7 +191,7 @@ func (s *Service) Heartbeat(ctx context.Context, in *controlv1.HeartbeatRequest)
 		}
 		modelUsage := usageFromProto(usage, workloadID, "")
 		if modelUsage != nil {
-			_ = s.sched.UpdateWorkloadRuntimeDetails(workloadID, nil, modelUsage)
+			_ = s.sched.UpdateWorkloadRuntimeDetails(workloadID, in.GetNodeId(), nil, modelUsage)
 		}
 	}
 
