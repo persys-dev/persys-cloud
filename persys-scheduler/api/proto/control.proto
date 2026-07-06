@@ -431,6 +431,7 @@ message WorkloadView {
   google.protobuf.Timestamp last_updated = 11;
   ReasonDetail reason = 12;
   WorkloadUsageSnapshot usage = 13;
+  google.protobuf.Timestamp created_at = 14;
 }
 
 message GetClusterSummaryRequest {}
