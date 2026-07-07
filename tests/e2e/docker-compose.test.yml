@@ -9,8 +9,8 @@ services:
 
   compute-agent:
     build:
-      context: ../../compute-agent
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: compute-agent/Dockerfile
     environment:
       - PERSYS_VAULT_ENABLED=false
       - PERSYS_TLS_ENABLED=false
