@@ -8,7 +8,9 @@ services:
 
   # --- Persys Gateway (Entry point for all API requests) ---
   persys-gateway:
-    build: ../../persys-gateway
+    build:
+      context: ../..
+      dockerfile: persys-gateway/Dockerfile
     ports:
       - 8551:8551
     depends_on:
@@ -41,7 +43,9 @@ services:
 
   # --- Persys Scheduler (Workload scheduler and reconciler) ---
   persys-scheduler:
-    build: ../../persys-scheduler
+    build:
+      context: ../..
+      dockerfile: persys-scheduler/Dockerfile
     ports:
       - 8084:8084   # HTTP Non-mTLS API
       - 8085:8085   # gRPC + mTLS API
@@ -75,7 +79,9 @@ services:
 
   # --- Persys Forgery (Internal build orchestration only) ---
   persys-forgery:
-    build: ../../persys-forgery
+    build:
+      context: ../..
+      dockerfile: persys-forgery/Dockerfile
     ports:
       - 8087:8087
     depends_on:
@@ -105,7 +111,9 @@ services:
 
   # --- Persys Automation (policy engine and control-plane automation) ---
   persys-automation:
-    build: ../../persys-automation
+    build:
+      context: ../..
+      dockerfile: persys-automation/Dockerfile
     ports:
       - 8091:8091
       - 8092:8092
@@ -203,8 +211,8 @@ services:
     
   compute-agent:
     build:
-      context: ../../compute-agent
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: compute-agent/Dockerfile
     environment:
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
       - OTEL_SERVICE_NAME=${COMPUTE_AGENT_OTEL_SERVICE_NAME:-compute-agent}
