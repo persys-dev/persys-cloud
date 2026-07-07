@@ -1,12 +1,19 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /src
+
+# smoke-client imports persys-scheduler/internal/controlv1, which pulls in
+# persys-scheduler/go.mod's `replace github.com/persys-dev/persys-cloud/pkg => ../pkg` —
+# so pkg has to exist as a sibling here too.
+COPY pkg ./pkg
 COPY persys-scheduler ./persys-scheduler
 RUN cd /src/persys-scheduler && go build -o /out/smoke-client ./cmd/smoke-client
+
+# tests/e2e is its own standalone module with no internal deps — doesn't need pkg.
 COPY tests/e2e ./tests/e2e
 RUN cd /src/tests/e2e && go build -o /out/test-runner ./test-runner.go
 
-FROM alpine:3.21
+FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /out/smoke-client ./smoke-client

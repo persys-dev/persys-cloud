@@ -1,3 +1,3 @@
 module persys-cloud-e2e
 
-go 1.21
+go 1.25
