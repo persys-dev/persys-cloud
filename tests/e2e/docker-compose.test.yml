@@ -31,8 +31,8 @@ services:
 
   persys-scheduler:
     build:
-      context: ../../persys-scheduler
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: persys-scheduler/Dockerfile
     command: ["./persys-scheduler", "-insecure"]
     environment:
       - PERSYS_VAULT_ENABLED=false
