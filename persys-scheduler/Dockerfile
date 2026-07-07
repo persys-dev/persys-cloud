@@ -1,30 +1,25 @@
 # Stage 1: Build the application
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
+WORKDIR /src
 
-# Set the working directory
-WORKDIR /app
+# go.mod/go.sum first for layer caching. Both are needed because
+# persys-scheduler/go.mod does: replace github.com/persys-dev/persys-cloud/pkg => ../pkg
+COPY pkg/go.mod pkg/go.sum ./pkg/
+COPY persys-scheduler/go.mod persys-scheduler/go.sum ./persys-scheduler/
 
-# Copy go.mod and go.sum to download dependencies
-COPY go.mod go.sum ./
+WORKDIR /src/persys-scheduler
 RUN go mod download
 
-# Copy the rest of the application code
-COPY . .
+WORKDIR /src
+COPY pkg ./pkg
+COPY persys-scheduler ./persys-scheduler
 
-# Build the application
+WORKDIR /src/persys-scheduler
 RUN CGO_ENABLED=0 GOOS=linux go build -o persys-scheduler ./cmd/scheduler
 
 # Stage 2: Create the final image
 FROM alpine:latest
-
-# Set the working directory
 WORKDIR /root/
-
-# Copy the binary from the builder stage
-COPY --from=builder /app/persys-scheduler .
-
-# Expose the port the scheduler listens on
+COPY --from=builder /src/persys-scheduler/persys-scheduler .
 EXPOSE 8084
-
-# Command to run the scheduler
 CMD ["./persys-scheduler"]
