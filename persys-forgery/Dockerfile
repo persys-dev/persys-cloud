@@ -1,23 +1,27 @@
-FROM golang:1.24-alpine AS builder
-WORKDIR /app
+FROM golang:1.25-alpine AS builder
+WORKDIR /src
 
-# Copy go.mod and go.sum to download dependencies
-COPY go.mod go.sum ./
+# go.mod/go.sum first for layer caching. Both are needed because
+# persys-forgery/go.mod does: replace github.com/persys-dev/persys-cloud/pkg => ../pkg
+COPY pkg/go.mod pkg/go.sum ./pkg/
+COPY persys-forgery/go.mod persys-forgery/go.sum ./persys-forgery/
+
+WORKDIR /src/persys-forgery
 RUN go mod download
 
-COPY . .
+WORKDIR /src
+COPY pkg ./pkg
+COPY persys-forgery ./persys-forgery
 
+WORKDIR /src/persys-forgery
 RUN go build -o persys-forgery ./cmd/main.go
 
-FROM alpine:3.19
-
+FROM alpine:latest
 WORKDIR /app
 
-COPY --from=builder /app/persys-forgery /app/persys-forgery
-COPY config.yaml /app/config.yaml
+COPY --from=builder /src/persys-forgery/persys-forgery /app/persys-forgery
+COPY --from=builder /src/persys-forgery/config.yaml /app/config.yaml
 
 RUN apk add git
-
 EXPOSE 8080
-
-CMD ["/app/persys-forgery"] 
+CMD ["/app/persys-forgery"]

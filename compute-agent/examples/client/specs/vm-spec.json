@@ -1,0 +1,44 @@
+{
+  "name": "persys-vm",
+  "vcpus": 1,
+  "memory_mb": 2048,
+  "disks": [
+    {
+      "path": "/var/lib/libvirt/images/persys-vm.qcow2",
+      "device": "vda",
+      "format": "qcow2",
+      "size_gb": 5,
+      "type": "disk",
+      "boot": true
+    },
+    {
+      "path": "/var/lib/libvirt/iso/ubuntu-24.04.2-live-server-amd64.iso",
+      "device": "hdc",
+      "format": "raw",
+      "size_gb": 0,
+      "type": "cdrom",
+      "boot": true
+    }
+  ],
+  "networks": [
+    {
+      "network": "default",
+      "mac_address": "52:54:00:12:34:56",
+      "ip_address": ""
+    }
+  ],
+  "cloud_init": "#cloud-config\nhostname: persys-vm\nmanage_etc_hosts: true\nusers:\n  - name: core\n    groups: [wheel]\n    sudo: [\"ALL=(ALL) NOPASSWD:ALL\"]\npackages:\n  - qemu-guest-agent\nruncmd:\n  - systemctl enable --now qemu-guest-agent\n  - echo \"cloud-init done\" > /tmp/cloud-init.done\n",
+  "metadata": {
+    "environment": "staging",
+    "owner": "platform-team",
+    "purpose": "integration-test",
+    "managed-by": "persys-test-client"
+  },
+  "cloud_init_config": {
+    "user_data": "#cloud-config\nhostname: demo-vm-alt\nusers:\n  - name: core\n",
+    "meta_data": "{\"instance-id\":\"demo-vm-instance\",\"local-hostname\":\"demo-vm\"}",
+    "network_config": "version: 2\nethernets:\n  eth0:\n    dhcp4: true\n",
+    "vendor_data": "#cloud-config\nwrite_files:\n  - path: /etc/motd\n    content: |\n      Managed by Persys\n"
+  }
+}
+

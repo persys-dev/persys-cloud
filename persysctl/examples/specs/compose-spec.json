@@ -1,0 +1,7 @@
+{
+  "source_type": "inline",
+  "inline_yaml": "services:\n  redis:\n    image: redis:7-alpine\n    ports:\n      - \"6379:6379\"\n  worker:\n    image: alpine:3.20\n    command: [\"sh\", \"-c\", \"while true; do echo worker running; sleep 10; done\"]\n    depends_on:\n      - redis\n",
+  "env": {
+    "COMPOSE_PROJECT_NAME": "persys-compose-demo"
+  }
+}

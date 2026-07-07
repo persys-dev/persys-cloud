@@ -1,27 +1,28 @@
-FROM golang:1.24-alpine AS build
+FROM golang:1.25-alpine AS build
+WORKDIR /src
 
-WORKDIR /app
+# go.mod/go.sum first for layer caching. Both are needed because
+# persys-gateway/go.mod does: replace github.com/persys-dev/persys-cloud/pkg => ../pkg
+COPY pkg/go.mod pkg/go.sum ./pkg/
+COPY persys-gateway/go.mod persys-gateway/go.sum ./persys-gateway/
 
-# Copy go.mod and go.sum to download dependencies
-COPY go.mod go.sum ./
+WORKDIR /src/persys-gateway
 RUN go mod download
 
-# Copy the rest of the application code
-COPY . .
+WORKDIR /src
+COPY pkg ./pkg
+COPY persys-gateway ./persys-gateway
 
-RUN cd cmd && go build -o main
+WORKDIR /src/persys-gateway
+RUN cd cmd && go build -o persys-gateway
 
-FROM alpine:3.19 AS server
-
+FROM alpine:latest AS server
 WORKDIR /app
 
-COPY --from=build /app/config.yaml .
-COPY --from=build /app/cluster.yaml .
+COPY --from=build /src/persys-gateway/config.yaml .
+COPY --from=build /src/persys-gateway/cluster.yaml .
+COPY --from=build /src/persys-gateway/cmd/persys-gateway .
 
-COPY --from=build /app/cmd/main .
-
-RUN chmod +x ./main
-
+RUN chmod +x ./persys-gateway
 EXPOSE 8551
-
-CMD [ "./main" ]
+CMD [ "./persys-gateway" ]

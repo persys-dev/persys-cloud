@@ -1,0 +1,10 @@
+{
+  "project_name": "org/repo",
+  "repository": "org/repo",
+  "cluster_id": "cluster-a",
+  "ref": "refs/heads/main",
+  "commit_sha": "HEAD",
+  "sender": "persysctl",
+  "mode": "standalone",
+  "event_type": "manual"
+}

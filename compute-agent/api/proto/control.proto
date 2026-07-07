@@ -1,0 +1,253 @@
+syntax = "proto3";
+
+package persys.control.v1;
+
+option go_package = "github.com/persys/compute-agent/pkg/control/v1;controlv1";
+
+import "google/protobuf/timestamp.proto";
+
+service AgentControl {
+  // Registration
+  rpc RegisterNode(RegisterNodeRequest) returns (RegisterNodeResponse);
+
+  // Heartbeat
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // Workload lifecycle
+  rpc ApplyWorkload(ApplyWorkloadRequest) returns (ApplyWorkloadResponse);
+  rpc DeleteWorkload(DeleteWorkloadRequest) returns (DeleteWorkloadResponse);
+
+  // Retry trigger
+  rpc RetryWorkload(RetryWorkloadRequest) returns (RetryWorkloadResponse);
+
+  // Optional future streaming channel
+  rpc ControlStream(stream ControlMessage) returns (stream ControlMessage);
+}
+
+message RegisterNodeRequest {
+  string node_id = 1;
+  NodeCapabilities capabilities = 2;
+  map<string, string> labels = 3;
+  string agent_version = 4;
+  string grpc_endpoint = 5;
+  string cluster_id = 6;
+  google.protobuf.Timestamp timestamp = 7;
+}
+
+message NodeCapabilities {
+  int64 cpu_total_millicores = 1;
+  int64 memory_total_mb = 2;
+  repeated StoragePool storage_pools = 3;
+  repeated string supported_workload_types = 4; // container, compose, vm
+  repeated string supported_storage_drivers = 5; // local, nfs, ceph-rbd
+}
+
+message StoragePool {
+  string name = 1;
+  string type = 2; // local, nfs, iscsi
+  int64 total_gb = 3;
+}
+
+message RegisterNodeResponse {
+  bool accepted = 1;
+  string reason = 2;
+  int32 heartbeat_interval_seconds = 3;
+  google.protobuf.Timestamp lease_expires_at = 4;
+}
+
+message HeartbeatRequest {
+  string node_id = 1;
+  NodeUsage usage = 2;
+  repeated WorkloadStatus workload_statuses = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  repeated WorkloadUsageSnapshot workload_usage = 5;
+}
+
+message NodeUsage {
+  int64 cpu_allocated_millicores = 1;
+  int64 cpu_used_millicores = 2;
+  int64 memory_allocated_mb = 3;
+  int64 memory_used_mb = 4;
+  int64 disk_allocated_gb = 5;
+  int64 disk_used_gb = 6;
+}
+
+message HeartbeatResponse {
+  bool acknowledged = 1;
+  bool drain_node = 2;
+  google.protobuf.Timestamp lease_expires_at = 3;
+}
+
+message ApplyWorkloadRequest {
+  string workload_id = 1;
+  WorkloadSpec spec = 2;
+
+  // Compatibility fields aligned with existing agent apply semantics.
+  string revision_id = 10;
+  string desired_state = 11; // Running | Stopped
+}
+
+message ApplyWorkloadResponse {
+  bool success = 1;
+  FailureReason failure_reason = 2;
+  string error_message = 3;
+}
+
+message DeleteWorkloadRequest {
+  string workload_id = 1;
+}
+
+message DeleteWorkloadResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message WorkloadSpec {
+  string type = 1; // container, compose, vm
+  ResourceRequirements resources = 2;
+
+  oneof workload {
+    ContainerSpec container = 10;
+    ComposeSpec compose = 11;
+    VMSpec vm = 12;
+  }
+
+  map<string, string> metadata = 20;
+}
+
+message ResourceRequirements {
+  int64 cpu_millicores = 1;
+  int64 memory_mb = 2;
+  int64 disk_gb = 3;
+}
+
+message ContainerSpec {
+  string image = 1;
+  repeated string command = 2;
+  map<string, string> env = 3;
+  repeated VolumeMount volumes = 4;
+  repeated Port ports = 5;
+  string restart_policy = 6;
+  bool privileged = 7;
+  repeated ManagedVolumeSpec managed_volumes = 8;
+}
+
+message VolumeMount {
+  string host_path = 1;
+  string container_path = 2;
+  bool read_only = 3;
+}
+
+message Port {
+  int32 host_port = 1;
+  int32 container_port = 2;
+  string protocol = 3; // tcp or udp
+}
+
+message ComposeSpec {
+  string source_type = 1; // git or inline
+  string git_repo = 2;
+  string git_ref = 3;
+  string inline_yaml = 4;
+  map<string, string> env = 5;
+}
+
+message VMSpec {
+  int32 vcpus = 1;
+  int64 memory_mb = 2;
+  repeated DiskConfig disks = 3;
+  repeated NetworkConfig networks = 4;
+  CloudInitConfig cloud_init = 5;
+  string os_image = 6;
+  repeated ManagedVolumeSpec managed_volumes = 7;
+}
+
+message DiskConfig {
+  string pool_name = 1;
+  int64 size_gb = 2;
+  string mount_point = 3;
+}
+
+message NetworkConfig {
+  string bridge = 1;
+  bool dhcp = 2;
+  string static_ip = 3;
+}
+
+message CloudInitConfig {
+  string user_data = 1;
+  string meta_data = 2;
+  string network_config = 3;
+  string vendor_data = 4;
+}
+
+message ManagedVolumeSpec {
+  string name = 1;
+  string driver = 2; // local|nfs|ceph-rbd
+  int64 size_gb = 3;
+  string access_mode = 4;
+  string fs_type = 5;
+  string mount_path = 6;
+  bool read_only = 7;
+  string retain_policy = 8; // Delete|Retain
+}
+
+message WorkloadUsageSnapshot {
+  string workload_id = 1;
+  string type = 2;
+  double cpu_percent = 3;
+  int64 memory_bytes = 4;
+  int64 disk_read_bytes = 5;
+  int64 disk_write_bytes = 6;
+  int64 net_rx_bytes = 7;
+  int64 net_tx_bytes = 8;
+  google.protobuf.Timestamp collected_at = 9;
+  string source = 10;
+}
+
+message ReasonDetail {
+  string code = 1;
+  string message = 2;
+  google.protobuf.Timestamp last_transition = 3;
+  google.protobuf.Timestamp next_retry_at = 4;
+  bool retryable = 5;
+}
+
+message WorkloadStatus {
+  string workload_id = 1;
+  string state = 2; // Running, Stopped, Failed
+  FailureReason failure_reason = 3;
+  string message = 4;
+  google.protobuf.Timestamp last_transition = 5;
+  ReasonDetail reason = 6;
+  WorkloadUsageSnapshot usage = 7;
+}
+
+enum FailureReason {
+  FAILURE_REASON_UNSPECIFIED = 0;
+  IMAGE_PULL_FAILED = 1;
+  IMAGE_NOT_FOUND = 2;
+  INSUFFICIENT_RESOURCES = 3;
+  INVALID_SPEC = 4;
+  RUNTIME_ERROR = 5;
+  NETWORK_ERROR = 6;
+  STORAGE_ERROR = 7;
+  VM_BOOT_FAILED = 8;
+}
+
+message RetryWorkloadRequest {
+  string workload_id = 1;
+}
+
+message RetryWorkloadResponse {
+  bool accepted = 1;
+}
+
+message ControlMessage {
+  oneof message {
+    RegisterNodeRequest register = 1;
+    HeartbeatRequest heartbeat = 2;
+    ApplyWorkloadRequest apply = 3;
+    DeleteWorkloadRequest delete = 4;
+  }
+}

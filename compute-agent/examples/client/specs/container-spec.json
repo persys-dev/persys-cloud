@@ -1,0 +1,42 @@
+{
+  "image": "nginx:latest",
+  "command": [
+    "/docker-entrypoint.sh"
+  ],
+  "args": [
+    "nginx",
+    "-g",
+    "daemon off;"
+  ],
+  "env": {
+    "NGINX_HOST": "localhost",
+    "NGINX_PORT": "80",
+    "APP_ENV": "staging"
+  },
+  "ports": [
+    {
+      "host_port": 18080,
+      "container_port": 80,
+      "protocol": "tcp"
+    },
+    {
+      "host_port": 8443,
+      "container_port": 443,
+      "protocol": "tcp"
+    }
+  ],
+  "resources": {
+    "cpu_shares": 512,
+    "memory_bytes": 536870912,
+    "memory_swap_bytes": 1073741824
+  },
+  "restart_policy": {
+    "policy": "unless-stopped",
+    "max_retry_count": 0
+  },
+  "labels": {
+    "app": "demo-nginx",
+    "environment": "staging"
+  }
+}
+

@@ -1,9 +1,3 @@
 [submodule "persys-operator"]
 	path = persys-operator
 	url = https://github.com/persys-dev/persys-operator.git
-[submodule "compute-agent"]
-	path = compute-agent
-	url = https://github.com/persys-dev/compute-agent.git
-[submodule "persysctl"]
-	path = persysctl
-	url = https://github.com/persys-dev/persysctl.git

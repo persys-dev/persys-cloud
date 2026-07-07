@@ -1,0 +1,11 @@
+{
+  "name": "org/repo",
+  "repo_url": "https://github.com/org/repo.git",
+  "default_branch": "main",
+  "cluster_id": "persys-genesis-a",
+  "build_type": "dockerfile",
+  "build_mode": "standalone",
+  "strategy": "local",
+  "auto_deploy": false,
+  "image_name": "org/repo:latest"
+}
