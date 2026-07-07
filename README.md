@@ -1,318 +1,118 @@
 # Persys Compute
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Language](https://img.shields.io/badge/language-Go-00ADD8)
-![Architecture](https://img.shields.io/badge/architecture-control--plane-orange)
-![Transport](https://img.shields.io/badge/transport-gRPC%20%2B%20mTLS-green)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Go](https://img.shields.io/badge/Go-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![gRPC](https://img.shields.io/badge/gRPC-%2300B4AB.svg?logo=grpc&logoColor=white)](https://grpc.io)
+[![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://docker.com)
 
-Persys Compute is a scheduler-driven distributed compute control plane
-designed to orchestrate containers, Docker Compose applications, and
-virtual machines across heterogeneous infrastructure.
+**A lightweight, community-driven distributed compute control plane for orchestrating Docker containers, Docker Compose applications, and virtual machines across heterogeneous infrastructure.**
 
-It is built with a clear architectural philosophy:
+Persys Compute brings hyperscaler-inspired orchestration to private, hybrid, and edge environments with minimal overhead and maximum reliability.
 
-- Centralized scheduler (authoritative desired state)
-- Dumb but reliable agents (local execution only)
-- Strongly typed gRPC contracts
-- mTLS everywhere
-- etcd-backed persistent cluster state
-- Explicit reconciliation loops
-- Resource-aware placement
-- Lease-based node liveness model
+## ✨ Features
 
-This repository currently lives under `persys-cloud`, but the product
-name is **Persys Compute**.
+- **Multi-workload support**: Docker containers, full Docker Compose stacks, and KVM-based VMs
+- **Resource-aware scheduling**: CPU, memory, disk, and label-based placement
+- **Strong security**: mTLS everywhere, Vault integration for certs and secrets
+- **etcd-backed state**: Persistent, highly available cluster state
+- **Explicit reconciliation**: Automatic drift detection and correction
+- **Observability-first**: Prometheus metrics, structured logs, health endpoints
+- **Lightweight agents**: Simple, reliable node agents with local execution
+- **CLI & API**: `persysctl` for easy management
+- **Federation ready**: Multi-cluster and cloud offloading support
 
-------------------------------------------------------------------------
+## 🚀 Quick Start
 
-## Vision
+### Using Docker Compose (Recommended for dev)
 
-Persys Compute is not just a container orchestrator.
+```bash
+# Clone the repo
+git clone https://github.com/persys-dev/persys-cloud.git
+cd persys-cloud
 
-It is a programmable compute control plane designed to:
+# Start the full stack
+cd infra/docker
+docker compose up -d --build
 
-- Run Docker containers
-- Run Docker Compose stacks (from Git or inline spec)
-- Provision and manage virtual machines
-- Enforce CPU, memory, disk limits
-- Reconcile drift automatically
-- Scale from a single bare-metal server to multi-node clusters
-- Support hybrid and federated deployments
+# Build and use CLI
+cd ../../persysctl
+go build -o ./bin/persysctl .
 
-The long-term goal is hyperscaler-style infrastructure for private and
-hybrid environments --- without unnecessary abstraction or
-overengineering.
+# Check cluster status
+./bin/persysctl --transport http cluster list
+```
 
-------------------------------------------------------------------------
+See [Local Development](#local-development) for more details.
 
-## Core Architecture
+## Architecture
 
-Persys Compute follows a strict control-plane model.
+Persys Compute follows a strict **control-plane / data-plane** separation:
 
-### Northbound (User → Control Plane)
+- **Scheduler**: Authoritative brain for placement and reconciliation
+- **Gateway**: REST API entrypoint with auth
+- **Agents**: Dumb executors on nodes
+- **etcd**: Cluster state store
+- **Vault**: Identity and secret management
 
-User → Gateway (HTTP + mTLS) → Scheduler
+For full details, see [docs/architecture](docs/architecture).
 
-- REST APIs for platform access
-- Authentication & service identity
-- Workload submission
-- Administrative operations
-
-### Southbound (Control Plane → Nodes)
-
-Scheduler ⇄ Agent (gRPC + mTLS)
-
-- Node registration
-- Heartbeat & lease model
-- Workload lifecycle execution
-- Status reporting
-
-Agents never schedule themselves. Scheduler owns all placement
-decisions.
-
-------------------------------------------------------------------------
-
-## Control Plane Components
-
-### persys-scheduler
-
-Authoritative cluster brain.
-
-Responsibilities:
-
-- Node registration & lease management
-- Workload scheduling
-- Resource-aware placement
-- Desired-state reconciliation
-- Retry & backoff policies
-- etcd state persistence
-- Event emission
-- Health & metrics endpoints
-
-### persys-gateway
-
-Platform entrypoint.
-
-Responsibilities:
-
-- REST APIs
-- mTLS authentication
-- Request routing to scheduler
-- Webhook ingestion (future use)
-- Platform-level authorization
-
-### vault
-
-Certificate authority bootstrap.
-
-- Service identity issuance
-- mTLS trust chain
-- Agent certificate provisioning
-
-### persys-federation
-
-Future hybrid/multi-cloud integration layer.
-
-- Connect to AWS/GCP/other providers
-- Offload workloads
-- Aggregate compute resources
-
-### persys-agent (runtime node agent)
-
-Responsibilities:
-
-- Register with scheduler
-- Maintain heartbeat
-- Enforce resource limits
-- Execute containers / compose / VMs
-- Report workload status
-- Perform local garbage collection
-- Expose Prometheus metrics
-
-Agent is intentionally simple and execution-focused.
-
-------------------------------------------------------------------------
-
-## Scheduling Model
-
-1. Agent boots
-2. Agent registers with scheduler via gRPC
-3. Scheduler stores node in etcd and issues lease
-4. Agent sends periodic heartbeat
-5. Scheduler tracks node liveness
-6. User submits workload
-7. Scheduler selects node based on:
-    - CPU availability
-    - Memory availability
-    - Disk pools
-    - Labels
-    - Capability matching
-8. Scheduler sends ApplyWorkload
-9. Agent executes and reports status
-10. Reconciler enforces desired state
-
-------------------------------------------------------------------------
-
-## Supported Workload Types
+## Supported Workloads
 
 ### Containers
-
-- Image-based
-- Resource limits
-- Env variables
-- Volumes
-- Ports
-- Restart policies
-- Privileged mode (optional)
+Simple image-based workloads with resource limits, volumes, ports, etc.
 
 ### Docker Compose
-
-- Git-based deployments
-- Inline YAML support
-- Environment injection
-- Secret injection (future: Vault integration)
-- Mixed public/private images
+Git-backed or inline YAML deployments with env/secrets injection.
 
 ### Virtual Machines
-
-- vCPU & memory specification
-- Disk provisioning via storage pools
-- Cloud-init injection
-- Network configuration
-- Login credential provisioning
-- Future: IP reporting back to scheduler
-
-------------------------------------------------------------------------
-
-### Cluster State Model (etcd)
-
-Scheduler persists:
-
-- /nodes/`<node-id>`{=html}
-- /nodes/`<node-id>`{=html}/lease
-- /workloads/`<workload-id>`{=html}
-- /assignments/`<workload-id>`{=html}
-- /events/`<timestamp>`{=html}
-- /retries/`<workload-id>`{=html}
-
-This enables:
-
-- Auditability
-- Recovery after scheduler restart
-- Drift detection
-- Retry tracking
-- Failure history
-
-------------------------------------------------------------------------
-
-## Resource Enforcement
-
-Agent enforces:
-
-- CPU limits
-- Memory limits
-- Disk allocation
-- System threshold rejection (default 80% utilization)
-- Orphan resource cleanup
-- Zombie workload detection
-
-Workloads are rejected early if capacity is insufficient.
-
-------------------------------------------------------------------------
-
-## Reliability Model
-
-Persys Compute uses:
-
-- Lease-based node liveness
-- Heartbeat TTL enforcement
-- Idempotent workload operations
-- Explicit failure reasons (enum-based)
-- Garbage collection loops
-- Structured error propagation
-- Metrics-first observability
-
-No ghost workloads. No silent failures. No hidden retries.
-
-------------------------------------------------------------------------
-
-## Observability
-
-Each component exposes:
-
-- /metrics (Prometheus)
-- /health
-- Structured logs
-
-Metrics include:
-
-- Workload counts
-- Failure reasons
-- Apply duration
-- Resource utilization
-- Runtime health status
-- GC statistics
-
-------------------------------------------------------------------------
+Full VM provisioning with cloud-init, storage pools, and network config.
 
 ## Local Development
 
-### 1. Start full stack
+### Prerequisites
+- Go 1.22+
+- Docker & Docker Compose
+- etcd, Vault (provided via compose)
+
+### Building Components
 
 ```bash
-cd infra/docker
-docker compose up -d --build
+# Scheduler
+cd persys-scheduler && make build
+
+# Agent
+cd ../compute-agent && make build
+
+# Gateway
+cd ../persys-gateway && make build
 ```
 
-### 2. Build CLI
+See individual component READMEs and root `Makefile` for more.
 
-```bash
-cd persysctl
-go build -o ./bin/persysctl
-```
+## Contributing
 
-### 3. Quick smoke commands
+We welcome contributions! Please see contributing guidelines in subdirectories and open issues/PRs.
 
-```bash
-# Cluster view from gateway
-./bin/persysctl --transport http cluster list
+## Roadmap
 
-# List nodes/workloads routed through gateway
-./bin/persysctl --transport http node list
-./bin/persysctl --transport http workload list
-```
-
-------------------------------------------------------------------------
-
-## Project Philosophy
-
-Persys Compute is built around:
-
-- Explicit contracts (protobuf-first design)
-- Control-plane correctness
-- Minimal but powerful abstraction
-- Hyperscaler-inspired architecture
-- Avoiding unnecessary AI buzz
-- Strong separation of concerns
-- Scalability from day one
-
-This is infrastructure designed to scale --- without rewriting the
-system when adding more nodes.
-
-------------------------------------------------------------------------
-
-## Roadmap Highlights
-
-- Storage pool full implementation
-- VM network introspection & IP reporting
-- Retry engine with exponential backoff
-- Federation workload offloading
-- Secrets integration (Vault)
-- Stream-based control channel
-- Multi-cluster support
-
-------------------------------------------------------------------------
+- Full storage pool management
+- Advanced retry and backoff engine
+- Multi-cluster federation
+- Enhanced VM networking and introspection
+- Secrets management integration
+- Stream-based control channels
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) file.
+
+## Links
+
+- [compute-agent](compute-agent) - Node runtime agent
+- [persys-scheduler](persys-scheduler) - Core scheduler
+- [persys-gateway](persys-gateway) - API gateway
+- [persysctl](persysctl) - Command line interface
+
+---
+
+*Engineered for production-grade private and hybrid compute with simplicity and rigor.*
