@@ -8,6 +8,7 @@ on:
       - 'pkg/**'
       - 'sdk/**'
       - 'go.mod'
+      - 'go.sum'
       - '.github/workflows/compute-agent-ci.yml'
   pull_request:
     branches: [ main, master ]
@@ -16,6 +17,7 @@ on:
       - 'pkg/**'
       - 'sdk/**'
       - 'go.mod'
+      - 'go.sum'
       - '.github/workflows/compute-agent-ci.yml'
 
 jobs:
@@ -29,13 +31,13 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.work          # Better for monorepo
+          go-version-file: compute-agent/go.mod   # Point to service go.mod
           cache: true
 
       - name: Run unit tests with race and coverage
         run: |
           cd compute-agent
-          make test-unit   # or go test ./... -race -coverprofile=coverage.txt
+          make test-unit || go test ./... -race -coverprofile=coverage.txt
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -55,7 +57,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.work
+          go-version-file: compute-agent/go.mod
           cache: true
 
       - name: Run end-to-end tests
@@ -74,7 +76,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.work
+          go-version-file: compute-agent/go.mod
           cache: true
 
       - name: Build agent and client
@@ -97,7 +99,7 @@ jobs:
       - name: Build optimized runtime image
         uses: docker/build-push-action@v6
         with:
-          context: .                       # Root context
+          context: .                          # Root context (needed for pkg/)
           file: ./compute-agent/Dockerfile
           target: runtime
           push: false
