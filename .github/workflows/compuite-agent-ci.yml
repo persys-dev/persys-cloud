@@ -106,14 +106,3 @@ jobs:
           tags: persys/compute-agent:ci-runtime
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Build full runtime image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./compute-agent/Dockerfile
-          target: full-runtime
-          push: false
-          tags: persys/compute-agent:ci-full-runtime
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
