@@ -1,18 +1,34 @@
 service_name: persys-gateway
 
+# Single toggle deciding the whole deployment posture. "self-hosted"
+# (default) needs no GitHub OAuth app and no database — see
+# database.dsn below and README.md's "Deployment Modes" section.
+# "managed" mounts GitHub OAuth and requires database.dsn to be set
+# (fails fast at startup otherwise).
+deployment:
+  mode: self-hosted
+
 app:
   http_addr: ":8551"
   http_addr_public: ":8585"
   grpc_addr: ":8661"
-  storage: mongodb
   oauth_redirect_url: "http://localhost:8585/auth"
   metadata:
     name: persys-gateway
+  # Signs/verifies user session JWTs. Leave unset for self-hosted local
+  # dev — a random secret is generated at startup with a warning (won't
+  # survive a restart). Set explicitly via PERSYS_GATEWAY_JWT_SECRET
+  # (preferred) or here for anything long-lived, and required if
+  # deployment.mode is "managed".
+  jwt_secret: ""
 
+# Postgres. Leave dsn empty for self-hosted — the gateway runs with no
+# database at all in that mode (see README.md). Required if
+# deployment.mode is "managed". Prefer PERSYS_GATEWAY_POSTGRES_DSN over
+# committing a real DSN here.
 database:
-  mongo_uri: "mongodb://admin:admin@localhost:27017/persys-gateway?authSource=admin"
-  collections: ["events", "repos", "users"]
-  name: persys-gateway
+  dsn: ""
+  max_conns: 10
 
 tls:
   enabled: true
@@ -23,6 +39,7 @@ tls:
 
 vault:
   enabled: true
+  manager_addr: ""
   addr: "http://localhost:8200"
   auth_method: "approle"
   token: ""
@@ -39,9 +56,13 @@ vault:
 core_dns:
   addr: "coredns:53"
 
-prow:
-  scheduler_addr: "persys-scheduler:8085"
-  enable_proxy: true
+# Fallback path used only when the scheduler pool (see cluster.yaml)
+# can't resolve a candidate for a cluster — e.g. a single-scheduler
+# deployment that hasn't set up cluster.yaml at all. Renamed from
+# "prow", which didn't describe what this does.
+legacy_scheduler:
+  fallback_addr: "persys-scheduler:8085"
+  proxy_enabled: true
   discovery_domain: "persys.local"
   discovery_service: "_persys-scheduler"
 
@@ -51,6 +72,7 @@ scheduler:
   discovery_interval: "30s"
   request_timeout: "10s"
 
+# GitHub OAuth — only read/used when deployment.mode is "managed".
 github:
   webhook_url: "http://persys.eastus.cloudapp.azure.com/webhooks/github"
   default_secret: ""
