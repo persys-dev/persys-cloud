@@ -250,8 +250,8 @@ func (m *SchedulerPoolManager) discoverAndMerge(ctx context.Context) {
 }
 
 func (m *SchedulerPoolManager) discoverSchedulers(ctx context.Context) ([]string, string, error) {
-	service := strings.TrimSpace(m.cfg.Prow.DiscoverySvc)
-	domain := strings.TrimSpace(m.cfg.Prow.DiscoveryDomain)
+	service := strings.TrimSpace(m.cfg.LegacyScheduler.DiscoverySvc)
+	domain := strings.TrimSpace(m.cfg.LegacyScheduler.DiscoveryDomain)
 	if service == "" || domain == "" {
 		return nil, "config", fmt.Errorf("discovery service/domain not configured")
 	}

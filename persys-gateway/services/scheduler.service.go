@@ -10,15 +10,15 @@ import (
 	"os"
 )
 
-type ProwService struct {
+type ClusterControlService struct {
 	config        *config.Config
 	clientTLS     *tls.Config
 	serverTLS     *tls.Config
 	schedulerPool *SchedulerPoolManager
 }
 
-func NewProwService(cfg *config.Config) *ProwService {
-	service := &ProwService{config: cfg}
+func NewClusterControlService(cfg *config.Config) *ClusterControlService {
+	service := &ClusterControlService{config: cfg}
 
 	if err := service.loadTLSConfigs(); err != nil {
 		panic(fmt.Sprintf("failed to load TLS configs: %v", err))
@@ -33,11 +33,11 @@ func NewProwService(cfg *config.Config) *ProwService {
 	return service
 }
 
-func (s *ProwService) Start(ctx context.Context) {
+func (s *ClusterControlService) Start(ctx context.Context) {
 	s.schedulerPool.Start(ctx)
 }
 
-func (s *ProwService) loadTLSConfigs() error {
+func (s *ClusterControlService) loadTLSConfigs() error {
 	cert, err := tls.LoadX509KeyPair(s.config.TLS.CertPath, s.config.TLS.KeyPath)
 	if err != nil {
 		return fmt.Errorf("failed to load client certificate: %w", err)
@@ -58,24 +58,24 @@ func (s *ProwService) loadTLSConfigs() error {
 	return nil
 }
 
-func (s *ProwService) DiscoverAndPrintSchedulers() {
+func (s *ClusterControlService) DiscoverAndPrintSchedulers() {
 	s.schedulerPool.ForceDiscover(context.Background())
 }
 
-func (s *ProwService) DiscoverSchedulers(_ string) error {
+func (s *ClusterControlService) DiscoverSchedulers(_ string) error {
 	s.schedulerPool.ForceDiscover(context.Background())
 	return nil
 }
 
-func (s *ProwService) GetSchedulerAddress() string {
+func (s *ClusterControlService) GetSchedulerAddress() string {
 	inst, err := s.schedulerPool.OrderedSchedulers(s.schedulerPool.DefaultClusterID(), "", "")
 	if err != nil || len(inst) == 0 {
-		return s.config.Prow.SchedulerAddr
+		return s.config.LegacyScheduler.FallbackAddr
 	}
 	return inst[0].Address
 }
 
-func (s *ProwService) GetSchedulerAddresses() []string {
+func (s *ClusterControlService) GetSchedulerAddresses() []string {
 	clusterID := s.schedulerPool.DefaultClusterID()
 	addrs := make([]string, 0)
 	for _, c := range s.schedulerPool.Snapshot() {
@@ -89,8 +89,8 @@ func (s *ProwService) GetSchedulerAddresses() []string {
 	return addrs
 }
 
-func (s *ProwService) IsProxyEnabled() bool {
-	return s.config.Prow.EnableProxy
+func (s *ClusterControlService) IsProxyEnabled() bool {
+	return s.config.LegacyScheduler.ProxyEnabled
 }
 
 func IsSchedulerUnavailable(err error) bool {
@@ -107,10 +107,10 @@ func IsUnknownCluster(err error) bool {
 	return errors.Is(err, ErrUnknownCluster)
 }
 
-func (s *ProwService) SnapshotClusters() []Cluster {
+func (s *ClusterControlService) SnapshotClusters() []Cluster {
 	return s.schedulerPool.Snapshot()
 }
 
-func (s *ProwService) DefaultClusterID() string {
+func (s *ClusterControlService) DefaultClusterID() string {
 	return s.schedulerPool.DefaultClusterID()
 }
