@@ -2,20 +2,19 @@ package services
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"strings"
 	"time"
 
 	controlv1 "github.com/persys-dev/persys-cloud/persys-gateway/internal/controlv1"
-	forgeryv1 "github.com/persys-dev/persys-cloud/persys-gateway/internal/forgeryv1"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 )
 
-func (s *ProwService) ApplyWorkload(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.ApplyWorkloadRequest) (*controlv1.ApplyWorkloadResponse, error) {
+func (s *ClusterControlService) ApplyWorkload(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.ApplyWorkloadRequest) (*controlv1.ApplyWorkloadResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.ApplyWorkload(ctx, req)
 	})
@@ -25,7 +24,7 @@ func (s *ProwService) ApplyWorkload(ctx context.Context, clusterID, sessionKey, 
 	return resp.(*controlv1.ApplyWorkloadResponse), nil
 }
 
-func (s *ProwService) ListNodes(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.ListNodesRequest) (*controlv1.ListNodesResponse, error) {
+func (s *ClusterControlService) ListNodes(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.ListNodesRequest) (*controlv1.ListNodesResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.ListNodes(ctx, req)
 	})
@@ -35,7 +34,7 @@ func (s *ProwService) ListNodes(ctx context.Context, clusterID, sessionKey, work
 	return resp.(*controlv1.ListNodesResponse), nil
 }
 
-func (s *ProwService) ListWorkloads(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.ListWorkloadsRequest) (*controlv1.ListWorkloadsResponse, error) {
+func (s *ClusterControlService) ListWorkloads(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.ListWorkloadsRequest) (*controlv1.ListWorkloadsResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.ListWorkloads(ctx, req)
 	})
@@ -45,7 +44,7 @@ func (s *ProwService) ListWorkloads(ctx context.Context, clusterID, sessionKey, 
 	return resp.(*controlv1.ListWorkloadsResponse), nil
 }
 
-func (s *ProwService) GetWorkload(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.GetWorkloadRequest) (*controlv1.GetWorkloadResponse, error) {
+func (s *ClusterControlService) GetWorkload(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.GetWorkloadRequest) (*controlv1.GetWorkloadResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.GetWorkload(ctx, req)
 	})
@@ -55,7 +54,7 @@ func (s *ProwService) GetWorkload(ctx context.Context, clusterID, sessionKey, wo
 	return resp.(*controlv1.GetWorkloadResponse), nil
 }
 
-func (s *ProwService) DeleteWorkload(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.DeleteWorkloadRequest) (*controlv1.DeleteWorkloadResponse, error) {
+func (s *ClusterControlService) DeleteWorkload(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.DeleteWorkloadRequest) (*controlv1.DeleteWorkloadResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.DeleteWorkload(ctx, req)
 	})
@@ -65,7 +64,7 @@ func (s *ProwService) DeleteWorkload(ctx context.Context, clusterID, sessionKey,
 	return resp.(*controlv1.DeleteWorkloadResponse), nil
 }
 
-func (s *ProwService) RetryWorkload(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.RetryWorkloadRequest) (*controlv1.RetryWorkloadResponse, error) {
+func (s *ClusterControlService) RetryWorkload(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.RetryWorkloadRequest) (*controlv1.RetryWorkloadResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.RetryWorkload(ctx, req)
 	})
@@ -75,7 +74,7 @@ func (s *ProwService) RetryWorkload(ctx context.Context, clusterID, sessionKey, 
 	return resp.(*controlv1.RetryWorkloadResponse), nil
 }
 
-func (s *ProwService) DrainNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.DrainNodeRequest) (*controlv1.DrainNodeResponse, error) {
+func (s *ClusterControlService) DrainNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.DrainNodeRequest) (*controlv1.DrainNodeResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.DrainNode(ctx, req)
 	})
@@ -85,7 +84,7 @@ func (s *ProwService) DrainNode(ctx context.Context, clusterID, sessionKey, work
 	return resp.(*controlv1.DrainNodeResponse), nil
 }
 
-func (s *ProwService) UndrainNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.UndrainNodeRequest) (*controlv1.UndrainNodeResponse, error) {
+func (s *ClusterControlService) UndrainNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.UndrainNodeRequest) (*controlv1.UndrainNodeResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.UndrainNode(ctx, req)
 	})
@@ -95,7 +94,7 @@ func (s *ProwService) UndrainNode(ctx context.Context, clusterID, sessionKey, wo
 	return resp.(*controlv1.UndrainNodeResponse), nil
 }
 
-func (s *ProwService) TaintNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.TaintNodeRequest) (*controlv1.TaintNodeResponse, error) {
+func (s *ClusterControlService) TaintNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.TaintNodeRequest) (*controlv1.TaintNodeResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.TaintNode(ctx, req)
 	})
@@ -105,7 +104,7 @@ func (s *ProwService) TaintNode(ctx context.Context, clusterID, sessionKey, work
 	return resp.(*controlv1.TaintNodeResponse), nil
 }
 
-func (s *ProwService) UntaintNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.UntaintNodeRequest) (*controlv1.UntaintNodeResponse, error) {
+func (s *ClusterControlService) UntaintNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.UntaintNodeRequest) (*controlv1.UntaintNodeResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.UntaintNode(ctx, req)
 	})
@@ -115,7 +114,7 @@ func (s *ProwService) UntaintNode(ctx context.Context, clusterID, sessionKey, wo
 	return resp.(*controlv1.UntaintNodeResponse), nil
 }
 
-func (s *ProwService) SetNodeLabel(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.SetNodeLabelRequest) (*controlv1.SetNodeLabelResponse, error) {
+func (s *ClusterControlService) SetNodeLabel(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.SetNodeLabelRequest) (*controlv1.SetNodeLabelResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.SetNodeLabel(ctx, req)
 	})
@@ -125,7 +124,7 @@ func (s *ProwService) SetNodeLabel(ctx context.Context, clusterID, sessionKey, w
 	return resp.(*controlv1.SetNodeLabelResponse), nil
 }
 
-func (s *ProwService) DeleteNodeLabel(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.DeleteNodeLabelRequest) (*controlv1.DeleteNodeLabelResponse, error) {
+func (s *ClusterControlService) DeleteNodeLabel(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.DeleteNodeLabelRequest) (*controlv1.DeleteNodeLabelResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.DeleteNodeLabel(ctx, req)
 	})
@@ -135,7 +134,7 @@ func (s *ProwService) DeleteNodeLabel(ctx context.Context, clusterID, sessionKey
 	return resp.(*controlv1.DeleteNodeLabelResponse), nil
 }
 
-func (s *ProwService) GetNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.GetNodeRequest) (*controlv1.GetNodeResponse, error) {
+func (s *ClusterControlService) GetNode(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.GetNodeRequest) (*controlv1.GetNodeResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.GetNode(ctx, req)
 	})
@@ -145,7 +144,7 @@ func (s *ProwService) GetNode(ctx context.Context, clusterID, sessionKey, worklo
 	return resp.(*controlv1.GetNodeResponse), nil
 }
 
-func (s *ProwService) GetClusterSummary(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.GetClusterSummaryRequest) (*controlv1.GetClusterSummaryResponse, error) {
+func (s *ClusterControlService) GetClusterSummary(ctx context.Context, clusterID, sessionKey, workloadKey string, req *controlv1.GetClusterSummaryRequest) (*controlv1.GetClusterSummaryResponse, error) {
 	resp, err := s.invokeControlRPC(ctx, clusterID, sessionKey, workloadKey, func(client controlv1.AgentControlClient) (any, error) {
 		return client.GetClusterSummary(ctx, req)
 	})
@@ -155,7 +154,7 @@ func (s *ProwService) GetClusterSummary(ctx context.Context, clusterID, sessionK
 	return resp.(*controlv1.GetClusterSummaryResponse), nil
 }
 
-func (s *ProwService) invokeControlRPC(ctx context.Context, clusterID, sessionKey, workloadKey string, call func(controlv1.AgentControlClient) (any, error)) (any, error) {
+func (s *ClusterControlService) invokeControlRPC(ctx context.Context, clusterID, sessionKey, workloadKey string, call func(controlv1.AgentControlClient) (any, error)) (any, error) {
 	if clusterID == "" {
 		clusterID = s.schedulerPool.DefaultClusterID()
 	}
@@ -197,93 +196,79 @@ func (s *ProwService) invokeControlRPC(ctx context.Context, clusterID, sessionKe
 	return nil, lastErr
 }
 
-func (s *ProwService) TriggerBuild(ctx context.Context, req *forgeryv1.TriggerBuildRequest) (*forgeryv1.OperationStatus, error) {
-	if req == nil {
-		return nil, fmt.Errorf("request is required")
+// InvokeDynamic implements grpcbridge.Invoker. It reuses the exact same
+// candidate ranking, dial, and failover logic as invokeControlRPC above —
+// this is deliberately NOT a separate connection-selection path. The only
+// difference from the typed methods (ApplyWorkload, ListNodes, etc.) is
+// that the request/response are dynamicpb messages built from reflection
+// instead of generated Go types, so the call goes through conn.Invoke
+// with a full method name string rather than a generated client method.
+func (s *ClusterControlService) InvokeDynamic(ctx context.Context, clusterID, sessionKey, workloadKey, fullMethod string, in, out proto.Message) error {
+	if clusterID == "" {
+		clusterID = s.schedulerPool.DefaultClusterID()
 	}
-	resp, err := s.invokeForgeryRPC(ctx, func(client forgeryv1.ForgeryControlClient) (any, error) {
-		return client.TriggerBuild(ctx, req)
-	})
+
+	candidates, err := s.schedulerPool.OrderedSchedulers(clusterID, sessionKey, workloadKey)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("select scheduler candidates for cluster %q: %w", clusterID, err)
 	}
-	return resp.(*forgeryv1.OperationStatus), nil
+
+	var lastErr error
+	for _, target := range candidates {
+		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		conn, dialErr := grpc.DialContext(callCtx, target.Address,
+			grpc.WithTransportCredentials(credentials.NewTLS(s.clientTLS)),
+			grpc.WithBlock(),
+		)
+		cancel()
+		if dialErr != nil {
+			s.schedulerPool.MarkUnhealthy(clusterID, target.Address)
+			lastErr = dialErr
+			continue
+		}
+
+		callWithTrace := injectTraceContext(ctx)
+		rpcErr := conn.Invoke(callWithTrace, fullMethod, in, out)
+		_ = conn.Close()
+		if rpcErr != nil {
+			s.schedulerPool.MarkUnhealthy(clusterID, target.Address)
+			lastErr = rpcErr
+			continue
+		}
+		return nil
+	}
+
+	if lastErr == nil {
+		lastErr = ErrNoHealthySchedulers
+	}
+	return lastErr
 }
 
-func (s *ProwService) UpsertProject(ctx context.Context, req *forgeryv1.UpsertProjectRequest) (*forgeryv1.ProjectResponse, error) {
-	if req == nil {
-		return nil, fmt.Errorf("request is required")
+// DialForReflection implements grpcbridge.ReflectionSource. Any one
+// healthy candidate is sufficient for descriptor discovery — reflection
+// responses are identical across replicas of the same deployed version —
+// so this deliberately skips the retry loop above: a failed reflection
+// dial just means "try again on the next refresh tick" (see
+// grpcbridge.Bridge.refreshLoop), not "fail the request."
+func (s *ClusterControlService) DialForReflection(ctx context.Context, clusterID string) (*grpc.ClientConn, error) {
+	if clusterID == "" {
+		clusterID = s.schedulerPool.DefaultClusterID()
 	}
-	resp, err := s.invokeForgeryRPC(ctx, func(client forgeryv1.ForgeryControlClient) (any, error) {
-		return client.UpsertProject(ctx, req)
-	})
-	if err != nil {
-		return nil, err
+	candidates, err := s.schedulerPool.OrderedSchedulers(clusterID, "", "")
+	if err != nil || len(candidates) == 0 {
+		return nil, fmt.Errorf("no scheduler candidates for cluster %q: %w", clusterID, err)
 	}
-	return resp.(*forgeryv1.ProjectResponse), nil
-}
-
-func (s *ProwService) ForwardWebhookTest(ctx context.Context, req *forgeryv1.ForwardWebhookRequest) (*forgeryv1.ForwardWebhookResponse, error) {
-	if req == nil {
-		return nil, fmt.Errorf("request is required")
-	}
-	req.Verified = true
-	resp, err := s.invokeForgeryRPC(ctx, func(client forgeryv1.ForgeryControlClient) (any, error) {
-		return client.ForwardWebhook(ctx, req)
-	})
-	if err != nil {
-		return nil, err
-	}
-	return resp.(*forgeryv1.ForwardWebhookResponse), nil
-}
-
-func (s *ProwService) ListPipelineStatus(ctx context.Context, req *forgeryv1.ListPipelineStatusRequest) (*forgeryv1.ListPipelineStatusResponse, error) {
-	if req == nil {
-		req = &forgeryv1.ListPipelineStatusRequest{}
-	}
-	resp, err := s.invokeForgeryRPC(ctx, func(client forgeryv1.ForgeryControlClient) (any, error) {
-		return client.ListPipelineStatus(ctx, req)
-	})
-	if err != nil {
-		return nil, err
-	}
-	return resp.(*forgeryv1.ListPipelineStatusResponse), nil
-}
-
-func (s *ProwService) invokeForgeryRPC(ctx context.Context, call func(forgeryv1.ForgeryControlClient) (any, error)) (any, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	callCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-
-	var forgeryTLS *tls.Config
-	if s.clientTLS != nil {
-		forgeryTLS = s.clientTLS.Clone()
-	} else {
-		forgeryTLS = &tls.Config{}
-	}
-	if serverName := s.config.Forgery.GRPCServerName; serverName != "" {
-		forgeryTLS.ServerName = serverName
-	}
-
-	conn, err := grpc.DialContext(callCtx, s.config.Forgery.GRPCAddr,
-		grpc.WithTransportCredentials(credentials.NewTLS(forgeryTLS)),
+	return grpc.DialContext(ctx, candidates[0].Address,
+		grpc.WithTransportCredentials(credentials.NewTLS(s.clientTLS)),
 		grpc.WithBlock(),
 	)
-	if err != nil {
-		return nil, fmt.Errorf("dial forgery %s: %w", s.config.Forgery.GRPCAddr, err)
-	}
-	defer conn.Close()
-
-	client := forgeryv1.NewForgeryControlClient(conn)
-	callWithTrace := injectTraceContext(ctx)
-	resp, err := call(forgeryClientFromContext(client, callWithTrace))
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
 }
+
+// Forgery methods (TriggerBuild, UpsertProject, ForwardWebhookTest,
+// ListPipelineStatus, invokeForgeryRPC) moved to services/forgery.service.go
+// as ForgeryService: forgery is a single fixed address with no pool or
+// failover, and sharing ProwService/ClusterControlService's shape here
+// was never honest about that difference.
 
 func injectTraceContext(ctx context.Context) context.Context {
 	md, ok := metadata.FromOutgoingContext(ctx)
@@ -362,42 +347,4 @@ func (c *controlClientWithContext) Heartbeat(_ context.Context, req *controlv1.H
 	return c.AgentControlClient.Heartbeat(c.ctx, req, opts...)
 }
 
-type forgeryClientWithContext struct {
-	forgeryv1.ForgeryControlClient
-	ctx context.Context
-}
-
-func forgeryClientFromContext(client forgeryv1.ForgeryControlClient, ctx context.Context) forgeryv1.ForgeryControlClient {
-	return &forgeryClientWithContext{ForgeryControlClient: client, ctx: ctx}
-}
-
-func (c *forgeryClientWithContext) ForwardWebhook(_ context.Context, req *forgeryv1.ForwardWebhookRequest, opts ...grpc.CallOption) (*forgeryv1.ForwardWebhookResponse, error) {
-	return c.ForgeryControlClient.ForwardWebhook(c.ctx, req, opts...)
-}
-func (c *forgeryClientWithContext) UpsertProject(_ context.Context, req *forgeryv1.UpsertProjectRequest, opts ...grpc.CallOption) (*forgeryv1.ProjectResponse, error) {
-	return c.ForgeryControlClient.UpsertProject(c.ctx, req, opts...)
-}
-func (c *forgeryClientWithContext) GetProject(_ context.Context, req *forgeryv1.GetProjectRequest, opts ...grpc.CallOption) (*forgeryv1.ProjectResponse, error) {
-	return c.ForgeryControlClient.GetProject(c.ctx, req, opts...)
-}
-func (c *forgeryClientWithContext) ListProjects(_ context.Context, req *forgeryv1.ListProjectsRequest, opts ...grpc.CallOption) (*forgeryv1.ListProjectsResponse, error) {
-	return c.ForgeryControlClient.ListProjects(c.ctx, req, opts...)
-}
-func (c *forgeryClientWithContext) DeleteProject(_ context.Context, req *forgeryv1.DeleteProjectRequest, opts ...grpc.CallOption) (*forgeryv1.OperationStatus, error) {
-	return c.ForgeryControlClient.DeleteProject(c.ctx, req, opts...)
-}
-func (c *forgeryClientWithContext) StoreGitHubCredential(_ context.Context, req *forgeryv1.StoreGitHubCredentialRequest, opts ...grpc.CallOption) (*forgeryv1.OperationStatus, error) {
-	return c.ForgeryControlClient.StoreGitHubCredential(c.ctx, req, opts...)
-}
-func (c *forgeryClientWithContext) ListUserRepositories(_ context.Context, req *forgeryv1.ListUserRepositoriesRequest, opts ...grpc.CallOption) (*forgeryv1.ListUserRepositoriesResponse, error) {
-	return c.ForgeryControlClient.ListUserRepositories(c.ctx, req, opts...)
-}
-func (c *forgeryClientWithContext) RegisterWebhook(_ context.Context, req *forgeryv1.RegisterWebhookRequest, opts ...grpc.CallOption) (*forgeryv1.OperationStatus, error) {
-	return c.ForgeryControlClient.RegisterWebhook(c.ctx, req, opts...)
-}
-func (c *forgeryClientWithContext) TriggerBuild(_ context.Context, req *forgeryv1.TriggerBuildRequest, opts ...grpc.CallOption) (*forgeryv1.OperationStatus, error) {
-	return c.ForgeryControlClient.TriggerBuild(c.ctx, req, opts...)
-}
-func (c *forgeryClientWithContext) ListPipelineStatus(_ context.Context, req *forgeryv1.ListPipelineStatusRequest, opts ...grpc.CallOption) (*forgeryv1.ListPipelineStatusResponse, error) {
-	return c.ForgeryControlClient.ListPipelineStatus(c.ctx, req, opts...)
-}
+// forgeryClientWithContext moved to services/forgery.service.go.

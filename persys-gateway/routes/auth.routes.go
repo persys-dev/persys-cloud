@@ -6,7 +6,6 @@ import (
 )
 
 var (
-	ctx    *gin.Context
 	scopes = []string{
 		"repo",
 		"write:repo_hook",

@@ -1,594 +1,100 @@
 package controllers
 
 import (
-	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"io"
 	"net/http"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	controlv1 "github.com/persys-dev/persys-cloud/persys-gateway/internal/controlv1"
-	forgeryv1 "github.com/persys-dev/persys-cloud/persys-gateway/internal/forgeryv1"
+	"github.com/persys-dev/persys-cloud/persys-gateway/internal/authn"
 	"github.com/persys-dev/persys-cloud/persys-gateway/services"
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
-type ProwController struct {
-	prowService *services.ProwService
-	authService services.AuthService
-	ctx         context.Context
+// ClusterMetaController holds the handlers that were never RPC-shaped and
+// so have nothing for grpcbridge to discover via reflection: health,
+// list-clusters, get-cluster. Everything else that used to live on
+// ProwController (workload/node CRUD, cluster metrics, forgery
+// passthrough) is now served dynamically — see
+// internal/router/bindings.go — since it's a straight AgentControl or
+// ForgeryControl RPC with no logic of its own beyond what the dynamic
+// bridge already does.
+//
+// Renamed from ProwController. Also dropped: ListHandler (was just an
+// alias for ListWorkloadsHandler, redundant with the real /workloads
+// route) and the determineAuthMethod/validateAuthentication/
+// isPublicEndpoint trio, which computed an auth decision that no handler
+// in this file ever actually consulted — dead code pretending to be a
+// safeguard.
+type ClusterMetaController struct {
+	clusterControl  *services.ClusterControlService
+	deploymentMode  string
+	databaseEnabled bool
 }
 
-func NewProwController(prowService *services.ProwService, authService services.AuthService, ctx context.Context) *ProwController {
-	return &ProwController{prowService: prowService, authService: authService, ctx: ctx}
-}
-
-func (c *ProwController) determineAuthMethod(ctx *gin.Context) string {
-	if ctx.Request.TLS != nil && len(ctx.Request.TLS.PeerCertificates) > 0 {
-		return "mtls"
-	}
-	if c.authService.IsAuthenticated(ctx) {
-		return "oauth"
-	}
-	return "none"
-}
-
-func (c *ProwController) validateAuthentication(ctx *gin.Context, authMethod string) bool {
-	switch authMethod {
-	case "mtls":
-		return true
-	case "oauth":
-		return c.authService.IsAuthenticated(ctx)
-	case "none":
-		return c.isPublicEndpoint(ctx.Request.URL.Path)
-	default:
-		return false
+func NewClusterMetaController(clusterControl *services.ClusterControlService, deploymentMode string, databaseEnabled bool) *ClusterMetaController {
+	return &ClusterMetaController{
+		clusterControl:  clusterControl,
+		deploymentMode:  deploymentMode,
+		databaseEnabled: databaseEnabled,
 	}
 }
 
-func (c *ProwController) isPublicEndpoint(path string) bool {
-	publicPaths := []string{"/metrics", "/health", "/ready"}
-	for _, publicPath := range publicPaths {
-		if path == publicPath {
-			return true
-		}
-	}
-	return false
+// Register implements router.Registrar. Mounted at the top level (not
+// nested under /clusters/:cluster_id) since ListClustersHandler in
+// particular has no single cluster to scope to.
+func (c *ClusterMetaController) Register(rg *gin.RouterGroup, _ *authn.Middleware) {
+	// Health is intentionally unauthenticated — it's a liveness probe,
+	// not a customer-facing endpoint, in both self-hosted and managed
+	// deployments.
+	rg.GET("/health", c.HealthCheckHandler())
+	rg.GET("/clusters", c.ListClustersHandler())
+	rg.GET("/clusters/:cluster_id", c.GetClusterHandler())
 }
 
-func (c *ProwController) ListHandler() gin.HandlerFunc {
+func (c *ClusterMetaController) HealthCheckHandler() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		c.ListWorkloadsHandler()(ctx)
-	}
-}
-
-func (c *ProwController) ScheduleWorkloadHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		req := &controlv1.ApplyWorkloadRequest{}
-		if !decodeProtoBody(ctx, req) {
-			return
-		}
-		clusterID := c.resolveClusterID(ctx)
-		sessionKey := c.resolveSessionKey(ctx)
-		workloadKey := c.resolveWorkloadKey(ctx)
-
-		resp, err := c.prowService.ApplyWorkload(ctx.Request.Context(), clusterID, sessionKey, workloadKey, req)
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) ListWorkloadsHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		clusterID := c.resolveClusterID(ctx)
-		sessionKey := c.resolveSessionKey(ctx)
-		workloadKey := c.resolveWorkloadKey(ctx)
-		req := &controlv1.ListWorkloadsRequest{Status: ctx.Query("status")}
-
-		resp, err := c.prowService.ListWorkloads(ctx.Request.Context(), clusterID, sessionKey, workloadKey, req)
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) GetWorkloadHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		clusterID := c.resolveClusterID(ctx)
-		sessionKey := c.resolveSessionKey(ctx)
-		workloadKey := c.resolveWorkloadKey(ctx)
-		req := &controlv1.GetWorkloadRequest{WorkloadId: ctx.Param("id")}
-
-		resp, err := c.prowService.GetWorkload(ctx.Request.Context(), clusterID, sessionKey, workloadKey, req)
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) DeleteWorkloadHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		clusterID := c.resolveClusterID(ctx)
-		sessionKey := c.resolveSessionKey(ctx)
-		workloadKey := c.resolveWorkloadKey(ctx)
-		req := &controlv1.DeleteWorkloadRequest{WorkloadId: ctx.Param("id")}
-
-		resp, err := c.prowService.DeleteWorkload(ctx.Request.Context(), clusterID, sessionKey, workloadKey, req)
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) RetryWorkloadHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		clusterID := c.resolveClusterID(ctx)
-		sessionKey := c.resolveSessionKey(ctx)
-		workloadKey := c.resolveWorkloadKey(ctx)
-		req := &controlv1.RetryWorkloadRequest{WorkloadId: ctx.Param("id")}
-
-		resp, err := c.prowService.RetryWorkload(ctx.Request.Context(), clusterID, sessionKey, workloadKey, req)
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) ListNodesHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		clusterID := c.resolveClusterID(ctx)
-		sessionKey := c.resolveSessionKey(ctx)
-		workloadKey := c.resolveWorkloadKey(ctx)
-		req := &controlv1.ListNodesRequest{Status: ctx.Query("status")}
-
-		resp, err := c.prowService.ListNodes(ctx.Request.Context(), clusterID, sessionKey, workloadKey, req)
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) GetNodeHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		clusterID := c.resolveClusterID(ctx)
-		sessionKey := c.resolveSessionKey(ctx)
-		workloadKey := c.resolveWorkloadKey(ctx)
-		req := &controlv1.GetNodeRequest{NodeId: ctx.Param("id")}
-
-		resp, err := c.prowService.GetNode(ctx.Request.Context(), clusterID, sessionKey, workloadKey, req)
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-type nodeReasonPayload struct {
-	Reason string `json:"reason"`
-}
-
-type nodeTaintPayload struct {
-	Key    string `json:"key" binding:"required"`
-	Value  string `json:"value"`
-	Effect string `json:"effect"`
-}
-
-type nodeLabelPayload struct {
-	Key   string `json:"key" binding:"required"`
-	Value string `json:"value"`
-}
-
-func (c *ProwController) DrainNodeHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		var body nodeReasonPayload
-		_ = ctx.ShouldBindJSON(&body)
-		resp, err := c.prowService.DrainNode(ctx.Request.Context(), c.resolveClusterID(ctx), c.resolveSessionKey(ctx), c.resolveWorkloadKey(ctx), &controlv1.DrainNodeRequest{NodeId: ctx.Param("id"), Reason: body.Reason})
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) UndrainNodeHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		var body nodeReasonPayload
-		_ = ctx.ShouldBindJSON(&body)
-		resp, err := c.prowService.UndrainNode(ctx.Request.Context(), c.resolveClusterID(ctx), c.resolveSessionKey(ctx), c.resolveWorkloadKey(ctx), &controlv1.UndrainNodeRequest{NodeId: ctx.Param("id"), Reason: body.Reason})
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) TaintNodeHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		var body nodeTaintPayload
-		if err := ctx.ShouldBindJSON(&body); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid taint payload"})
-			return
-		}
-		req := &controlv1.TaintNodeRequest{NodeId: ctx.Param("id"), Taint: &controlv1.NodeTaint{Key: body.Key, Value: body.Value, Effect: body.Effect}}
-		resp, err := c.prowService.TaintNode(ctx.Request.Context(), c.resolveClusterID(ctx), c.resolveSessionKey(ctx), c.resolveWorkloadKey(ctx), req)
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) UntaintNodeHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		var body nodeTaintPayload
-		if err := ctx.ShouldBindJSON(&body); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid taint payload"})
-			return
-		}
-		resp, err := c.prowService.UntaintNode(ctx.Request.Context(), c.resolveClusterID(ctx), c.resolveSessionKey(ctx), c.resolveWorkloadKey(ctx), &controlv1.UntaintNodeRequest{NodeId: ctx.Param("id"), Key: body.Key, Effect: body.Effect})
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) SetNodeLabelHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		var body nodeLabelPayload
-		if err := ctx.ShouldBindJSON(&body); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid label payload"})
-			return
-		}
-		resp, err := c.prowService.SetNodeLabel(ctx.Request.Context(), c.resolveClusterID(ctx), c.resolveSessionKey(ctx), c.resolveWorkloadKey(ctx), &controlv1.SetNodeLabelRequest{NodeId: ctx.Param("id"), Key: body.Key, Value: body.Value})
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) DeleteNodeLabelHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		var body nodeLabelPayload
-		if err := ctx.ShouldBindJSON(&body); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid label payload"})
-			return
-		}
-		resp, err := c.prowService.DeleteNodeLabel(ctx.Request.Context(), c.resolveClusterID(ctx), c.resolveSessionKey(ctx), c.resolveWorkloadKey(ctx), &controlv1.DeleteNodeLabelRequest{NodeId: ctx.Param("id"), Key: body.Key})
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) ClusterMetricsHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		clusterID := c.resolveClusterID(ctx)
-		sessionKey := c.resolveSessionKey(ctx)
-		workloadKey := c.resolveWorkloadKey(ctx)
-
-		resp, err := c.prowService.GetClusterSummary(ctx.Request.Context(), clusterID, sessionKey, workloadKey, &controlv1.GetClusterSummaryRequest{})
-		if err != nil {
-			c.writeProxyError(ctx, err)
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-type triggerBuildPayload struct {
-	ProjectName string `json:"project_name" binding:"required"`
-	Repository  string `json:"repository"`
-	ClusterID   string `json:"cluster_id"`
-	Ref         string `json:"ref"`
-	CommitSHA   string `json:"commit_sha"`
-	Sender      string `json:"sender"`
-	Mode        string `json:"mode"`
-	EventType   string `json:"event_type"`
-}
-
-func (c *ProwController) TriggerBuildHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		var reqBody triggerBuildPayload
-		if err := ctx.ShouldBindJSON(&reqBody); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid build request payload"})
-			return
-		}
-		clusterID := c.resolveClusterID(ctx)
-		if clusterID == "" {
-			clusterID = reqBody.ClusterID
-		}
-
-		resp, err := c.prowService.TriggerBuild(ctx.Request.Context(), &forgeryv1.TriggerBuildRequest{
-			ProjectName: strings.TrimSpace(reqBody.ProjectName),
-			Repository:  strings.TrimSpace(reqBody.Repository),
-			ClusterId:   strings.TrimSpace(clusterID),
-			Ref:         strings.TrimSpace(reqBody.Ref),
-			CommitSha:   strings.TrimSpace(reqBody.CommitSHA),
-			Sender:      strings.TrimSpace(reqBody.Sender),
-			Mode:        strings.TrimSpace(reqBody.Mode),
-			EventType:   strings.TrimSpace(reqBody.EventType),
+		ctx.JSON(http.StatusOK, gin.H{
+			"status":                "healthy",
+			"service":               "persys-gateway",
+			"deployment_mode":       c.deploymentMode,
+			"database_enabled":      c.databaseEnabled,
+			"legacy_proxy_enabled":  c.clusterControl.IsProxyEnabled(),
+			"legacy_scheduler_addr": c.clusterControl.GetSchedulerAddress(),
 		})
-		if err != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
 	}
 }
 
-func (c *ProwController) ListPipelineStatusHandler() gin.HandlerFunc {
+func (c *ClusterMetaController) ListClustersHandler() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		limit := uint32(50)
-		if rawLimit := strings.TrimSpace(ctx.Query("limit")); rawLimit != "" {
-			if n, err := strconv.Atoi(rawLimit); err == nil && n > 0 {
-				limit = uint32(n)
-			}
-		}
-		resp, err := c.prowService.ListPipelineStatus(ctx.Request.Context(), &forgeryv1.ListPipelineStatusRequest{
-			DeliveryId: strings.TrimSpace(ctx.Query("delivery_id")),
-			Repository: strings.TrimSpace(ctx.Query("repository")),
-			Limit:      limit,
-		})
-		if err != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-type upsertProjectPayload struct {
-	Name          string `json:"name" binding:"required"`
-	RepoURL       string `json:"repo_url" binding:"required"`
-	DefaultBranch string `json:"default_branch"`
-	ClusterID     string `json:"cluster_id"`
-	BuildType     string `json:"build_type"`
-	BuildMode     string `json:"build_mode"`
-	Strategy      string `json:"strategy"`
-	NexusRepo     string `json:"nexus_repo"`
-	PipelineYAML  string `json:"pipeline_yaml"`
-	AutoDeploy    bool   `json:"auto_deploy"`
-	ImageName     string `json:"image_name"`
-}
-
-func (c *ProwController) UpsertProjectHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		var reqBody upsertProjectPayload
-		if err := ctx.ShouldBindJSON(&reqBody); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid project payload"})
-			return
-		}
-		clusterID := c.resolveClusterID(ctx)
-		if clusterID == "" {
-			clusterID = reqBody.ClusterID
-		}
-
-		resp, err := c.prowService.UpsertProject(ctx.Request.Context(), &forgeryv1.UpsertProjectRequest{
-			Name:          strings.TrimSpace(reqBody.Name),
-			RepoUrl:       strings.TrimSpace(reqBody.RepoURL),
-			DefaultBranch: strings.TrimSpace(reqBody.DefaultBranch),
-			ClusterId:     strings.TrimSpace(clusterID),
-			BuildType:     strings.TrimSpace(reqBody.BuildType),
-			BuildMode:     strings.TrimSpace(reqBody.BuildMode),
-			Strategy:      strings.TrimSpace(reqBody.Strategy),
-			NexusRepo:     strings.TrimSpace(reqBody.NexusRepo),
-			PipelineYaml:  reqBody.PipelineYAML,
-			AutoDeploy:    reqBody.AutoDeploy,
-			ImageName:     strings.TrimSpace(reqBody.ImageName),
-		})
-		if err != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-type webhookTestPayload struct {
-	DeliveryID string `json:"delivery_id"`
-	EventType  string `json:"event_type"`
-	Repository string `json:"repository" binding:"required"`
-	ClusterID  string `json:"cluster_id"`
-	Sender     string `json:"sender"`
-	Ref        string `json:"ref"`
-	Before     string `json:"before"`
-	After      string `json:"after"`
-	Payload    any    `json:"payload"`
-}
-
-func (c *ProwController) TestWebhookHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		var reqBody webhookTestPayload
-		if err := ctx.ShouldBindJSON(&reqBody); err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook test payload"})
-			return
-		}
-		clusterID := c.resolveClusterID(ctx)
-		if clusterID == "" {
-			clusterID = reqBody.ClusterID
-		}
-
-		if strings.TrimSpace(reqBody.DeliveryID) == "" {
-			reqBody.DeliveryID = uuid.NewString()
-		}
-		if strings.TrimSpace(reqBody.EventType) == "" {
-			reqBody.EventType = "push"
-		}
-
-		payloadJSON := "{}"
-		if reqBody.Payload != nil {
-			if marshaled, err := json.Marshal(reqBody.Payload); err == nil {
-				payloadJSON = string(marshaled)
-			}
-		}
-
-		resp, err := c.prowService.ForwardWebhookTest(ctx.Request.Context(), &forgeryv1.ForwardWebhookRequest{
-			DeliveryId:  reqBody.DeliveryID,
-			EventType:   strings.TrimSpace(reqBody.EventType),
-			Repository:  strings.TrimSpace(reqBody.Repository),
-			ClusterId:   strings.TrimSpace(clusterID),
-			Sender:      strings.TrimSpace(reqBody.Sender),
-			Ref:         strings.TrimSpace(reqBody.Ref),
-			Before:      strings.TrimSpace(reqBody.Before),
-			After:       strings.TrimSpace(reqBody.After),
-			PayloadJson: payloadJSON,
-			Verified:    true,
-		})
-		if err != nil {
-			ctx.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
-			return
-		}
-		writeProtoJSON(ctx, http.StatusOK, resp)
-	}
-}
-
-func (c *ProwController) HealthCheckHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		ctx.JSON(http.StatusOK, gin.H{"status": "healthy", "service": "persys-gateway", "prow_proxy_enabled": c.prowService.IsProxyEnabled(), "prow_scheduler": c.prowService.GetSchedulerAddress()})
-	}
-}
-
-func (c *ProwController) ListClustersHandler() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		clusters := c.prowService.SnapshotClusters()
+		clusters := c.clusterControl.SnapshotClusters()
 		sort.SliceStable(clusters, func(i, j int) bool { return clusters[i].ID < clusters[j].ID })
 		ctx.JSON(http.StatusOK, gin.H{
-			"default_cluster_id": c.prowService.DefaultClusterID(),
+			"default_cluster_id": c.clusterControl.DefaultClusterID(),
 			"clusters":           buildClusterViews(clusters),
 		})
 	}
 }
 
-func (c *ProwController) GetClusterHandler() gin.HandlerFunc {
+func (c *ClusterMetaController) GetClusterHandler() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		clusterID := strings.TrimSpace(ctx.Param("cluster_id"))
 		if clusterID == "" {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "cluster_id is required"})
 			return
 		}
-		for _, cluster := range c.prowService.SnapshotClusters() {
+		for _, cluster := range c.clusterControl.SnapshotClusters() {
 			if cluster.ID != clusterID {
 				continue
 			}
 			ctx.JSON(http.StatusOK, gin.H{
-				"default_cluster_id": c.prowService.DefaultClusterID(),
+				"default_cluster_id": c.clusterControl.DefaultClusterID(),
 				"cluster":            buildClusterView(cluster),
 			})
 			return
 		}
 		ctx.JSON(http.StatusNotFound, gin.H{"error": "cluster not found"})
 	}
-}
-
-func (c *ProwController) resolveClusterID(ctx *gin.Context) string {
-	if clusterID := strings.TrimSpace(ctx.Param("cluster_id")); clusterID != "" {
-		return clusterID
-	}
-	if clusterID := strings.TrimSpace(ctx.GetHeader("X-Persys-Cluster-ID")); clusterID != "" {
-		return clusterID
-	}
-	if clusterID := strings.TrimSpace(ctx.Query("cluster_id")); clusterID != "" {
-		return clusterID
-	}
-	return ""
-}
-
-func (c *ProwController) resolveSessionKey(ctx *gin.Context) string {
-	if s := strings.TrimSpace(ctx.GetHeader("X-Persys-Session")); s != "" {
-		return s
-	}
-	if cookie, err := ctx.Cookie("persys_session"); err == nil && strings.TrimSpace(cookie) != "" {
-		return cookie
-	}
-	authz := strings.TrimSpace(ctx.GetHeader("Authorization"))
-	if authz == "" {
-		return strings.TrimSpace(ctx.ClientIP())
-	}
-	sum := sha256.Sum256([]byte(authz))
-	return hex.EncodeToString(sum[:])
-}
-
-func (c *ProwController) resolveWorkloadKey(ctx *gin.Context) string {
-	if key := strings.TrimSpace(ctx.GetHeader("X-Persys-Workload-Key")); key != "" {
-		return key
-	}
-	if id := strings.TrimSpace(ctx.Param("id")); id != "" {
-		return id
-	}
-	if wid := strings.TrimSpace(ctx.Query("workload_id")); wid != "" {
-		return wid
-	}
-	return ctx.Request.URL.Path
-}
-
-func (c *ProwController) writeProxyError(ctx *gin.Context, err error) {
-	if services.IsUnknownCluster(err) {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	if services.IsSchedulerUnavailable(err) {
-		ctx.JSON(http.StatusServiceUnavailable, gin.H{"error": "no healthy scheduler available"})
-		return
-	}
-	ctx.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-}
-
-func decodeProtoBody(ctx *gin.Context, msg proto.Message) bool {
-	body, err := io.ReadAll(ctx.Request.Body)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "failed to read request body"})
-		return false
-	}
-	if len(strings.TrimSpace(string(body))) == 0 {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "request body is required"})
-		return false
-	}
-	unmarshal := protojson.UnmarshalOptions{DiscardUnknown: true}
-	if err := unmarshal.Unmarshal(body, msg); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
-		return false
-	}
-	return true
-}
-
-func writeProtoJSON(ctx *gin.Context, status int, msg proto.Message) {
-	data, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(msg)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode response"})
-		return
-	}
-	ctx.Data(status, "application/json", data)
 }
 
 func buildClusterViews(clusters []services.Cluster) []gin.H {

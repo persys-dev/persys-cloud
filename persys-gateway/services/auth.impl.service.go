@@ -2,62 +2,38 @@ package services
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"time"
 
 	jwtlib "github.com/dgrijalva/jwt-go"
 	"github.com/dgrijalva/jwt-go/request"
 	"github.com/gin-gonic/gin"
+	"github.com/persys-dev/persys-cloud/persys-gateway/internal/store"
 	"github.com/persys-dev/persys-cloud/persys-gateway/models"
-
-	//"github.com/wpcodevo/golang-mongodb/utils"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type AuthServiceImpl struct {
-	collection *mongo.Collection
-	ctx        context.Context
+	store     *store.Store
+	ctx       context.Context
+	jwtSecret []byte
+}
+
+func NewAuthService(st *store.Store, ctx context.Context, jwtSecret []byte) AuthService {
+	return &AuthServiceImpl{store: st, ctx: ctx, jwtSecret: jwtSecret}
 }
 
 func (uc *AuthServiceImpl) ReadUserData(ctx *gin.Context) (*models.DBResponse, error) {
-
-	var result *models.DBResponse
-
 	data, err := request.ParseFromRequest(ctx.Request, request.OAuth2Extractor, func(token *jwtlib.Token) (interface{}, error) {
-		b := []byte("unicornsAreAwesome")
-		return b, nil
+		return uc.jwtSecret, nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	user := data.Claims.(jwtlib.MapClaims)
-	UserID := user["UserID"].(float64)
-	res := uc.collection.FindOne(ctx, bson.M{"userID": UserID})
-	if res.Err() == mongo.ErrNoDocuments {
-		return nil, res.Err()
-	}
-	err = res.Decode(&result)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
+	claims := data.Claims.(jwtlib.MapClaims)
+	userID := int64(claims["UserID"].(float64))
+	return uc.store.FindUserByID(ctx.Request.Context(), userID)
 }
 
 func (uc *AuthServiceImpl) CliLogin(req *models.CliReq) (*models.DBResponse, error) {
-	res := uc.collection.FindOne(uc.ctx, bson.M{"state": req.State})
-
-	var result *models.DBResponse
-
-	if res.Err() != mongo.ErrNoDocuments {
-		err := res.Decode(&result)
-		if err != nil {
-			return nil, err
-		}
-		return result, nil
-	}
-	return nil, res.Err()
+	return uc.store.FindUserByState(uc.ctx, req.State)
 }
 
 func (uc *AuthServiceImpl) CheckUser() {
@@ -65,58 +41,20 @@ func (uc *AuthServiceImpl) CheckUser() {
 	panic("implement me")
 }
 
-func NewAuthService(collection *mongo.Collection, ctx context.Context) AuthService {
-	return &AuthServiceImpl{collection, ctx}
-}
-
+// SignInUser creates or updates a user record. Delegates to
+// store.UpsertUser, whose Postgres ON CONFLICT clause makes this
+// atomic — no separate exists-check-then-branch, which is exactly what
+// let the old Mongo implementation silently create duplicate user rows
+// on every subsequent login (the insert ran unconditionally regardless
+// of which branch was taken, relying on a unique index that was never
+// actually created to catch it).
 func (uc *AuthServiceImpl) SignInUser(user *models.UserInput) (*models.DBResponse, error) {
-
-	// check if a user exists
-	check := uc.collection.FindOne(uc.ctx, bson.M{"userID": user.UserID})
-
-	if check.Err() != mongo.ErrNoDocuments {
-		update := uc.collection.FindOneAndUpdate(uc.ctx, bson.M{"userID": user.UserID},
-			bson.M{"$set": bson.M{
-				"updatedAt":   time.Now().String(),
-				"persysToken": user.PersysToken,
-				"githubToken": user.GithubToken,
-				"state":       user.State,
-			}})
-		fmt.Print(update)
-	}
-
-	res, err := uc.collection.InsertOne(uc.ctx, &user)
-
-	if err != nil {
-		if er, ok := err.(mongo.WriteException); ok && er.WriteErrors[0].Code == 11000 {
-			return nil, errors.New("user with that email already exist")
-		}
-		return nil, err
-	}
-
-	// Create a unique index for the email field
-	//opt := options.Index()
-	//opt.SetUnique(true)
-	//index := mongo.IndexModel{Keys: bson.M{"email": 1}, Options: opt}
-
-	//if _, err := uc.collection.Indexes().CreateOne(uc.ctx, index); err != nil {
-	//	return nil, errors.New("could not create index for email")
-	//}
-
-	var newUser *models.DBResponse
-	query := bson.M{"_id": res.InsertedID}
-
-	err = uc.collection.FindOne(uc.ctx, query).Decode(&newUser)
-	if err != nil {
-		return nil, err
-	}
-
-	return newUser, nil
+	return uc.store.UpsertUser(uc.ctx, user)
 }
 
 func (a *AuthServiceImpl) IsAuthenticated(ctx *gin.Context) bool {
 	_, err := request.ParseFromRequest(ctx.Request, request.OAuth2Extractor, func(token *jwtlib.Token) (interface{}, error) {
-		return []byte("unicornsAreAwesome"), nil
+		return a.jwtSecret, nil
 	})
 	return err == nil
 }
