@@ -7,3 +7,10 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     editable: true
+
+  - name: pyroscope
+    type: pyroscope
+    access: proxy
+    url: http://pyroscope:4040
+    isDefault: true
+    editable: true
