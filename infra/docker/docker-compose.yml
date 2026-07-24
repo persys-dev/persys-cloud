@@ -14,20 +14,16 @@ services:
     ports:
       - 8551:8551
     depends_on:
-      - vault-manager
-      - mongodb
-      - vault
       - coredns
     environment:
       - OTEL_EXPORTER_JAEGER_ENDPOINT=${OTEL_EXPORTER_JAEGER_ENDPOINT:-jaeger:4318}
       - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
       - PERSYS_VAULT_ADDR=${PERSYS_GATEWAY_VAULT_ADDR:-http://vault:8200}
       - PERSYS_VAULT_AUTH_METHOD=${PERSYS_GATEWAY_VAULT_AUTH_METHOD:-approle}
-      - PERSYS_VAULT_TOKEN=${PERSYS_GATEWAY_VAULT_TOKEN:-}
       - PERSYS_GATEWAY_VAULT_ADDR=${PERSYS_GATEWAY_VAULT_ADDR:-http://vault:8200}
-      - PERSYS_GATEWAY_VAULT_ROLE_ID=${PERSYS_GATEWAY_VAULT_ROLE_ID:-}
-      - PERSYS_GATEWAY_VAULT_SECRET_ID=${PERSYS_GATEWAY_VAULT_SECRET_ID:-}
-      - PERSYS_GATEWAY_MONGO_URI=${PERSYS_GATEWAY_MONGO_URI:-mongodb://admin:admin@mongodb:27017/persys-gateway?authSource=admin}
+      - PERSYS_GATEWAY_DEPLOYMENT_MODE=${PERSYS_GATEWAY_DEPLOYMENT_MODE:-self-hosted}
+      - PERSYS_GATEWAY_JWT_SECRET=${PERSYS_GATEWAY_JWT_SECRET}
+      - PERSYS_GATEWAY_POSTGRES_DSN=${PERSYS_GATEWAY_POSTGRES_DSN}
       - PERSYS_GATEWAY_GITHUB_WEBHOOK_SECRET=${PERSYS_GATEWAY_GITHUB_WEBHOOK_SECRET:-}
       - PERSYS_GATEWAY_GITHUB_WEBHOOK_SECRET_FILE=${PERSYS_GATEWAY_GITHUB_WEBHOOK_SECRET_FILE:-}
       - PERSYS_GATEWAY_GITHUB_CLIENT_ID=${PERSYS_GATEWAY_GITHUB_CLIENT_ID:-}
@@ -40,7 +36,7 @@ services:
       - /etc/localtime:/etc/localtime:ro
     networks:
       - persys-cloud-net
-
+      
   # --- Persys Scheduler (Workload scheduler and reconciler) ---
   persys-scheduler:
     build:
@@ -51,7 +47,6 @@ services:
       - 8085:8085   # gRPC + mTLS API
     depends_on:
       - etcd
-      - vault-manager
       - coredns
       - redis
     environment:
@@ -65,9 +60,6 @@ services:
       - PERSYS_EXTERNAL_IP=${PERSYS_EXTERNAL_IP}
       - PERSYS_VAULT_ADDR=${PERSYS_SCHEDULER_VAULT_ADDR:-http://vault:8200}
       - PERSYS_VAULT_AUTH_METHOD=${PERSYS_SCHEDULER_VAULT_AUTH_METHOD:-approle}
-      - PERSYS_VAULT_TOKEN=${PERSYS_SCHEDULER_VAULT_TOKEN}
-      - PERSYS_VAULT_APPROLE_ROLE_ID=${PERSYS_SCHEDULER_VAULT_ROLE_ID}
-      - PERSYS_VAULT_APPROLE_SECRET_ID=${PERSYS_SCHEDULER_VAULT_SECRET_ID}
       - PERSYS_VAULT_PKI_MOUNT=${PERSYS_VAULT_PKI_MOUNT:-pki}
       - REDIS_ADDR=redis:6379
       - REDIS_PASSWORD=
@@ -85,7 +77,6 @@ services:
     ports:
       - 8087:8087
     depends_on:
-      - vault-manager
       - mysql
       - redis
     environment:
@@ -98,10 +89,6 @@ services:
       - PERSYS_FORGERY_PIPELINE_STATUS_KEY=${PERSYS_FORGERY_PIPELINE_STATUS_KEY:-pipeline_status}
       - PERSYS_FORGERY_VAULT_ADDR=${PERSYS_FORGERY_VAULT_ADDR:-http://vault:8200}
       - PERSYS_FORGERY_VAULT_AUTH_METHOD=${PERSYS_FORGERY_VAULT_AUTH_METHOD:-approle}
-      - PERSYS_FORGERY_VAULT_TOKEN=${PERSYS_FORGERY_VAULT_TOKEN:-}
-      - PERSYS_FORGERY_VAULT_TOKEN_FILE=${PERSYS_FORGERY_VAULT_TOKEN_FILE:-}
-      - PERSYS_FORGERY_VAULT_ROLE_ID=${PERSYS_FORGERY_VAULT_ROLE_ID:-}
-      - PERSYS_FORGERY_VAULT_SECRET_ID=${PERSYS_FORGERY_VAULT_SECRET_ID:-}
       - PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET=${PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET:-}
       - PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET_FILE=${PERSYS_FORGERY_GITHUB_WEBHOOK_SECRET_FILE:-}
     volumes:
@@ -139,9 +126,6 @@ services:
       - AUTOMATION_VAULT_ENABLED=${AUTOMATION_VAULT_ENABLED:-false}
       - AUTOMATION_VAULT_ADDR=${AUTOMATION_VAULT_ADDR:-http://vault:8200}
       - AUTOMATION_VAULT_AUTH_METHOD=${AUTOMATION_VAULT_AUTH_METHOD:-approle}
-      - AUTOMATION_VAULT_TOKEN=${AUTOMATION_VAULT_TOKEN:-}
-      - AUTOMATION_VAULT_APPROLE_ROLE_ID=${AUTOMATION_VAULT_APPROLE_ROLE_ID:-}
-      - AUTOMATION_VAULT_APPROLE_SECRET_ID=${AUTOMATION_VAULT_APPROLE_SECRET_ID:-}
       - AUTOMATION_VAULT_PKI_MOUNT=${AUTOMATION_VAULT_PKI_MOUNT:-pki}
       - AUTOMATION_VAULT_PKI_ROLE=${AUTOMATION_VAULT_PKI_ROLE:-persys-automation}
       - AUTOMATION_VAULT_CERT_TTL=${AUTOMATION_VAULT_CERT_TTL:-24h}
@@ -154,7 +138,7 @@ services:
       - AUTOMATION_FORGERY_REDIS_DB=${AUTOMATION_FORGERY_REDIS_DB:-0}
       - AUTOMATION_FORGERY_PIPELINE_KEY=${AUTOMATION_FORGERY_PIPELINE_KEY:-pipeline_status}
       - AUTOMATION_STORE_BACKEND=${AUTOMATION_STORE_BACKEND:-postgres}
-      - AUTOMATION_POSTGRES_DSN=${AUTOMATION_POSTGRES_DSN:-postgres://automation:automation@automation-postgres:5432/persys_automation?sslmode=disable}
+      - AUTOMATION_POSTGRES_DSN=${AUTOMATION_POSTGRES_DSN:-postgres://automation:automation@postgres:5432/persys_automation?sslmode=disable}
       - AUTOMATION_LEADER_ELECTION_ENABLED=${AUTOMATION_LEADER_ELECTION_ENABLED:-true}
       - AUTOMATION_LEADER_ELECTION_LOCK_ID=${AUTOMATION_LEADER_ELECTION_LOCK_ID:-771001}
       - AUTOMATION_LEADER_ELECTION_POLL_INTERVAL=${AUTOMATION_LEADER_ELECTION_POLL_INTERVAL:-5s}
@@ -192,9 +176,6 @@ services:
       - INTELLIGENCE_VAULT_ENABLED=${INTELLIGENCE_VAULT_ENABLED:-false}
       - INTELLIGENCE_VAULT_ADDR=${INTELLIGENCE_VAULT_ADDR:-http://vault:8200}
       - INTELLIGENCE_VAULT_AUTH_METHOD=${INTELLIGENCE_VAULT_AUTH_METHOD:-approle}
-      - INTELLIGENCE_VAULT_TOKEN=${INTELLIGENCE_VAULT_TOKEN:-}
-      - INTELLIGENCE_VAULT_APPROLE_ROLE_ID=${INTELLIGENCE_VAULT_APPROLE_ROLE_ID:-}
-      - INTELLIGENCE_VAULT_APPROLE_SECRET_ID=${INTELLIGENCE_VAULT_APPROLE_SECRET_ID:-}
       - INTELLIGENCE_VAULT_PKI_MOUNT=${INTELLIGENCE_VAULT_PKI_MOUNT:-pki}
       - INTELLIGENCE_VAULT_PKI_ROLE=${INTELLIGENCE_VAULT_PKI_ROLE:-persys-intelligence}
       - INTELLIGENCE_VAULT_CERT_TTL=${INTELLIGENCE_VAULT_CERT_TTL:-24h}
@@ -206,40 +187,6 @@ services:
       - INTELLIGENCE_MODEL_NAME=${INTELLIGENCE_MODEL_NAME:-}
     volumes:
       - /etc/localtime:/etc/localtime:ro
-    networks:
-      - persys-cloud-net
-    
-  compute-agent:
-    build:
-      context: ../..
-      dockerfile: compute-agent/Dockerfile
-    environment:
-      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
-      - OTEL_SERVICE_NAME=${COMPUTE_AGENT_OTEL_SERVICE_NAME:-compute-agent}
-      - PERSYS_VAULT_ENABLED=true
-      - PERSYS_VAULT_ADDR=${COMPUTE_AGENT_VAULT_ADDR:-http://vault:8200}
-      - PERSYS_VAULT_AUTH_METHOD=${COMPUTE_AGENT_VAULT_AUTH_METHOD:-approle}
-      - PERSYS_VAULT_TOKEN=${COMPUTE_AGENT_VAULT_TOKEN:-}
-      - PERSYS_VAULT_APPROLE_ROLE_ID=${COMPUTE_AGENT_VAULT_ROLE_ID:-}
-      - PERSYS_VAULT_APPROLE_SECRET_ID=${COMPUTE_AGENT_VAULT_SECRET_ID:-}
-      - PERSYS_VAULT_SERVICE_NAME=${COMPUTE_AGENT_VAULT_SERVICE_NAME:-compute-agent}
-      - PERSYS_TLS_ENABLED=${PERSYS_TLS_ENABLED:-true}
-      - PERSYS_GRPC_PORT=${PERSYS_GRPC_PORT:-50051}
-      - PERSYS_LOG_LEVEL=${PERSYS_LOG_LEVEL:-info}
-      - PERSYS_RECONCILE_ENABLED=${PERSYS_RECONCILE_ENABLED:-true}
-      - PERSYS_VM_ENABLED=${PERSYS_VM_ENABLED:-false}
-      - PERSYS_SCHEDULER_INSECURE=${PERSYS_SCHEDULER_INSECURE:-false}
-      - PERSYS_SCHEDULER_ADDR=${PERSYS_SCHEDULER_ADDR:-persys-scheduler:8085}
-    user: "0:0"
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - ${DOCKER_SOCK_PATH:-/var/run/docker.sock}:/var/run/docker.sock
-    depends_on:
-      - vault-manager
-      - persys-scheduler
-    ports:
-      - "50051:50051"
-      - "8089:8089"
     networks:
       - persys-cloud-net
 
@@ -325,7 +272,7 @@ services:
     networks:
       - persys-cloud-net
 
-#  --- Postgres (Automation policy and audit store) ---
+#  --- Postgres (Automation policy and audit store/ Gateway Auth Store) ---
   postgres:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -337,25 +284,10 @@ services:
       - "5432:5432"
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - automation_postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - persys-cloud-net
 
-#  --- MongoDB (Database for Persys Gateway) ---
-  mongodb:
-    image: mongo:latest
-    restart: always
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: "${MONGO_INITDB_ROOT_USERNAME:-admin}"
-      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_INITDB_ROOT_PASSWORD:-admin}"
-      MONGODB_DATABASE: "${MONGODB_DATABASE:-persys-gateway}"
-    ports:
-      - 27017:27017
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - mongodb_data_container:/data/db
-    networks:
-      - persys-cloud-net
 
   # --- etcd (Key-value store for Persys Scheduler and CoreDNS) ---
   etcd:
@@ -374,7 +306,7 @@ services:
 
 # --- Volumes for persistent data ---
 volumes:
-  mongodb_data_container:
+  postgres_data:
   mysql_data:
   redis_data:
   automation_postgres_data:
