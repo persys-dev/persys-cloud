@@ -139,16 +139,19 @@ None. All changes are backward compatible.
 ### Resource Impact
 
 **etcd Reduction (12-hour baseline: 100 workloads, 5s reconciliation)**:
+
 - Before: ~172,800 writes (~520MB cumulative)
 - After: ~1,000 writes (~1MB cumulative)
 - Result: 99.8% reduction in etcd write volume
 
 **Redis Requirements**:
+
 - Memory: ~10-20MB (events + reconciliation metadata)
 - CPU: <1% typical
 - Network: <1KB/s typical
 
 **Backward Compatibility**:
+
 - Old workloads in `/workloads/{id}` continue to load via compatibility shim
 - New scheduler can read old data; old scheduler can ignore new split storage
 - No manual migration required

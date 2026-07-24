@@ -49,6 +49,7 @@ earlier MongoDB-based version.
 ## Ports
 
 From `config.yaml`:
+
 - mTLS API: `:8551`
 - public webhook API: `:8585`
 - debug/pprof: `:6060`
@@ -56,11 +57,13 @@ From `config.yaml`:
 ## Config
 
 Primary config files:
+
 - `config.yaml`
 - `cluster.yaml` (scheduler clusters and routing)
 - `catalog.yaml` (optional — see Dynamic API Surface; absence is normal)
 
 Important sections:
+
 - `deployment.mode` — see Deployment Modes
 - `app.jwt_secret` — required in managed mode, auto-generated with a
   startup warning in self-hosted (won't survive a restart unless set)
@@ -96,9 +99,11 @@ GET /clusters/:cluster_id/forgery/rpc/_meta
 ## Key Routes
 
 Public:
+
 - `POST /webhooks/github`
 
 mTLS API:
+
 - `GET /health`
 - `GET /clusters`
 - `GET /clusters/:cluster_id`
@@ -111,6 +116,7 @@ mTLS API:
 - `POST /clusters/:cluster_id/forgery/webhooks/test`
 
 Managed mode only:
+
 - `GET /auth/login`
 - `GET /auth/` (OAuth callback)
 - `GET /github/list/repos`
