@@ -19,7 +19,8 @@ type Config struct {
 	APIEndpoint  string
 	PrivateKey   *rsa.PrivateKey
 	PublicKeyPEM string
-
+	APIVersion   string
+	ClusterID    string
 	Transport         string
 	GRPCEndpoint      string
 	GRPCInsecure      bool
@@ -73,6 +74,18 @@ func GetConfig() Config {
 	if cfg.APIEndpoint == "" {
 		cfg.APIEndpoint = "http://localhost:8084"
 		log.Printf("WARNING! No api_endpoint found in your config.yaml; defaulting to: %v", cfg.APIEndpoint)
+	}
+
+	cfg.APIVersion = viper.GetString("api_version")
+	if cfg.APIVersion == "" {
+		cfg.APIVersion = "v2"
+		log.Printf("WARNING! No api_version found in your config.yaml; defaulting to: %v", cfg.APIVersion)
+	}
+
+	cfg.ClusterID = viper.GetString("cluster_id")
+	if cfg.ClusterID == "" {
+		cfg.ClusterID = "persys-genesis-a"
+		log.Printf("WARNING! No cluster_id found in your config.yaml; some operations may fail.")
 	}
 
 	cfg.Transport = strings.ToLower(viper.GetString("transport"))
