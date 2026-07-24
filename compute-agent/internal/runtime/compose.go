@@ -10,20 +10,30 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
 	"github.com/persys-dev/persys-cloud/compute-agent/pkg/models"
 	"github.com/sirupsen/logrus"
 )
 
 // ComposeRuntime manages Docker Compose workloads
 type ComposeRuntime struct {
-	composeBinary string
-	workDir       string
-	logger        *logrus.Entry
+	composeBinary  string
+	dockerEndpoint string
+	workDir        string
+	logger         *logrus.Entry
+
+	// dockerClient is used only for per-container stats collection (UsageStats).
+	// It's optional - if it fails to initialize, UsageStats simply reports
+	// unavailable and every other compose operation (which shells out to the
+	// docker/compose CLIs) is unaffected.
+	dockerClient *client.Client
 }
 
 // NewComposeRuntime creates a new Docker Compose runtime
-func NewComposeRuntime(composeBinary, workDir string, logger *logrus.Logger) (*ComposeRuntime, error) {
+func NewComposeRuntime(composeBinary, dockerEndpoint, workDir string, logger *logrus.Logger) (*ComposeRuntime, error) {
 	if composeBinary == "" {
 		composeBinary = "docker compose"
 	}
@@ -43,10 +53,33 @@ func NewComposeRuntime(composeBinary, workDir string, logger *logrus.Logger) (*C
 		return nil, fmt.Errorf("docker compose binary not found: %w", err)
 	}
 
+// Best-effort docker client for stats collection. Compose itself doesn't need
+	// this (it drives the compose/docker CLIs directly), so a failure here is
+	// logged but non-fatal - it only means UsageStats will be unavailable.
+	var dockerCli *client.Client
+	var err error
+	if dockerEndpoint != "" {
+		dockerCli, err = client.NewClientWithOpts(
+			client.WithHost(dockerEndpoint),
+			client.WithAPIVersionNegotiation(),
+		)
+	} else {
+		dockerCli, err = client.NewClientWithOpts(
+			client.FromEnv,
+			client.WithAPIVersionNegotiation(),
+		)
+	}
+	if err != nil {
+		logger.WithError(err).Warn("compose runtime: failed to init docker client, per-workload metrics will be unavailable")
+		dockerCli = nil
+	}
+
 	return &ComposeRuntime{
-		composeBinary: composeBinary,
-		workDir:       workDir,
-		logger:        logger.WithField("runtime", "compose"),
+		composeBinary:  composeBinary,
+		dockerEndpoint: dockerEndpoint,
+		workDir:        workDir,
+		logger:         logger.WithField("runtime", "compose"),
+		dockerClient:   dockerCli,
 	}, nil
 }
 
@@ -232,12 +265,100 @@ func (c *ComposeRuntime) Healthy(ctx context.Context) error {
 	return nil
 }
 
+// UsageStats returns an aggregated point-in-time resource usage snapshot for
+// a compose project, implementing runtime.UsageStatsProvider. It sums the
+// per-container stats (Docker's one-shot stats endpoint, same as
+// DockerRuntime.UsageStats) across every currently-running container that
+// belongs to the project.
+func (c *ComposeRuntime) UsageStats(ctx context.Context, id string) (*models.WorkloadUsage, error) {
+	if c.dockerClient == nil {
+		return nil, fmt.Errorf("docker client unavailable for compose stats")
+	}
+
+	projectDir := filepath.Join(c.workDir, id)
+	runningIDs, err := c.composeContainerIDs(ctx, projectDir, id, "ps", "-q", "--status", "running")
+	if err != nil {
+		c.logger.Debugf("compose usage query failed for %s via compose CLI, falling back to docker labels: %v", id, err)
+		runningIDs, err = c.dockerContainerIDsByComposeProject(ctx, id, false)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get running compose container list: %w", err)
+		}
+	}
+
+	if len(runningIDs) == 0 {
+		return nil, fmt.Errorf("no running containers for compose project: %s", id)
+	}
+
+	usage := &models.WorkloadUsage{
+		WorkloadID:  id,
+		Type:        string(models.WorkloadTypeCompose),
+		CollectedAt: time.Now(),
+		Source:      "compose.stats",
+	}
+
+	var cpuTotal float64
+	var sampled int
+	for _, containerID := range runningIDs {
+		stats, err := c.dockerClient.ContainerStatsOneShot(ctx, containerID)
+		if err != nil {
+			c.logger.Debugf("failed to fetch stats for compose container %s (project %s): %v", containerID, id, err)
+			continue
+		}
+
+		var raw types.StatsJSON
+		decodeErr := json.NewDecoder(stats.Body).Decode(&raw)
+		stats.Body.Close()
+		if decodeErr != nil {
+			c.logger.Debugf("failed to decode stats for compose container %s (project %s): %v", containerID, id, decodeErr)
+			continue
+		}
+
+		cpuTotal += dockerCPUPercent(&raw)
+		usage.MemoryBytes += int64(dockerMemoryUsageNoCache(&raw.MemoryStats))
+
+		for _, netStats := range raw.Networks {
+			usage.NetRXBytes += int64(netStats.RxBytes)
+			usage.NetTXBytes += int64(netStats.TxBytes)
+		}
+
+		for _, entry := range raw.BlkioStats.IoServiceBytesRecursive {
+			switch strings.ToLower(entry.Op) {
+			case "read":
+				usage.DiskReadBytes += int64(entry.Value)
+			case "write":
+				usage.DiskWriteBytes += int64(entry.Value)
+			}
+		}
+
+		sampled++
+	}
+
+	if sampled == 0 {
+		return nil, fmt.Errorf("failed to sample stats for any container in compose project: %s", id)
+	}
+
+	usage.CPUPercent = cpuTotal
+	return usage, nil
+}
+
 // Helper functions
 
+// buildCommand creates an exec.Cmd for docker compose with proper Docker endpoint support
 func (c *ComposeRuntime) buildCommand(ctx context.Context, args ...string) *exec.Cmd {
 	parts := strings.Fields(c.composeBinary)
 	allArgs := append(parts[1:], args...)
-	return exec.CommandContext(ctx, parts[0], allArgs...)
+
+	cmd := exec.CommandContext(ctx, parts[0], allArgs...)
+
+	// CRITICAL: Pass the correct Docker socket to every command
+	if c.dockerEndpoint != "" {
+		// Preserve existing environment + override DOCKER_HOST
+		env := os.Environ()
+		env = append(env, "DOCKER_HOST="+c.dockerEndpoint)
+		cmd.Env = env
+	}
+
+	return cmd
 }
 
 func (c *ComposeRuntime) parseSpec(specMap map[string]interface{}) (*models.ComposeSpec, error) {
