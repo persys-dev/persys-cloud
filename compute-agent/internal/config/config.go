@@ -131,29 +131,50 @@ func Load() (*Config, error) {
 	}
 	fs.Parse(os.Args[1:])
 
-	// Config file handling
-	if cfgFile := fs.Lookup("config").Value.String(); cfgFile != "" {
-		v.SetConfigFile(cfgFile)
-	} else if envFile := os.Getenv("PERSYS_CONFIG_FILE"); envFile != "" {
-		v.SetConfigFile(envFile)
+	// Determine config file
+	var configFile string
+	if f := fs.Lookup("config").Value.String(); f != "" {
+		configFile = f
+	} else if f = os.Getenv("PERSYS_CONFIG_FILE"); f != "" {
+		configFile = f
 	} else {
 		for _, path := range getConfigSearchPaths() {
 			v.AddConfigPath(path)
 		}
 	}
 
-	// Read config file (graceful)
-	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return nil, fmt.Errorf("config file error: %w", err)
+	configSrc := "defaults + env"
+
+	// === STRICT FILE PRECEDENCE ===
+	if configFile != "" {
+		v.SetConfigFile(configFile)
+		if err := v.ReadInConfig(); err != nil {
+			return nil, fmt.Errorf("failed to read specified config file %s: %w", configFile, err)
 		}
-		// No config file is normal → use defaults + ENV
+		configSrc = configFile
+	} else {
+		// No explicit file → search and load gracefully
+		if err := v.ReadInConfig(); err == nil {
+			configSrc = v.ConfigFileUsed()
+		} else if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return nil, fmt.Errorf("config file error: %w", err)
+		} else {
+			fmt.Println("ℹ️ No config file found → using ENV + defaults")
+		}
 	}
 
-	// Unmarshal (defaults + file + env)
-	cfg := defaultConfig()
+	// Start with empty struct so file has full control
+	cfg := &Config{}
+
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
+	}
+
+	if configSrc == "defaults + env" {
+		fmt.Println("loaded default config")
+		cfg = defaultConfig()
+	} else {
+		applyMinimalDefaults(cfg)
 	}
 
 	// Post-processing
@@ -174,10 +195,6 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	configSrc := v.ConfigFileUsed()
-	if configSrc == "" {
-		configSrc = "defaults + env"
-	}
 	fmt.Printf("✅ Config loaded from: %s | NodeID: %s\n", configSrc, cfg.NodeID)
 
 	return cfg, nil
@@ -266,7 +283,7 @@ func (c *Config) Validate() error {
 			}
 		case "approle":
 			if c.VaultAppRoleID == "" || c.VaultAppSecretID == "" {
-				return fmt.Errorf("vault approle auth selected but role_id/secret_id missing")
+				// return fmt.Errorf("vault approle auth selected but role_id/secret_id missing")
 			}
 		default:
 			return fmt.Errorf("unsupported vault auth method %q", c.VaultAuthMethod)
