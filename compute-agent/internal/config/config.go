@@ -172,10 +172,8 @@ func Load() (*Config, error) {
 
 	if configSrc == "defaults + env" {
 		fmt.Println("loaded default config")
-		cfg = defaultConfig()
-	} else {
-		applyMinimalDefaults(cfg)
 	}
+	applyMinimalDefaults(cfg)
 
 	// Post-processing
 	cfg.SchedulerTLSEnabled = !cfg.SchedulerInsecure
