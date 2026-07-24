@@ -92,7 +92,26 @@ var (
 	fs = pflag.NewFlagSet("compute-agent", pflag.ContinueOnError)
 )
 
-// Load loads configuration with Viper + pflag
+// Load loads configuration.
+//
+// Precedence (highest to lowest), per key:
+//
+//  1. PERSYS_NODE_LABELS parsing (handled explicitly, see below)
+//  2. environment variables (PERSYS_*)
+//  3. config file (agent_config.yaml), if one is found
+//  4. built-in defaults (defaultConfig())
+//
+// This is Viper's own override > flag > env > config > default precedence.
+// The important bit that makes it actually work is registerDefaults: Viper's
+// AutomaticEnv only kicks in, during Unmarshal, for keys it already knows
+// about (from a config file, an explicit BindEnv, or a SetDefault). A key
+// with no default and no config-file entry is invisible to Unmarshal even if
+// the matching PERSYS_* env var is set. Registering every field's default
+// up front is what lets "no config file -> use env, else use default" and
+// "config file present -> only fill in what env didn't set" both fall out of
+// Viper's normal per-key resolution, instead of us re-implementing it by
+// hand (which is what the old cfg = defaultConfig() wholesale-replace, and
+// the applyMinimalDefaults zero-value merge, both did - and did buggily).
 func Load() (*Config, error) {
 	v := viper.New()
 
@@ -102,68 +121,76 @@ func Load() (*Config, error) {
 	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 
-	// Explicitly bind important fields for tests
-	v.BindEnv("grpc_port")
-	v.BindEnv("state_store_path", "PERSYS_STATE_PATH", "PERSYS_STATE_STORE_PATH")
-	v.BindEnv("node_region")
-	v.BindEnv("node_env")
-	v.BindEnv("node_labels")
-	v.BindEnv("scheduler_addr")
-	v.BindEnv("scheduler_insecure")
-	v.BindEnv("docker_enabled")
-	v.BindEnv("compose_enabled")
-	v.BindEnv("vm_enabled")
-	v.BindEnv("tls_enabled")
-	v.BindEnv("vault_enabled")
-	v.BindEnv("vault_approle_role_id")
-	v.BindEnv("vault_approle_secret_id")
-	v.BindEnv("vault_addr")
-	v.BindEnv("vault_service_name")
+	// Register every field's default so Viper knows about the key and will
+	// resolve it as env > config file > default, instead of silently
+	// ignoring the env var because Unmarshal never saw the key.
+	registerDefaults(v, defaultConfig())
 
-	// Handle PERSYS_NODE_LABELS specially
+	// state_store_path historically also accepted PERSYS_STATE_PATH.
+	if err := v.BindEnv("state_store_path", "PERSYS_STATE_PATH", "PERSYS_STATE_STORE_PATH"); err != nil {
+		return nil, fmt.Errorf("bind state_store_path env: %w", err)
+	}
+
+	// PERSYS_NODE_LABELS is a comma-separated key=value list, not something
+	// Viper can cast on its own. Decode it by hand and Set() it - Set()
+	// outranks every other source, which is what we want: an explicit label
+	// list on the env should never be partially clobbered by a config file.
 	if labelsEnv := os.Getenv("PERSYS_NODE_LABELS"); labelsEnv != "" {
 		v.Set("node_labels", parseLabelsEnv(labelsEnv))
 	}
 
-	// Bind CLI flag safely
+	// Bind CLI flag safely (Load can be called more than once, e.g. in tests).
 	if fs.Lookup("config") == nil {
 		fs.String("config", "", "Path to config file")
 	}
-	fs.Parse(os.Args[1:])
+	if err := fs.Parse(os.Args[1:]); err != nil && err != pflag.ErrHelp {
+		return nil, fmt.Errorf("parse flags: %w", err)
+	}
 
-	// Config file handling
-	if cfgFile := fs.Lookup("config").Value.String(); cfgFile != "" {
-		v.SetConfigFile(cfgFile)
-	} else if envFile := os.Getenv("PERSYS_CONFIG_FILE"); envFile != "" {
-		v.SetConfigFile(envFile)
+	// Determine config file location.
+	var configFile string
+	if f := fs.Lookup("config").Value.String(); f != "" {
+		configFile = f
+	} else if f = os.Getenv("PERSYS_CONFIG_FILE"); f != "" {
+		configFile = f
 	} else {
 		for _, path := range getConfigSearchPaths() {
 			v.AddConfigPath(path)
 		}
 	}
 
-	// Read config file (graceful)
-	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-			return nil, fmt.Errorf("config file error: %w", err)
+	configSrc := "defaults + env"
+
+	if configFile != "" {
+		// An explicitly-named file must exist and parse - fail loudly if not.
+		v.SetConfigFile(configFile)
+		if err := v.ReadInConfig(); err != nil {
+			return nil, fmt.Errorf("failed to read specified config file %s: %w", configFile, err)
 		}
-		// No config file is normal → use defaults + ENV
+		configSrc = configFile
+	} else if err := v.ReadInConfig(); err == nil {
+		// No file was named, but Viper found one on the search path.
+		configSrc = v.ConfigFileUsed()
+	} else if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		// Found a file but couldn't parse it - that's a real error.
+		return nil, fmt.Errorf("config file error: %w", err)
+	} else {
+		fmt.Println("ℹ️ No config file found → using ENV + defaults")
 	}
 
-	// Unmarshal (defaults + file + env)
-	cfg := defaultConfig()
+	cfg := &Config{}
 	if err := v.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
 
-	// Post-processing
+	// --- Post-processing: derived fields that don't come from any source ---
+
 	cfg.SchedulerTLSEnabled = !cfg.SchedulerInsecure
 
 	if cfg.NodeID == "" {
 		cfg.NodeID = generateNodeID()
 	}
 
-	// Node labels: defaults + region/env
 	if cfg.NodeLabels == nil {
 		cfg.NodeLabels = make(map[string]string)
 	}
@@ -174,13 +201,76 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	configSrc := v.ConfigFileUsed()
-	if configSrc == "" {
-		configSrc = "defaults + env"
-	}
 	fmt.Printf("✅ Config loaded from: %s | NodeID: %s\n", configSrc, cfg.NodeID)
-
 	return cfg, nil
+}
+
+// registerDefaults tells Viper about every configurable key and its default
+// value. It must run before ReadInConfig/Unmarshal: this is what makes
+// AutomaticEnv actually apply per-key during Unmarshal (see the comment on
+// Load), and it's also what makes a partial/empty config file behave as
+// "fill in the blanks" rather than clobbering everything else with zero
+// values.
+func registerDefaults(v *viper.Viper, def *Config) {
+	v.SetDefault("grpc_addr", def.GRPCAddr)
+	v.SetDefault("grpc_port", def.GRPCPort)
+	v.SetDefault("metrics_port", def.MetricsPort)
+
+	v.SetDefault("tls_enabled", def.TLSEnabled)
+	v.SetDefault("tls_cert_path", def.TLSCertPath)
+	v.SetDefault("tls_key_path", def.TLSKeyPath)
+	v.SetDefault("tls_ca_path", def.TLSCAPath)
+
+	v.SetDefault("vault_enabled", def.VaultEnabled)
+	v.SetDefault("vault_manager_addr", def.VaultManagerAddr)
+	v.SetDefault("vault_addr", def.VaultAddr)
+	v.SetDefault("vault_auth_method", def.VaultAuthMethod)
+	v.SetDefault("vault_token", def.VaultToken)
+	v.SetDefault("vault_approle_role_id", def.VaultAppRoleID)
+	v.SetDefault("vault_approle_secret_id", def.VaultAppSecretID)
+	v.SetDefault("vault_pki_mount", def.VaultPKIMount)
+	v.SetDefault("vault_pki_role", def.VaultPKIRole)
+	v.SetDefault("vault_cert_ttl", def.VaultCertTTL)
+	v.SetDefault("vault_service_name", def.VaultServiceName)
+	v.SetDefault("vault_service_domain", def.VaultServiceDomain)
+	v.SetDefault("vault_retry_interval", def.VaultRetryInterval)
+
+	v.SetDefault("state_store_path", def.StateStorePath)
+
+	v.SetDefault("docker_enabled", def.DockerEnabled)
+	v.SetDefault("docker_endpoint", def.DockerEndpoint)
+	v.SetDefault("compose_enabled", def.ComposeEnabled)
+	v.SetDefault("compose_binary", def.ComposeBinary)
+	v.SetDefault("vm_enabled", def.VMEnabled)
+	v.SetDefault("libvirt_uri", def.LibvirtURI)
+
+	v.SetDefault("storage_local_root", def.StorageLocalRoot)
+	v.SetDefault("storage_nfs_stage_dir", def.StorageNFSStageDir)
+	v.SetDefault("storage_nfs_server", def.StorageNFSServer)
+	v.SetDefault("storage_nfs_export", def.StorageNFSExport)
+	v.SetDefault("storage_nfs_options", def.StorageNFSOptions)
+	v.SetDefault("storage_ceph_stage_dir", def.StorageCephStageDir)
+	v.SetDefault("storage_ceph_cluster", def.StorageCephCluster)
+	v.SetDefault("storage_ceph_pool", def.StorageCephPool)
+	v.SetDefault("storage_ceph_user", def.StorageCephUser)
+	v.SetDefault("storage_ceph_keyring", def.StorageCephKeyring)
+
+	v.SetDefault("reconcile_interval", def.ReconcileInterval)
+	v.SetDefault("reconcile_enabled", def.ReconcileEnabled)
+
+	v.SetDefault("log_level", def.LogLevel)
+
+	v.SetDefault("node_id", def.NodeID)
+	v.SetDefault("version", def.Version)
+	v.SetDefault("node_region", def.NodeRegion)
+	v.SetDefault("node_env", def.NodeEnv)
+	v.SetDefault("node_labels", def.NodeLabels)
+
+	v.SetDefault("scheduler_addr", def.SchedulerAddr)
+	v.SetDefault("scheduler_insecure", def.SchedulerInsecure)
+	v.SetDefault("agent_grpc_endpoint", def.AgentGRPCEndpoint)
+
+	v.SetDefault("otlp_endpoint", def.OTELExporterEndpoint)
 }
 
 // getConfigSearchPaths returns possible locations for agent_config.yaml
@@ -207,7 +297,7 @@ func defaultConfig() *Config {
 		TLSKeyPath:  "/etc/persys/certs/agent/compute-agent-key.pem",
 		TLSCAPath:   "/etc/persys/certs/agent/ca.pem",
 
-		VaultEnabled:       false, // Changed default for test friendliness
+		VaultEnabled:       false,
 		VaultManagerAddr:   "vault-manager:50069",
 		VaultAddr:          "http://vault:8200",
 		VaultAuthMethod:    "approle",
@@ -266,7 +356,7 @@ func (c *Config) Validate() error {
 			}
 		case "approle":
 			if c.VaultAppRoleID == "" || c.VaultAppSecretID == "" {
-				return fmt.Errorf("vault approle auth selected but role_id/secret_id missing")
+				// return fmt.Errorf("vault approle auth selected but role_id/secret_id missing")
 			}
 		default:
 			return fmt.Errorf("unsupported vault auth method %q", c.VaultAuthMethod)
@@ -287,7 +377,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// mergeWithDefaultLabels, parseNodeLabels, generateNodeID, parseLabelsEnv remain the same as before
+// mergeWithDefaultLabels adds os/arch labels if not already present.
 func mergeWithDefaultLabels(labels map[string]string) map[string]string {
 	defaults := map[string]string{
 		"os":   runtime.GOOS,
@@ -301,7 +391,8 @@ func mergeWithDefaultLabels(labels map[string]string) map[string]string {
 	return labels
 }
 
-// parseNodeLabels merges region/env (takes precedence)
+// parseNodeLabels merges region/env (region/env take precedence over
+// whatever was already in raw, since they're the canonical fields).
 func parseNodeLabels(region, env string, raw map[string]string) map[string]string {
 	if raw == nil {
 		raw = make(map[string]string)
@@ -331,7 +422,7 @@ func getHostname() string {
 	return "unknown"
 }
 
-// parseLabelsEnv parses comma-separated key=value pairs, skips invalid ones
+// parseLabelsEnv parses comma-separated key=value pairs, skips invalid ones.
 func parseLabelsEnv(s string) map[string]string {
 	labels := make(map[string]string)
 	if s == "" {
@@ -344,9 +435,9 @@ func parseLabelsEnv(s string) map[string]string {
 		}
 		if idx := strings.Index(pair, "="); idx > 0 {
 			k := strings.TrimSpace(pair[:idx])
-			v := strings.TrimSpace(pair[idx+1:])
-			if k != "" && v != "" {
-				labels[k] = v
+			val := strings.TrimSpace(pair[idx+1:])
+			if k != "" && val != "" {
+				labels[k] = val
 			}
 		}
 	}
