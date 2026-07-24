@@ -3,25 +3,26 @@ package utils
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"time"
+
 	jwtlib "github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
 	"github.com/google/go-github/github"
-	"time"
 )
 
-func GenerateToken(user *github.User) (tok string, err error) {
-	// Create the token
+// GenerateToken signs a session token for user with secret. secret comes
+// from config.Config.App.JWTSecret (env-sourced, never hardcoded — see
+// config/config.go). Previously this was a literal string,
+// "unicornsAreAwesome", committed in a public repo; anyone with the
+// source could mint a valid token for any user ID.
+func GenerateToken(user *github.User, secret []byte) (tok string, err error) {
 	token := jwtlib.New(jwtlib.GetSigningMethod("HS256"))
-	// Set some claims
 	token.Claims = jwtlib.MapClaims{
 		"Name":   user.Login,
 		"UserID": user.ID,
 		"exp":    time.Now().Add(time.Hour * 1).Unix(),
 	}
-	// Sign and get the complete encoded token as a string
-	mySuperSecretPassword := "unicornsAreAwesome"
-
-	tokenString, err := token.SignedString([]byte(mySuperSecretPassword))
+	tokenString, err := token.SignedString(secret)
 	if err != nil {
 		return "", err
 	}

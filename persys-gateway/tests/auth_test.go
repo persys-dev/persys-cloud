@@ -3,51 +3,57 @@ package tests
 import (
 	"context"
 	"crypto/tls"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"testing"
+
 	"github.com/gin-gonic/gin"
 	"github.com/persys-dev/persys-cloud/persys-gateway/config"
 	"github.com/persys-dev/persys-cloud/persys-gateway/controllers"
+	"github.com/persys-dev/persys-cloud/persys-gateway/internal/store"
 	"github.com/persys-dev/persys-cloud/persys-gateway/routes"
 	"github.com/persys-dev/persys-cloud/persys-gateway/services"
 	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"net/http"
-	"net/http/httptest"
-	"testing"
 )
 
 var (
-	scopes = []string{
-		"repo",
-		"write:repo_hook",
-		"user",
-		// You have to select your own scope from here -> https://developer.github.com/v3/oauth/#scopes
-	}
 	redirectUri         = "http://localhost:8551/auth"
-	GithubCollection    *mongo.Collection
-	AuthCollection      *mongo.Collection
 	AuthRouteController routes.AuthRouteController
 	ctx                 = context.TODO()
 )
 
+// TestAuthRoute previously connected to a hardcoded MongoDB Atlas cluster
+// with a username/password committed directly in this file. That
+// credential was live and public in the repo; if this is your database,
+// rotate it now regardless of this fix. The test now requires
+// PERSYS_TEST_POSTGRES_DSN to be set and skips (not fails) otherwise, so
+// running the suite doesn't require, or leak, real database credentials.
 func TestAuthRoute(t *testing.T) {
-	mongoconn := options.Client().ApplyURI("mongodb+srv://miladhzz:hXBfZeTBHvLbu0Fy@cluster0.nlik4mb.mongodb.net/?retryWrites=true&w=majority")
-	mongoclient, err := mongo.Connect(ctx, mongoconn)
+	dsn := os.Getenv("PERSYS_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("PERSYS_TEST_POSTGRES_DSN not set — skipping integration test that requires a real Postgres instance")
+	}
+
+	db, err := store.New(ctx, dsn, 5)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = mongoclient.Ping(context.Background(), nil)
-	if err != nil {
+	defer db.Close()
+	if err := db.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
-	GithubCollection = mongoclient.Database("persys-gateway").Collection("repos")
-	AuthCollection = mongoclient.Database("persys-gateway").Collection("users")
 
 	gin.SetMode(gin.TestMode)
 
-	githubService := services.NewGithubService(GithubCollection, ctx, &config.Config{}, &tls.Config{})
-	authService := services.NewAuthService(AuthCollection, ctx)
-	authController := controllers.NewAuthController(authService, ctx, githubService, AuthCollection, AuthCollection)
+	testJWTSecret := []byte("test-only-secret-not-used-in-production")
+
+	githubService := services.NewGithubService(&config.Config{}, &tls.Config{})
+	authService := services.NewAuthService(db, ctx, testJWTSecret)
+	authController := controllers.NewAuthController(
+		authService, ctx, githubService, db,
+		"test-client-id", "test-client-secret", testJWTSecret,
+	)
 	AuthRouteController = routes.NewAuthRouteController(authController, redirectUri)
 
 	router := gin.Default()

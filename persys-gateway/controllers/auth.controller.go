@@ -10,46 +10,53 @@ import (
 	"github.com/dgrijalva/jwt-go/request"
 	"github.com/gin-gonic/gin"
 	"github.com/google/go-github/github"
-	"github.com/persys-dev/persys-cloud/persys-gateway/config"
+	"github.com/persys-dev/persys-cloud/persys-gateway/internal/store"
 	"github.com/persys-dev/persys-cloud/persys-gateway/models"
 	"github.com/persys-dev/persys-cloud/persys-gateway/services"
 	"github.com/persys-dev/persys-cloud/persys-gateway/utils"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"golang.org/x/oauth2"
 	oauth2gh "golang.org/x/oauth2/github"
 )
 
-var (
-	conf                  *oauth2.Config
-	state                 string
-	users                 *models.UserInput
-	repos                 *models.Repos
-	mySuperSecretPassword = "unicornsAreAwesome"
-	cnf, _                = config.LoadConfig()
-)
-
-type Credentials struct {
-	ClientID     string `json:"clientid"`
-	ClientSecret string `json:"secret"`
-}
-
+// AuthController previously depended on three package-level mutable
+// variables: `conf` (*oauth2.Config, written by Setup, read by every
+// request), `state` (the last-issued CSRF token, overwritten on every
+// login attempt — a real race under concurrent logins), and `cnf` (a
+// second, independent config.LoadConfig() call happening at package
+// init, racing whatever main.go's own load did). All three are gone:
+// oauthConfig and jwtSecret are receiver fields set once at construction,
+// and the CSRF token lives in Postgres (oauth_sessions table) keyed by
+// the token itself, not remembered in a Go variable at all.
 type AuthController struct {
 	authService   services.AuthService
 	githubService services.GithubService
-	//userService services.UserService
-	ctx               context.Context
-	collection        *mongo.Collection
-	sessionCollection *mongo.Collection
+	ctx           context.Context
+	store         *store.Store
+
+	oauthConfig *oauth2.Config
+	jwtSecret   []byte
 }
 
-func NewAuthController(authService services.AuthService, ctx context.Context, githubService services.GithubService, collection *mongo.Collection, sessionCollection *mongo.Collection) AuthController {
+func NewAuthController(
+	authService services.AuthService,
+	ctx context.Context,
+	githubService services.GithubService,
+	st *store.Store,
+	githubClientID string,
+	githubClientSecret string,
+	jwtSecret []byte,
+) AuthController {
 	return AuthController{
-		authService:       authService,
-		githubService:     githubService,
-		ctx:               ctx,
-		collection:        collection,
-		sessionCollection: sessionCollection,
+		authService:   authService,
+		githubService: githubService,
+		ctx:           ctx,
+		store:         st,
+		oauthConfig: &oauth2.Config{
+			ClientID:     githubClientID,
+			ClientSecret: githubClientSecret,
+			Endpoint:     oauth2gh.Endpoint,
+		},
+		jwtSecret: jwtSecret,
 	}
 }
 
@@ -64,13 +71,10 @@ func (ac *AuthController) Cli() gin.HandlerFunc {
 
 		ac.authService.CliLogin(req)
 	}
-
 }
 
 func (ac *AuthController) Auth() gin.HandlerFunc {
-
 	return func(ctx *gin.Context) {
-
 		gitCode := ctx.Query("code")
 		idempotencyID := ctx.Query("state")
 
@@ -81,35 +85,33 @@ func (ac *AuthController) Auth() gin.HandlerFunc {
 
 		if ctx.Request.Header.Get("Authorization") != "" {
 			_, err := request.ParseFromRequest(ctx.Request, request.OAuth2Extractor, func(token *jwtlib.Token) (interface{}, error) {
-				b := []byte(mySuperSecretPassword)
-				return b, nil
+				return ac.jwtSecret, nil
 			})
 
 			if err != nil {
-				ctx.AbortWithError(401, err)
+				ctx.AbortWithError(http.StatusUnauthorized, err)
 				return
 			}
 		}
 
 		if gitCode != "" {
-			if err := ac.validateAndConsumeState(idempotencyID); err != nil {
+			if err := ac.store.ValidateAndConsumeState(ctx.Request.Context(), idempotencyID); err != nil {
 				ctx.AbortWithError(http.StatusUnauthorized, fmt.Errorf("invalid oauth state: %v", err))
 				return
 			}
 
-			tok, err := conf.Exchange(context.Background(), ctx.Query("code"))
+			tok, err := ac.oauthConfig.Exchange(context.Background(), ctx.Query("code"))
 			if err != nil {
-				ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("Failed to do exchange: %v", err))
+				ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("failed to do exchange: %v", err))
 				return
 			}
-			client := github.NewClient(conf.Client(context.Background(), tok))
+			client := github.NewClient(ac.oauthConfig.Client(context.Background(), tok))
 			user, _, err := client.Users.Get(context.Background(), "")
-			//client.Repositories.List(context.Background(), "", &github-auth.RepositoryListOptions{})
 			if err != nil {
-				ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("Failed to get user: %v", err))
+				ctx.AbortWithError(http.StatusBadRequest, fmt.Errorf("failed to get user: %v", err))
 				return
 			}
-			persysToken, _ := utils.GenerateToken(user)
+			persysToken, _ := utils.GenerateToken(user, ac.jwtSecret)
 
 			data := models.UserInput{
 				Login:       stringFromPointer(user.Login),
@@ -138,70 +140,24 @@ func (ac *AuthController) Auth() gin.HandlerFunc {
 }
 
 func (ac *AuthController) LoginHandler() gin.HandlerFunc {
-
 	return func(c *gin.Context) {
-		state = utils.RandToken()
-		ac.storeOAuthState(state)
-		c.JSON(http.StatusOK, gin.H{"URL": GetLoginURL(state)})
+		state := utils.RandToken()
+		if err := ac.store.StoreOAuthState(c.Request.Context(), state, 10*time.Minute); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to start login"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"URL": ac.oauthConfig.AuthCodeURL(state)})
 	}
-	//ac.authService.SignInUser()
-
 }
 
-func (ac *AuthController) storeOAuthState(state string) {
-	if ac.sessionCollection == nil {
-		return
-	}
-	now := time.Now().UTC()
-	_, _ = ac.sessionCollection.UpdateOne(ac.ctx,
-		bson.M{"state": state},
-		bson.M{"$set": bson.M{
-			"state":      state,
-			"created_at": now,
-			"expires_at": now.Add(10 * time.Minute),
-			"consumed":   false,
-		}},
-	)
-}
-
-func (ac *AuthController) validateAndConsumeState(state string) error {
-	if ac.sessionCollection == nil {
-		return nil
-	}
-	if state == "" {
-		return fmt.Errorf("empty state")
-	}
-	filter := bson.M{
-		"state":      state,
-		"consumed":   false,
-		"expires_at": bson.M{"$gt": time.Now().UTC()},
-	}
-	update := bson.M{"$set": bson.M{"consumed": true}}
-	res := ac.sessionCollection.FindOneAndUpdate(ac.ctx, filter, update)
-	if res.Err() != nil {
-		return res.Err()
-	}
-	return nil
-}
-
+// Setup finishes wiring the OAuth redirect URL and scopes now that
+// they're known (both come from config, resolved once in main.go).
+// ClientID/ClientSecret are already set from the constructor — Setup no
+// longer re-reads config itself, which is what caused the double
+// config.LoadConfig() call this replaces.
 func (ac *AuthController) Setup(redirectURL string, scopes []string) {
-	// IMPORTANT SECURITY ISSUE
-	c := Credentials{
-		ClientID:     cnf.GitHub.Auth.ClientID,
-		ClientSecret: cnf.GitHub.Auth.ClientSecret,
-	}
-
-	conf = &oauth2.Config{
-		ClientID:     c.ClientID,
-		ClientSecret: c.ClientSecret,
-		RedirectURL:  redirectURL,
-		Scopes:       scopes,
-		Endpoint:     oauth2gh.Endpoint,
-	}
-}
-
-func GetLoginURL(state string) string {
-	return conf.AuthCodeURL(state)
+	ac.oauthConfig.RedirectURL = redirectURL
+	ac.oauthConfig.Scopes = scopes
 }
 
 func stringFromPointer(strPtr *string) (res string) {
