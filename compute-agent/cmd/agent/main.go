@@ -121,7 +121,7 @@ func main() {
 
 	// Register Compose runtime if enabled
 	if cfg.ComposeEnabled {
-		composeRuntime, err := runtime.NewComposeRuntime(cfg.ComposeBinary, "", logger)
+		composeRuntime, err := runtime.NewComposeRuntime(cfg.ComposeBinary, cfg.DockerEndpoint ,"", logger)
 		if err != nil {
 			logger.Warnf("Failed to initialize Compose runtime: %v", err)
 		} else {
