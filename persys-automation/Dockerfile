@@ -1,4 +1,4 @@
-FROM golang:1.25 AS build
+FROM golang:1.25-alpine AS build
 WORKDIR /src
 
 # go.mod/go.sum first for layer caching. Both are needed because

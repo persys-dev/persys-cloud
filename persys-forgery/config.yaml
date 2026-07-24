@@ -1,7 +1,7 @@
-mysql_dsn: "forgery:password@tcp(localhost:3306)/forgery_db?parseTime=true"
+mysql_dsn: "forgery:password@tcp(mysql:3306)/forgery_db?parseTime=true"
 
 redis:
-  addr: "localhost:6379"
+  addr: "redis:6379"
   password: ""
   db: 0
   build_queue_key: "forge:builds"
@@ -23,7 +23,8 @@ tls:
 
 vault:
   enabled: true
-  addr: "http://localhost:8200"
+  manager_addr: "vault-manager:50069"
+  addr: "http://vault:8200"
   auth_method: "approle"
   token: ""
   approle_id: ""

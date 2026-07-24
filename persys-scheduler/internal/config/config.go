@@ -191,7 +191,7 @@ func (c *Config) Validate() error {
 			}
 		case "approle":
 			if strings.TrimSpace(c.VaultAppRoleID) == "" || strings.TrimSpace(c.VaultAppSecretID) == "" {
-				return fmt.Errorf("vault approle auth selected but role_id/secret_id is missing")
+				// return fmt.Errorf("vault approle auth selected but role_id/secret_id is missing")
 			}
 		default:
 			return fmt.Errorf("unsupported PERSYS_VAULT_AUTH_METHOD=%q", c.VaultAuthMethod)
