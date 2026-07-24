@@ -1,0 +1,35 @@
+# Persys Compute Agent Docker Compose
+
+services:
+  compute-agent:
+    build:
+      context: ../..
+      dockerfile: compute-agent/Dockerfile
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=${OTEL_EXPORTER_OTLP_ENDPOINT:-jaeger:4318}
+      - OTEL_SERVICE_NAME=${COMPUTE_AGENT_OTEL_SERVICE_NAME:-compute-agent}
+      - PERSYS_VAULT_ENABLED=true
+      - PERSYS_VAULT_ADDR=${COMPUTE_AGENT_VAULT_ADDR:-http://vault:8200}
+      - PERSYS_VAULT_AUTH_METHOD=${COMPUTE_AGENT_VAULT_AUTH_METHOD:-approle}
+      - PERSYS_VAULT_SERVICE_NAME=${COMPUTE_AGENT_VAULT_SERVICE_NAME:-compute-agent}
+      - PERSYS_TLS_ENABLED=${PERSYS_TLS_ENABLED:-true}
+      - PERSYS_GRPC_PORT=${PERSYS_GRPC_PORT:-50051}
+      - PERSYS_LOG_LEVEL=${PERSYS_LOG_LEVEL:-info}
+      - PERSYS_RECONCILE_ENABLED=${PERSYS_RECONCILE_ENABLED:-true}
+      - PERSYS_VM_ENABLED=${PERSYS_VM_ENABLED:-false}
+      - PERSYS_SCHEDULER_INSECURE=${PERSYS_SCHEDULER_INSECURE:-false}
+      - PERSYS_SCHEDULER_ADDR=${PERSYS_SCHEDULER_ADDR:-persys-scheduler:8085}
+    user: "0:0"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKER_SOCK_PATH:-/var/run/docker.sock}:/var/run/docker.sock
+    ports:
+      - "50051:50051"
+      - "8089:8089"
+    networks:
+      - persys-cloud-net
+
+# --- Shared overlay network for all services ---
+networks:
+  persys-cloud-net:
+    driver: bridge
