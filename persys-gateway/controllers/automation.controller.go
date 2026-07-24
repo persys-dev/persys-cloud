@@ -5,8 +5,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	automationv1 "github.com/persys-dev/persys-cloud/pkg/automation/automationv1"
 	"github.com/persys-dev/persys-cloud/persys-gateway/services"
+	automationv1 "github.com/persys-dev/persys-cloud/pkg/automation/automationv1"
 )
 
 type AutomationController struct {
