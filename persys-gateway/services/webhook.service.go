@@ -16,10 +16,8 @@ import (
 
 	"github.com/persys-dev/persys-cloud/persys-gateway/config"
 	forgeryv1 "github.com/persys-dev/persys-cloud/persys-gateway/internal/forgeryv1"
+	"github.com/persys-dev/persys-cloud/persys-gateway/internal/store"
 	"github.com/persys-dev/persys-cloud/persys-gateway/models"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/grpc"
@@ -34,7 +32,7 @@ type WebhookService interface {
 type webhookService struct {
 	cfg            *config.Config
 	tlsConfig      *tls.Config
-	collection     *mongo.Collection
+	store          *store.Store
 	replayTTL      time.Duration
 	baseBackoff    time.Duration
 	retries        int
@@ -69,7 +67,7 @@ type githubPushEnvelope struct {
 	} `json:"repository"`
 }
 
-func NewWebhookService(cfg *config.Config, tlsClient *tls.Config, collection *mongo.Collection) (WebhookService, error) {
+func NewWebhookService(cfg *config.Config, tlsClient *tls.Config, st *store.Store) (WebhookService, error) {
 	replayTTL, err := time.ParseDuration(cfg.Webhook.ReplayTTL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid webhook.replay_ttl: %w", err)
@@ -85,7 +83,7 @@ func NewWebhookService(cfg *config.Config, tlsClient *tls.Config, collection *mo
 	return &webhookService{
 		cfg:            cfg,
 		tlsConfig:      tlsClient,
-		collection:     collection,
+		store:          st,
 		replayTTL:      replayTTL,
 		baseBackoff:    baseBackoff,
 		retries:        cfg.Webhook.ForwardRetries,
@@ -197,7 +195,7 @@ func (w *webhookService) HandleGitHubWebhook(ctx context.Context, headers http.H
 }
 
 func (w *webhookService) persist(ctx context.Context, event models.WebhookEvent) {
-	if w.collection == nil {
+	if w.store == nil {
 		return
 	}
 	now := time.Now().UTC()
@@ -208,9 +206,7 @@ func (w *webhookService) persist(ctx context.Context, event models.WebhookEvent)
 		event.ReceivedAt = now
 	}
 
-	update := bson.M{"$set": event, "$setOnInsert": bson.M{"delivery_id": event.DeliveryID, "received_at": event.ReceivedAt}}
-	_, err := w.collection.UpdateOne(ctx, bson.M{"delivery_id": event.DeliveryID}, update, options.Update().SetUpsert(true))
-	if err != nil {
+	if err := w.store.UpsertWebhookEvent(ctx, &event); err != nil {
 		log.Printf("failed to persist webhook metadata delivery=%s err=%v", event.DeliveryID, err)
 	}
 }

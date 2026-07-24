@@ -10,7 +10,6 @@ import (
 	"github.com/persys-dev/persys-cloud/persys-gateway/config"
 	forgeryv1 "github.com/persys-dev/persys-cloud/persys-gateway/internal/forgeryv1"
 	"github.com/persys-dev/persys-cloud/persys-gateway/models"
-	"go.mongodb.org/mongo-driver/mongo"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -20,7 +19,11 @@ type GithubServiceImpl struct {
 	tlsClient *tls.Config
 }
 
-func NewGithubService(_ *mongo.Collection, _ context.Context, cfg *config.Config, tlsClient *tls.Config) GithubService {
+// NewGithubService previously took an unused *mongo.Collection parameter
+// (named `_`, never read) — dropped. This service has never touched a
+// database directly; every operation delegates to persys-forgery over
+// gRPC, which owns repository/credential data itself.
+func NewGithubService(cfg *config.Config, tlsClient *tls.Config) GithubService {
 	return &GithubServiceImpl{cfg: cfg, tlsClient: tlsClient}
 }
 

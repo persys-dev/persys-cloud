@@ -7,24 +7,23 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/persys-dev/persys-cloud/persys-gateway/config"
 	"github.com/persys-dev/persys-cloud/persys-gateway/services"
-	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type GithubController struct {
 	authService   services.AuthService
 	githubService services.GithubService
-	//userService services.UserService
-	ctx        context.Context
-	collection *mongo.Collection
-	config     *config.Config
+	ctx           context.Context
+	config        *config.Config
 }
 
-func NewGithubController(authService services.AuthService, ctx context.Context, githubService services.GithubService, collection *mongo.Collection, cfg *config.Config) GithubController {
+// NewGithubController previously took an unused *mongo.Collection
+// parameter — dropped. Nothing in this controller ever read or wrote it;
+// every handler goes through authService/githubService instead.
+func NewGithubController(authService services.AuthService, ctx context.Context, githubService services.GithubService, cfg *config.Config) GithubController {
 	return GithubController{
 		authService:   authService,
 		githubService: githubService,
 		ctx:           ctx,
-		collection:    collection,
 		config:        cfg,
 	}
 }
