@@ -34,7 +34,7 @@ type Options struct {
 	Insecure bool
 
 	// UseCertManager enables Vault-backed certificate management (default true).
-	UseCertManager bool
+	UseCertManager   bool
 	VaultManagerAddr string
 
 	// Identity holds service-identity configuration.
@@ -48,23 +48,23 @@ type Options struct {
 
 // IdentityOptions configures service identity.
 type IdentityOptions struct {
-	VaultAddr    string
-	VaultToken   string
-	PKIMount     string
-	PKIRole      string
-	ServiceName  string
-	TTL          string
+	VaultAddr   string
+	VaultToken  string
+	PKIMount    string
+	PKIRole     string
+	ServiceName string
+	TTL         string
 }
 
 // DefaultOptions returns SDK configuration suitable for local development.
 func DefaultOptions() *Options {
 	return &Options{
-		APIEndpoint:    "https://localhost:8443",
-		GRPCEndpoint:   "localhost:9090",
-		Transport:      TransportHTTP,
-		Timeout:        30 * time.Second,
-		Insecure:       false,
-		UseCertManager: true,
+		APIEndpoint:      "https://localhost:8443",
+		GRPCEndpoint:     "localhost:9090",
+		Transport:        TransportHTTP,
+		Timeout:          30 * time.Second,
+		Insecure:         false,
+		UseCertManager:   true,
 		VaultManagerAddr: "localhost:50069", // default
 		Identity: IdentityOptions{
 			PKIMount:    "pki",

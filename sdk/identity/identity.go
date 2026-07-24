@@ -99,6 +99,7 @@ func parseTTL(s string) time.Duration {
 
 // Insecure + plain providers (unchanged from original)
 type insecureProvider struct{}
+
 func NewInsecureProvider() Provider { return &insecureProvider{} }
 func (p *insecureProvider) TLSConfig(_ context.Context) (*tls.Config, error) {
 	return &tls.Config{InsecureSkipVerify: true}, nil
@@ -106,6 +107,7 @@ func (p *insecureProvider) TLSConfig(_ context.Context) (*tls.Config, error) {
 func (p *insecureProvider) Close() error { return nil }
 
 type plainTLSProvider struct{}
+
 func (p *plainTLSProvider) TLSConfig(_ context.Context) (*tls.Config, error) {
 	return &tls.Config{MinVersion: tls.VersionTLS12}, nil
 }
