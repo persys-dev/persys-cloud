@@ -57,6 +57,8 @@ mkdir -p ~/.persys
 
 ```yaml
 api_endpoint: "https://localhost:8551"
+api_version: "v2"
+cluster_id: "persys-genesis-a"
 transport: "http"
 grpc_endpoint: "localhost:8085"
 grpc_target: "scheduler"

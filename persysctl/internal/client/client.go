@@ -18,12 +18,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/persys-dev/persys-cloud/pkg/certmanager"
-	automationv1 "github.com/persys-dev/persys-cloud/pkg/automation/automationv1"
-	"github.com/persys-dev/persysctl/internal/config"
-	controlv1 "github.com/persys-dev/persys-cloud/pkg/scheduler/controlv1"
-	"github.com/persys-dev/persysctl/internal/models"
 	agentv1 "github.com/persys-dev/persys-cloud/pkg/agent/api/v1"
+	automationv1 "github.com/persys-dev/persys-cloud/pkg/automation/automationv1"
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
+	controlv1 "github.com/persys-dev/persys-cloud/pkg/scheduler/controlv1"
+	"github.com/persys-dev/persysctl/internal/config"
+	"github.com/persys-dev/persysctl/internal/models"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -345,6 +345,35 @@ func (c *Client) requireAgentGRPC() error {
 		return fmt.Errorf("this operation requires compute-agent target (set --grpc-target agent)")
 	}
 	return nil
+}
+
+// clusterPath resolves a cluster-scoped gateway route (workloads, nodes,
+// cluster metrics, forgery) according to c.cfg.APIVersion:
+//
+//   - "v2": prefixes suffix with /clusters/{cluster_id}, using
+//     c.cfg.ClusterID. Fails with a clear error if ClusterID is unset —
+//     silently guessing a cluster would be worse than refusing.
+//   - anything else, including unset/"v1"/unrecognized: returns suffix
+//     unchanged. This is the ORIGINAL flat route shape every
+//     persys-gateway has always served (e.g. /workloads/schedule,
+//     /nodes/{id}/drain, /cluster/metrics, /forgery/builds/trigger),
+//     which resolves to the gateway's default cluster server-side. This
+//     is the default specifically so that existing persysctl configs —
+//     which predate api_version entirely — keep working with zero
+//     changes required.
+//
+// Not used for /clusters (lists all clusters, inherently cluster-
+// agnostic) or /automation, /ai (never gained cluster-scoped variants on
+// the gateway side).
+func (c *Client) clusterPath(suffix string) (string, error) {
+	if c.cfg.APIVersion != "v2" {
+		return suffix, nil
+	}
+	clusterID := strings.TrimSpace(c.cfg.ClusterID)
+	if clusterID == "" {
+		return "", fmt.Errorf("api_version is \"v2\" but cluster_id is not set (use --cluster-id or set cluster_id in config)")
+	}
+	return "/clusters/" + url.PathEscape(clusterID) + suffix, nil
 }
 
 func (c *Client) ScheduleWorkload(workload models.Workload) (*ScheduleResponse, error) {
@@ -716,8 +745,12 @@ func (c *Client) ControlStreamSend(msg *controlv1.ControlMessage) (*controlv1.Co
 
 func (c *Client) ApplySchedulerWorkload(req *controlv1.ApplyWorkloadRequest) (*controlv1.ApplyWorkloadResponse, error) {
 	if c.cfg.Transport == "http" {
+		path, err := c.clusterPath("/workloads/schedule")
+		if err != nil {
+			return nil, err
+		}
 		resp := &controlv1.ApplyWorkloadResponse{}
-		if err := c.httpProtoRequest("POST", "/workloads/schedule", req, resp); err != nil {
+		if err := c.httpProtoRequest("POST", path, req, resp); err != nil {
 			return nil, err
 		}
 		return resp, nil
@@ -803,7 +836,11 @@ func (c *Client) GetMetrics() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("metrics are available only with scheduler gRPC or http transport")
 	}
 
-	req, err := http.NewRequest("GET", c.cfg.APIEndpoint+"/cluster/metrics", nil)
+	path, err := c.clusterPath("/cluster/metrics")
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest("GET", c.cfg.APIEndpoint+path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %v", err)
 	}
@@ -835,8 +872,12 @@ func (c *Client) scheduleWorkloadHTTP(workload models.Workload) (*ScheduleRespon
 	if err != nil {
 		return nil, err
 	}
+	path, err := c.clusterPath("/workloads/schedule")
+	if err != nil {
+		return nil, err
+	}
 	resp := &controlv1.ApplyWorkloadResponse{}
-	if err := c.httpProtoRequest("POST", "/workloads/schedule", req, resp); err != nil {
+	if err := c.httpProtoRequest("POST", path, req, resp); err != nil {
 		return nil, err
 	}
 	scheduleResp := ScheduleResponse{WorkloadID: workloadID, NodeID: "scheduler-managed", Status: "applied"}
@@ -854,7 +895,10 @@ func (c *Client) listWorkloadsHTTP(nodeID, status string) ([]models.Workload, er
 	if strings.TrimSpace(status) != "" {
 		q.Set("status", strings.TrimSpace(status))
 	}
-	path := "/workloads"
+	path, err := c.clusterPath("/workloads")
+	if err != nil {
+		return nil, err
+	}
 	if encoded := q.Encode(); encoded != "" {
 		path += "?" + encoded
 	}
@@ -898,7 +942,10 @@ func (c *Client) listWorkloadsHTTP(nodeID, status string) ([]models.Workload, er
 }
 
 func (c *Client) listNodesHTTP(status string) ([]models.Node, error) {
-	path := "/nodes"
+	path, err := c.clusterPath("/nodes")
+	if err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(status) != "" {
 		path += "?status=" + url.QueryEscape(strings.TrimSpace(status))
 	}
@@ -941,6 +988,9 @@ func (c *Client) GatewayClusters() (*GatewayClustersResponse, error) {
 	if c.cfg.Transport != "http" {
 		return nil, fmt.Errorf("gateway cluster API is available only with http transport")
 	}
+	// Deliberately not routed through clusterPath: this endpoint lists
+	// every cluster and is inherently cluster-agnostic. It has never had
+	// a cluster-scoped variant on the gateway side, in either v1 or v2.
 	resp, err := c.makeRequest("GET", "/clusters", nil)
 	if err != nil {
 		return nil, err
@@ -965,8 +1015,12 @@ func (c *Client) TriggerForgeryBuild(req ForgeryBuildTriggerRequest) (map[string
 	if c.cfg.Transport != "http" {
 		return nil, fmt.Errorf("forgery trigger-build is available only with http transport")
 	}
+	path, err := c.clusterPath("/forgery/builds/trigger")
+	if err != nil {
+		return nil, err
+	}
 	var out map[string]interface{}
-	if err := c.httpJSONRequest("POST", "/forgery/builds/trigger", req, &out); err != nil {
+	if err := c.httpJSONRequest("POST", path, req, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -976,8 +1030,12 @@ func (c *Client) UpsertForgeryProject(req ForgeryUpsertProjectRequest) (map[stri
 	if c.cfg.Transport != "http" {
 		return nil, fmt.Errorf("forgery upsert-project is available only with http transport")
 	}
+	path, err := c.clusterPath("/forgery/projects/upsert")
+	if err != nil {
+		return nil, err
+	}
 	var out map[string]interface{}
-	if err := c.httpJSONRequest("POST", "/forgery/projects/upsert", req, &out); err != nil {
+	if err := c.httpJSONRequest("POST", path, req, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -987,8 +1045,12 @@ func (c *Client) SendForgeryTestWebhook(req ForgeryTestWebhookRequest) (map[stri
 	if c.cfg.Transport != "http" {
 		return nil, fmt.Errorf("forgery test-webhook is available only with http transport")
 	}
+	path, err := c.clusterPath("/forgery/webhooks/test")
+	if err != nil {
+		return nil, err
+	}
 	var out map[string]interface{}
-	if err := c.httpJSONRequest("POST", "/forgery/webhooks/test", req, &out); err != nil {
+	if err := c.httpJSONRequest("POST", path, req, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -1057,93 +1119,142 @@ func (c *Client) httpJSONRequest(method, path string, reqBody interface{}, respB
 }
 
 func (c *Client) getWorkloadHTTP(workloadID string) (*controlv1.GetWorkloadResponse, error) {
+	path, err := c.clusterPath("/workloads/" + url.PathEscape(workloadID))
+	if err != nil {
+		return nil, err
+	}
 	resp := &controlv1.GetWorkloadResponse{}
-	if err := c.httpProtoRequest("GET", "/workloads/"+url.PathEscape(workloadID), nil, resp); err != nil {
+	if err := c.httpProtoRequest("GET", path, nil, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 func (c *Client) deleteWorkloadHTTP(workloadID string) (*controlv1.DeleteWorkloadResponse, error) {
+	path, err := c.clusterPath("/workloads/" + url.PathEscape(workloadID))
+	if err != nil {
+		return nil, err
+	}
 	resp := &controlv1.DeleteWorkloadResponse{}
-	if err := c.httpProtoRequest("DELETE", "/workloads/"+url.PathEscape(workloadID), nil, resp); err != nil {
+	if err := c.httpProtoRequest("DELETE", path, nil, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 func (c *Client) retryWorkloadHTTP(workloadID string) (*controlv1.RetryWorkloadResponse, error) {
+	path, err := c.clusterPath("/workloads/" + url.PathEscape(workloadID) + "/retry")
+	if err != nil {
+		return nil, err
+	}
 	resp := &controlv1.RetryWorkloadResponse{}
-	if err := c.httpProtoRequest("POST", "/workloads/"+url.PathEscape(workloadID)+"/retry", nil, resp); err != nil {
+	if err := c.httpProtoRequest("POST", path, nil, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 func (c *Client) getNodeHTTP(nodeID string) (*controlv1.GetNodeResponse, error) {
+	path, err := c.clusterPath("/nodes/" + url.PathEscape(nodeID))
+	if err != nil {
+		return nil, err
+	}
 	resp := &controlv1.GetNodeResponse{}
-	if err := c.httpProtoRequest("GET", "/nodes/"+url.PathEscape(nodeID), nil, resp); err != nil {
+	if err := c.httpProtoRequest("GET", path, nil, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 func (c *Client) drainNodeHTTP(nodeID, reason string) (*controlv1.DrainNodeResponse, error) {
+	path, err := c.clusterPath("/nodes/" + url.PathEscape(nodeID) + "/drain")
+	if err != nil {
+		return nil, err
+	}
 	resp := &controlv1.DrainNodeResponse{}
 	body := map[string]string{"reason": reason}
-	if err := c.httpJSONBodyProtoResponse("POST", "/nodes/"+url.PathEscape(nodeID)+"/drain", body, resp); err != nil {
+	if err := c.httpJSONBodyProtoResponse("POST", path, body, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 func (c *Client) undrainNodeHTTP(nodeID, reason string) (*controlv1.UndrainNodeResponse, error) {
+	path, err := c.clusterPath("/nodes/" + url.PathEscape(nodeID) + "/undrain")
+	if err != nil {
+		return nil, err
+	}
 	resp := &controlv1.UndrainNodeResponse{}
 	body := map[string]string{"reason": reason}
-	if err := c.httpJSONBodyProtoResponse("POST", "/nodes/"+url.PathEscape(nodeID)+"/undrain", body, resp); err != nil {
+	if err := c.httpJSONBodyProtoResponse("POST", path, body, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 func (c *Client) taintNodeHTTP(nodeID, key, value, effect string) (*controlv1.TaintNodeResponse, error) {
+	path, err := c.clusterPath("/nodes/" + url.PathEscape(nodeID) + "/taint")
+	if err != nil {
+		return nil, err
+	}
 	resp := &controlv1.TaintNodeResponse{}
-	body := map[string]string{"key": key, "value": value, "effect": effect}
-	if err := c.httpJSONBodyProtoResponse("POST", "/nodes/"+url.PathEscape(nodeID)+"/taint", body, resp); err != nil {
+	// TaintNodeRequest.Taint is a NESTED message (*NodeTaint{Key,Value,
+	// Effect}), unlike every other node-management request here (which
+	// have Key/Value/Effect as flat top-level fields). The gateway
+	// decodes this body with protojson against the real proto shape, so
+	// it must be nested to match — a flat {"key":...} body silently
+	// produces an empty Taint and was a real bug before this fix.
+	body := map[string]any{"taint": map[string]string{"key": key, "value": value, "effect": effect}}
+	if err := c.httpJSONBodyProtoResponse("POST", path, body, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 func (c *Client) untaintNodeHTTP(nodeID, key, effect string) (*controlv1.UntaintNodeResponse, error) {
+	path, err := c.clusterPath("/nodes/" + url.PathEscape(nodeID) + "/untaint")
+	if err != nil {
+		return nil, err
+	}
 	resp := &controlv1.UntaintNodeResponse{}
 	body := map[string]string{"key": key, "effect": effect}
-	if err := c.httpJSONBodyProtoResponse("POST", "/nodes/"+url.PathEscape(nodeID)+"/untaint", body, resp); err != nil {
+	if err := c.httpJSONBodyProtoResponse("POST", path, body, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 func (c *Client) setNodeLabelHTTP(nodeID, key, value string) (*controlv1.SetNodeLabelResponse, error) {
+	path, err := c.clusterPath("/nodes/" + url.PathEscape(nodeID) + "/labels")
+	if err != nil {
+		return nil, err
+	}
 	resp := &controlv1.SetNodeLabelResponse{}
 	body := map[string]string{"key": key, "value": value}
-	if err := c.httpJSONBodyProtoResponse("POST", "/nodes/"+url.PathEscape(nodeID)+"/labels", body, resp); err != nil {
+	if err := c.httpJSONBodyProtoResponse("POST", path, body, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 func (c *Client) deleteNodeLabelHTTP(nodeID, key string) (*controlv1.DeleteNodeLabelResponse, error) {
+	path, err := c.clusterPath("/nodes/" + url.PathEscape(nodeID) + "/labels")
+	if err != nil {
+		return nil, err
+	}
 	resp := &controlv1.DeleteNodeLabelResponse{}
 	body := map[string]string{"key": key}
-	if err := c.httpJSONBodyProtoResponse("DELETE", "/nodes/"+url.PathEscape(nodeID)+"/labels", body, resp); err != nil {
+	if err := c.httpJSONBodyProtoResponse("DELETE", path, body, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
 func (c *Client) schedulerListNodesHTTP(status string) (*controlv1.ListNodesResponse, error) {
-	path := "/nodes"
+	path, err := c.clusterPath("/nodes")
+	if err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(status) != "" {
 		path += "?status=" + url.QueryEscape(strings.TrimSpace(status))
 	}
@@ -1162,7 +1273,10 @@ func (c *Client) schedulerListWorkloadsHTTP(nodeID, status string) (*controlv1.L
 	if strings.TrimSpace(status) != "" {
 		q.Set("status", strings.TrimSpace(status))
 	}
-	path := "/workloads"
+	path, err := c.clusterPath("/workloads")
+	if err != nil {
+		return nil, err
+	}
 	if encoded := q.Encode(); encoded != "" {
 		path += "?" + encoded
 	}
@@ -1174,6 +1288,10 @@ func (c *Client) schedulerListWorkloadsHTTP(nodeID, status string) (*controlv1.L
 }
 
 // --- Automation (persys-automation, proxied via gateway /automation/*) ---
+//
+// Not routed through clusterPath: the gateway never gained a cluster-
+// scoped variant of these routes, in either v1 or v2 — they stayed flat
+// throughout the gateway's routing refactor.
 
 func (c *Client) CreatePolicy(req *automationv1.CreatePolicyRequest) (*automationv1.CreatePolicyResponse, error) {
 	if c.cfg.Transport != "http" {
@@ -1250,6 +1368,8 @@ func (c *Client) ListAutomationAuditLog(limit int) (*automationv1.ListAuditLogRe
 }
 
 // --- Intelligence (persys-intelligence, proxied via gateway /ai/*) ---
+//
+// Not routed through clusterPath: same reasoning as automation above.
 
 type AIQueryRequest struct {
 	Query        string `json:"query"`
@@ -1428,8 +1548,12 @@ func (c *Client) httpJSONBodyProtoResponse(method, path string, jsonBody interfa
 }
 
 func (c *Client) getClusterSummaryHTTP() (*controlv1.GetClusterSummaryResponse, error) {
+	path, err := c.clusterPath("/cluster/metrics")
+	if err != nil {
+		return nil, err
+	}
 	resp := &controlv1.GetClusterSummaryResponse{}
-	if err := c.httpProtoRequest("GET", "/cluster/metrics", nil, resp); err != nil {
+	if err := c.httpProtoRequest("GET", path, nil, resp); err != nil {
 		return nil, err
 	}
 	return resp, nil
