@@ -102,24 +102,6 @@ func Load() (*Config, error) {
 	v.AutomaticEnv()
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_", "-", "_"))
 
-	// Explicitly bind important fields for tests
-	v.BindEnv("grpc_port")
-	v.BindEnv("state_store_path", "PERSYS_STATE_PATH", "PERSYS_STATE_STORE_PATH")
-	v.BindEnv("node_region")
-	v.BindEnv("node_env")
-	v.BindEnv("node_labels")
-	v.BindEnv("scheduler_addr")
-	v.BindEnv("scheduler_insecure")
-	v.BindEnv("docker_enabled")
-	v.BindEnv("compose_enabled")
-	v.BindEnv("vm_enabled")
-	v.BindEnv("tls_enabled")
-	v.BindEnv("vault_enabled")
-	v.BindEnv("vault_approle_role_id")
-	v.BindEnv("vault_approle_secret_id")
-	v.BindEnv("vault_addr")
-	v.BindEnv("vault_service_name")
-
 	// Handle PERSYS_NODE_LABELS specially
 	if labelsEnv := os.Getenv("PERSYS_NODE_LABELS"); labelsEnv != "" {
 		v.Set("node_labels", parseLabelsEnv(labelsEnv))
@@ -172,6 +154,23 @@ func Load() (*Config, error) {
 
 	if configSrc == "defaults + env" {
 		fmt.Println("loaded default config")
+		// Explicitly bind important fields for tests
+		v.BindEnv("grpc_port")
+		v.BindEnv("state_store_path", "PERSYS_STATE_PATH", "PERSYS_STATE_STORE_PATH")
+		v.BindEnv("node_region")
+		v.BindEnv("node_env")
+		v.BindEnv("node_labels")
+		v.BindEnv("scheduler_addr")
+		v.BindEnv("scheduler_insecure")
+		v.BindEnv("docker_enabled")
+		v.BindEnv("compose_enabled")
+		v.BindEnv("vm_enabled")
+		v.BindEnv("tls_enabled")
+		v.BindEnv("vault_enabled")
+		v.BindEnv("vault_approle_role_id")
+		v.BindEnv("vault_approle_secret_id")
+		v.BindEnv("vault_addr")
+		v.BindEnv("vault_service_name")
 	}
 	applyMinimalDefaults(cfg)
 
