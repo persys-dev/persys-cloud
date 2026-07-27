@@ -1,0 +1,12 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse
+    restart: unless-stopped
+    ports:
+      - "8123:8123"      # HTTP interface (for queries, UI, etc.)
+      - "9000:9000"      # Native TCP interface (for clients like clickhouse-client)  
+    environment:
+      - CLICKHOUSE_DB=persys
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=persys   # Change this!
