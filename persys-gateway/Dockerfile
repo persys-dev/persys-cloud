@@ -21,6 +21,7 @@ WORKDIR /app
 
 COPY --from=build /src/persys-gateway/config.yaml .
 COPY --from=build /src/persys-gateway/cluster.yaml .
+COPY --from=build /src/persys-gateway/catalog.yaml .
 COPY --from=build /src/persys-gateway/cmd/persys-gateway .
 
 RUN chmod +x ./persys-gateway

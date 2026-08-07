@@ -59,6 +59,7 @@ type App struct {
 	authController        controllers.AuthController
 	githubController      controllers.GithubController
 	clusterMetaController *controllers.ClusterMetaController
+	eventsController      *controllers.EventsController
 	webhookController     *controllers.WebhookController
 	automationController  *controllers.AutomationController
 }
@@ -190,6 +191,7 @@ func main() {
 	)
 	app.githubController = controllers.NewGithubController(app.authService, ctx, app.githubService, cnf)
 	app.clusterMetaController = controllers.NewClusterMetaController(app.clusterControl, string(cnf.Deployment.Mode), cnf.Database.Enabled())
+	app.eventsController = controllers.NewEventsController(app.clusterControl)
 	app.webhookController = controllers.NewWebhookController(app.webhookService)
 	app.automationController = controllers.NewAutomationController(app.automationService)
 
@@ -228,6 +230,9 @@ func main() {
 
 	authnMW := authn.New(jwtSecret)
 	gwRouter := router.New(authnMW, cnf.Deployment.Mode)
+
+	// events/watch is registered on the mTLS router group
+	app.eventsController.Register(mtlsGroup)
 
 	// ClusterMetaController: health/list-clusters/get-cluster — the only
 	// handlers left that were never RPC-shaped.

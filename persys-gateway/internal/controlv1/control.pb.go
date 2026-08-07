@@ -3483,6 +3483,279 @@ func (x *ListWorkloadsRequest) GetStatus() string {
 	return ""
 }
 
+type SchedulerEventView struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Id         string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type       string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`                               // e.g. "NodeLost", "WorkloadScheduled", "DriftDetected"
+	WorkloadId string                 `protobuf:"bytes,3,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"` // optional, empty if not workload-scoped
+	NodeId     string                 `protobuf:"bytes,4,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`             // optional, empty if not node-scoped
+	Reason     string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	Timestamp  *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	// Free-form auxiliary data. Values are stringified on the way out
+	// (models.SchedulerEvent.Details is map[string]interface{} on the Go
+	// side) — this is a deliberate simplification over a
+	// google.protobuf.Struct, since event details are informational/
+	// display-oriented, not structured data a client needs to
+	// round-trip losslessly.
+	Details       map[string]string `protobuf:"bytes,7,rep,name=details,proto3" json:"details,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SchedulerEventView) Reset() {
+	*x = SchedulerEventView{}
+	mi := &file_control_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SchedulerEventView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SchedulerEventView) ProtoMessage() {}
+
+func (x *SchedulerEventView) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SchedulerEventView.ProtoReflect.Descriptor instead.
+func (*SchedulerEventView) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *SchedulerEventView) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SchedulerEventView) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *SchedulerEventView) GetWorkloadId() string {
+	if x != nil {
+		return x.WorkloadId
+	}
+	return ""
+}
+
+func (x *SchedulerEventView) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *SchedulerEventView) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *SchedulerEventView) GetTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Timestamp
+	}
+	return nil
+}
+
+func (x *SchedulerEventView) GetDetails() map[string]string {
+	if x != nil {
+		return x.Details
+	}
+	return nil
+}
+
+type ListEventsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Limit         int64                  `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"`                            // 0 means server default
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`                               // optional filter
+	WorkloadId    string                 `protobuf:"bytes,3,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"` // optional filter
+	NodeId        string                 `protobuf:"bytes,4,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`             // optional filter
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListEventsRequest) Reset() {
+	*x = ListEventsRequest{}
+	mi := &file_control_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListEventsRequest) ProtoMessage() {}
+
+func (x *ListEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListEventsRequest.ProtoReflect.Descriptor instead.
+func (*ListEventsRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *ListEventsRequest) GetLimit() int64 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListEventsRequest) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *ListEventsRequest) GetWorkloadId() string {
+	if x != nil {
+		return x.WorkloadId
+	}
+	return ""
+}
+
+func (x *ListEventsRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+type ListEventsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []*SchedulerEventView  `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListEventsResponse) Reset() {
+	*x = ListEventsResponse{}
+	mi := &file_control_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListEventsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListEventsResponse) ProtoMessage() {}
+
+func (x *ListEventsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListEventsResponse.ProtoReflect.Descriptor instead.
+func (*ListEventsResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *ListEventsResponse) GetEvents() []*SchedulerEventView {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+type WatchEventsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Same optional filters as ListEventsRequest. The stream first replays
+	// recent matching events (server-side default limit), then continues
+	// with new matching events as they're emitted.
+	Type          string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	WorkloadId    string `protobuf:"bytes,2,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`
+	NodeId        string `protobuf:"bytes,3,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchEventsRequest) Reset() {
+	*x = WatchEventsRequest{}
+	mi := &file_control_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchEventsRequest) ProtoMessage() {}
+
+func (x *WatchEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchEventsRequest.ProtoReflect.Descriptor instead.
+func (*WatchEventsRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *WatchEventsRequest) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *WatchEventsRequest) GetWorkloadId() string {
+	if x != nil {
+		return x.WorkloadId
+	}
+	return ""
+}
+
+func (x *WatchEventsRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
 type GetWorkloadRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	WorkloadId    string                 `protobuf:"bytes,1,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`
@@ -3492,7 +3765,7 @@ type GetWorkloadRequest struct {
 
 func (x *GetWorkloadRequest) Reset() {
 	*x = GetWorkloadRequest{}
-	mi := &file_control_proto_msgTypes[49]
+	mi := &file_control_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3504,7 +3777,7 @@ func (x *GetWorkloadRequest) String() string {
 func (*GetWorkloadRequest) ProtoMessage() {}
 
 func (x *GetWorkloadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[49]
+	mi := &file_control_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3517,7 +3790,7 @@ func (x *GetWorkloadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkloadRequest.ProtoReflect.Descriptor instead.
 func (*GetWorkloadRequest) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{49}
+	return file_control_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *GetWorkloadRequest) GetWorkloadId() string {
@@ -3536,7 +3809,7 @@ type ListWorkloadsResponse struct {
 
 func (x *ListWorkloadsResponse) Reset() {
 	*x = ListWorkloadsResponse{}
-	mi := &file_control_proto_msgTypes[50]
+	mi := &file_control_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3548,7 +3821,7 @@ func (x *ListWorkloadsResponse) String() string {
 func (*ListWorkloadsResponse) ProtoMessage() {}
 
 func (x *ListWorkloadsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[50]
+	mi := &file_control_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3561,7 +3834,7 @@ func (x *ListWorkloadsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWorkloadsResponse.ProtoReflect.Descriptor instead.
 func (*ListWorkloadsResponse) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{50}
+	return file_control_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *ListWorkloadsResponse) GetWorkloads() []*WorkloadView {
@@ -3580,7 +3853,7 @@ type GetWorkloadResponse struct {
 
 func (x *GetWorkloadResponse) Reset() {
 	*x = GetWorkloadResponse{}
-	mi := &file_control_proto_msgTypes[51]
+	mi := &file_control_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3592,7 +3865,7 @@ func (x *GetWorkloadResponse) String() string {
 func (*GetWorkloadResponse) ProtoMessage() {}
 
 func (x *GetWorkloadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[51]
+	mi := &file_control_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3605,7 +3878,7 @@ func (x *GetWorkloadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetWorkloadResponse.ProtoReflect.Descriptor instead.
 func (*GetWorkloadResponse) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{51}
+	return file_control_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *GetWorkloadResponse) GetWorkload() *WorkloadView {
@@ -3630,13 +3903,14 @@ type WorkloadView struct {
 	LastUpdated      *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=last_updated,json=lastUpdated,proto3" json:"last_updated,omitempty"`
 	Reason           *ReasonDetail          `protobuf:"bytes,12,opt,name=reason,proto3" json:"reason,omitempty"`
 	Usage            *WorkloadUsageSnapshot `protobuf:"bytes,13,opt,name=usage,proto3" json:"usage,omitempty"`
+	CreatedAt        *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
 
 func (x *WorkloadView) Reset() {
 	*x = WorkloadView{}
-	mi := &file_control_proto_msgTypes[52]
+	mi := &file_control_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3648,7 +3922,7 @@ func (x *WorkloadView) String() string {
 func (*WorkloadView) ProtoMessage() {}
 
 func (x *WorkloadView) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[52]
+	mi := &file_control_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3661,7 +3935,7 @@ func (x *WorkloadView) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkloadView.ProtoReflect.Descriptor instead.
 func (*WorkloadView) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{52}
+	return file_control_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *WorkloadView) GetWorkloadId() string {
@@ -3755,6 +4029,13 @@ func (x *WorkloadView) GetUsage() *WorkloadUsageSnapshot {
 	return nil
 }
 
+func (x *WorkloadView) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
 type GetClusterSummaryRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -3763,7 +4044,7 @@ type GetClusterSummaryRequest struct {
 
 func (x *GetClusterSummaryRequest) Reset() {
 	*x = GetClusterSummaryRequest{}
-	mi := &file_control_proto_msgTypes[53]
+	mi := &file_control_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3775,7 +4056,7 @@ func (x *GetClusterSummaryRequest) String() string {
 func (*GetClusterSummaryRequest) ProtoMessage() {}
 
 func (x *GetClusterSummaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[53]
+	mi := &file_control_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3788,7 +4069,7 @@ func (x *GetClusterSummaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetClusterSummaryRequest.ProtoReflect.Descriptor instead.
 func (*GetClusterSummaryRequest) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{53}
+	return file_control_proto_rawDescGZIP(), []int{57}
 }
 
 type GetClusterSummaryResponse struct {
@@ -3808,7 +4089,7 @@ type GetClusterSummaryResponse struct {
 
 func (x *GetClusterSummaryResponse) Reset() {
 	*x = GetClusterSummaryResponse{}
-	mi := &file_control_proto_msgTypes[54]
+	mi := &file_control_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3820,7 +4101,7 @@ func (x *GetClusterSummaryResponse) String() string {
 func (*GetClusterSummaryResponse) ProtoMessage() {}
 
 func (x *GetClusterSummaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[54]
+	mi := &file_control_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3833,7 +4114,7 @@ func (x *GetClusterSummaryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetClusterSummaryResponse.ProtoReflect.Descriptor instead.
 func (*GetClusterSummaryResponse) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{54}
+	return file_control_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *GetClusterSummaryResponse) GetTotalNodes() int32 {
@@ -3914,7 +4195,7 @@ type ControlMessage struct {
 
 func (x *ControlMessage) Reset() {
 	*x = ControlMessage{}
-	mi := &file_control_proto_msgTypes[55]
+	mi := &file_control_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3926,7 +4207,7 @@ func (x *ControlMessage) String() string {
 func (*ControlMessage) ProtoMessage() {}
 
 func (x *ControlMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[55]
+	mi := &file_control_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3939,7 +4220,7 @@ func (x *ControlMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ControlMessage.ProtoReflect.Descriptor instead.
 func (*ControlMessage) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{55}
+	return file_control_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ControlMessage) GetMessage() isControlMessage_Message {
@@ -4307,14 +4588,39 @@ const file_control_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"G\n" +
 	"\x14ListWorkloadsRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x16\n" +
-	"\x06status\x18\x02 \x01(\tR\x06status\"5\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\"\xce\x02\n" +
+	"\x12SchedulerEventView\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1f\n" +
+	"\vworkload_id\x18\x03 \x01(\tR\n" +
+	"workloadId\x12\x17\n" +
+	"\anode_id\x18\x04 \x01(\tR\x06nodeId\x12\x16\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x128\n" +
+	"\ttimestamp\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12L\n" +
+	"\adetails\x18\a \x03(\v22.persys.control.v1.SchedulerEventView.DetailsEntryR\adetails\x1a:\n" +
+	"\fDetailsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"w\n" +
+	"\x11ListEventsRequest\x12\x14\n" +
+	"\x05limit\x18\x01 \x01(\x03R\x05limit\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1f\n" +
+	"\vworkload_id\x18\x03 \x01(\tR\n" +
+	"workloadId\x12\x17\n" +
+	"\anode_id\x18\x04 \x01(\tR\x06nodeId\"S\n" +
+	"\x12ListEventsResponse\x12=\n" +
+	"\x06events\x18\x01 \x03(\v2%.persys.control.v1.SchedulerEventViewR\x06events\"b\n" +
+	"\x12WatchEventsRequest\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\x12\x1f\n" +
+	"\vworkload_id\x18\x02 \x01(\tR\n" +
+	"workloadId\x12\x17\n" +
+	"\anode_id\x18\x03 \x01(\tR\x06nodeId\"5\n" +
 	"\x12GetWorkloadRequest\x12\x1f\n" +
 	"\vworkload_id\x18\x01 \x01(\tR\n" +
 	"workloadId\"V\n" +
 	"\x15ListWorkloadsResponse\x12=\n" +
 	"\tworkloads\x18\x01 \x03(\v2\x1f.persys.control.v1.WorkloadViewR\tworkloads\"R\n" +
 	"\x13GetWorkloadResponse\x12;\n" +
-	"\bworkload\x18\x01 \x01(\v2\x1f.persys.control.v1.WorkloadViewR\bworkload\"\xbf\x04\n" +
+	"\bworkload\x18\x01 \x01(\v2\x1f.persys.control.v1.WorkloadViewR\bworkload\"\xfa\x04\n" +
 	"\fWorkloadView\x12\x1f\n" +
 	"\vworkload_id\x18\x01 \x01(\tR\n" +
 	"workloadId\x12\x12\n" +
@@ -4331,7 +4637,9 @@ const file_control_proto_rawDesc = "" +
 	" \x01(\tR\rfailureReason\x12=\n" +
 	"\flast_updated\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\vlastUpdated\x127\n" +
 	"\x06reason\x18\f \x01(\v2\x1f.persys.control.v1.ReasonDetailR\x06reason\x12>\n" +
-	"\x05usage\x18\r \x01(\v2(.persys.control.v1.WorkloadUsageSnapshotR\x05usage\"\x1a\n" +
+	"\x05usage\x18\r \x01(\v2(.persys.control.v1.WorkloadUsageSnapshotR\x05usage\x129\n" +
+	"\n" +
+	"created_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x1a\n" +
 	"\x18GetClusterSummaryRequest\"\x9f\x03\n" +
 	"\x19GetClusterSummaryResponse\x12\x1f\n" +
 	"\vtotal_nodes\x18\x01 \x01(\x05R\n" +
@@ -4366,7 +4674,7 @@ const file_control_proto_rawDesc = "" +
 	"\rRUNTIME_ERROR\x10\x05\x12\x11\n" +
 	"\rNETWORK_ERROR\x10\x06\x12\x11\n" +
 	"\rSTORAGE_ERROR\x10\a\x12\x12\n" +
-	"\x0eVM_BOOT_FAILED\x10\b2\xf0\r\n" +
+	"\x0eVM_BOOT_FAILED\x10\b2\xaa\x0f\n" +
 	"\fAgentControl\x12_\n" +
 	"\fRegisterNode\x12&.persys.control.v1.RegisterNodeRequest\x1a'.persys.control.v1.RegisterNodeResponse\x12V\n" +
 	"\tHeartbeat\x12#.persys.control.v1.HeartbeatRequest\x1a$.persys.control.v1.HeartbeatResponse\x12b\n" +
@@ -4385,6 +4693,9 @@ const file_control_proto_rawDesc = "" +
 	"\rListWorkloads\x12'.persys.control.v1.ListWorkloadsRequest\x1a(.persys.control.v1.ListWorkloadsResponse\x12\\\n" +
 	"\vGetWorkload\x12%.persys.control.v1.GetWorkloadRequest\x1a&.persys.control.v1.GetWorkloadResponse\x12n\n" +
 	"\x11GetClusterSummary\x12+.persys.control.v1.GetClusterSummaryRequest\x1a,.persys.control.v1.GetClusterSummaryResponse\x12Y\n" +
+	"\n" +
+	"ListEvents\x12$.persys.control.v1.ListEventsRequest\x1a%.persys.control.v1.ListEventsResponse\x12]\n" +
+	"\vWatchEvents\x12%.persys.control.v1.WatchEventsRequest\x1a%.persys.control.v1.SchedulerEventView0\x01\x12Y\n" +
 	"\rControlStream\x12!.persys.control.v1.ControlMessage\x1a!.persys.control.v1.ControlMessage(\x010\x01B7Z5github.com/persys-dev/persys/api/control/v1;controlv1b\x06proto3"
 
 var (
@@ -4400,7 +4711,7 @@ func file_control_proto_rawDescGZIP() []byte {
 }
 
 var file_control_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_control_proto_msgTypes = make([]protoimpl.MessageInfo, 61)
+var file_control_proto_msgTypes = make([]protoimpl.MessageInfo, 66)
 var file_control_proto_goTypes = []any{
 	(AutomationActionType)(0),                  // 0: persys.control.v1.AutomationActionType
 	(FailureReason)(0),                         // 1: persys.control.v1.FailureReason
@@ -4453,56 +4764,61 @@ var file_control_proto_goTypes = []any{
 	(*GetNodeResponse)(nil),                    // 48: persys.control.v1.GetNodeResponse
 	(*NodeView)(nil),                           // 49: persys.control.v1.NodeView
 	(*ListWorkloadsRequest)(nil),               // 50: persys.control.v1.ListWorkloadsRequest
-	(*GetWorkloadRequest)(nil),                 // 51: persys.control.v1.GetWorkloadRequest
-	(*ListWorkloadsResponse)(nil),              // 52: persys.control.v1.ListWorkloadsResponse
-	(*GetWorkloadResponse)(nil),                // 53: persys.control.v1.GetWorkloadResponse
-	(*WorkloadView)(nil),                       // 54: persys.control.v1.WorkloadView
-	(*GetClusterSummaryRequest)(nil),           // 55: persys.control.v1.GetClusterSummaryRequest
-	(*GetClusterSummaryResponse)(nil),          // 56: persys.control.v1.GetClusterSummaryResponse
-	(*ControlMessage)(nil),                     // 57: persys.control.v1.ControlMessage
-	nil,                                        // 58: persys.control.v1.RegisterNodeRequest.LabelsEntry
-	nil,                                        // 59: persys.control.v1.WorkloadSpec.MetadataEntry
-	nil,                                        // 60: persys.control.v1.ContainerSpec.EnvEntry
-	nil,                                        // 61: persys.control.v1.ComposeSpec.EnvEntry
-	nil,                                        // 62: persys.control.v1.NodeView.LabelsEntry
-	(*timestamppb.Timestamp)(nil),              // 63: google.protobuf.Timestamp
+	(*SchedulerEventView)(nil),                 // 51: persys.control.v1.SchedulerEventView
+	(*ListEventsRequest)(nil),                  // 52: persys.control.v1.ListEventsRequest
+	(*ListEventsResponse)(nil),                 // 53: persys.control.v1.ListEventsResponse
+	(*WatchEventsRequest)(nil),                 // 54: persys.control.v1.WatchEventsRequest
+	(*GetWorkloadRequest)(nil),                 // 55: persys.control.v1.GetWorkloadRequest
+	(*ListWorkloadsResponse)(nil),              // 56: persys.control.v1.ListWorkloadsResponse
+	(*GetWorkloadResponse)(nil),                // 57: persys.control.v1.GetWorkloadResponse
+	(*WorkloadView)(nil),                       // 58: persys.control.v1.WorkloadView
+	(*GetClusterSummaryRequest)(nil),           // 59: persys.control.v1.GetClusterSummaryRequest
+	(*GetClusterSummaryResponse)(nil),          // 60: persys.control.v1.GetClusterSummaryResponse
+	(*ControlMessage)(nil),                     // 61: persys.control.v1.ControlMessage
+	nil,                                        // 62: persys.control.v1.RegisterNodeRequest.LabelsEntry
+	nil,                                        // 63: persys.control.v1.WorkloadSpec.MetadataEntry
+	nil,                                        // 64: persys.control.v1.ContainerSpec.EnvEntry
+	nil,                                        // 65: persys.control.v1.ComposeSpec.EnvEntry
+	nil,                                        // 66: persys.control.v1.NodeView.LabelsEntry
+	nil,                                        // 67: persys.control.v1.SchedulerEventView.DetailsEntry
+	(*timestamppb.Timestamp)(nil),              // 68: google.protobuf.Timestamp
 }
 var file_control_proto_depIdxs = []int32{
 	0,  // 0: persys.control.v1.AutomationSuggestion.action_type:type_name -> persys.control.v1.AutomationActionType
-	63, // 1: persys.control.v1.AutomationSuggestion.suggested_at:type_name -> google.protobuf.Timestamp
+	68, // 1: persys.control.v1.AutomationSuggestion.suggested_at:type_name -> google.protobuf.Timestamp
 	2,  // 2: persys.control.v1.SubmitAutomationSuggestionRequest.suggestion:type_name -> persys.control.v1.AutomationSuggestion
-	63, // 3: persys.control.v1.SubmitAutomationSuggestionResponse.decided_at:type_name -> google.protobuf.Timestamp
+	68, // 3: persys.control.v1.SubmitAutomationSuggestionResponse.decided_at:type_name -> google.protobuf.Timestamp
 	6,  // 4: persys.control.v1.RegisterNodeRequest.capabilities:type_name -> persys.control.v1.NodeCapabilities
-	58, // 5: persys.control.v1.RegisterNodeRequest.labels:type_name -> persys.control.v1.RegisterNodeRequest.LabelsEntry
-	63, // 6: persys.control.v1.RegisterNodeRequest.timestamp:type_name -> google.protobuf.Timestamp
+	62, // 5: persys.control.v1.RegisterNodeRequest.labels:type_name -> persys.control.v1.RegisterNodeRequest.LabelsEntry
+	68, // 6: persys.control.v1.RegisterNodeRequest.timestamp:type_name -> google.protobuf.Timestamp
 	7,  // 7: persys.control.v1.NodeCapabilities.storage_pools:type_name -> persys.control.v1.StoragePool
-	63, // 8: persys.control.v1.RegisterNodeResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	68, // 8: persys.control.v1.RegisterNodeResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
 	10, // 9: persys.control.v1.HeartbeatRequest.usage:type_name -> persys.control.v1.NodeUsage
 	29, // 10: persys.control.v1.HeartbeatRequest.workload_statuses:type_name -> persys.control.v1.WorkloadStatus
-	63, // 11: persys.control.v1.HeartbeatRequest.timestamp:type_name -> google.protobuf.Timestamp
+	68, // 11: persys.control.v1.HeartbeatRequest.timestamp:type_name -> google.protobuf.Timestamp
 	27, // 12: persys.control.v1.HeartbeatRequest.workload_usage:type_name -> persys.control.v1.WorkloadUsageSnapshot
-	63, // 13: persys.control.v1.HeartbeatResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	68, // 13: persys.control.v1.HeartbeatResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
 	16, // 14: persys.control.v1.ApplyWorkloadRequest.spec:type_name -> persys.control.v1.WorkloadSpec
 	1,  // 15: persys.control.v1.ApplyWorkloadResponse.failure_reason:type_name -> persys.control.v1.FailureReason
 	17, // 16: persys.control.v1.WorkloadSpec.resources:type_name -> persys.control.v1.ResourceRequirements
 	18, // 17: persys.control.v1.WorkloadSpec.container:type_name -> persys.control.v1.ContainerSpec
 	21, // 18: persys.control.v1.WorkloadSpec.compose:type_name -> persys.control.v1.ComposeSpec
 	22, // 19: persys.control.v1.WorkloadSpec.vm:type_name -> persys.control.v1.VMSpec
-	59, // 20: persys.control.v1.WorkloadSpec.metadata:type_name -> persys.control.v1.WorkloadSpec.MetadataEntry
-	60, // 21: persys.control.v1.ContainerSpec.env:type_name -> persys.control.v1.ContainerSpec.EnvEntry
+	63, // 20: persys.control.v1.WorkloadSpec.metadata:type_name -> persys.control.v1.WorkloadSpec.MetadataEntry
+	64, // 21: persys.control.v1.ContainerSpec.env:type_name -> persys.control.v1.ContainerSpec.EnvEntry
 	19, // 22: persys.control.v1.ContainerSpec.volumes:type_name -> persys.control.v1.VolumeMount
 	20, // 23: persys.control.v1.ContainerSpec.ports:type_name -> persys.control.v1.Port
 	26, // 24: persys.control.v1.ContainerSpec.managed_volumes:type_name -> persys.control.v1.ManagedVolumeSpec
-	61, // 25: persys.control.v1.ComposeSpec.env:type_name -> persys.control.v1.ComposeSpec.EnvEntry
+	65, // 25: persys.control.v1.ComposeSpec.env:type_name -> persys.control.v1.ComposeSpec.EnvEntry
 	23, // 26: persys.control.v1.VMSpec.disks:type_name -> persys.control.v1.DiskConfig
 	24, // 27: persys.control.v1.VMSpec.networks:type_name -> persys.control.v1.NetworkConfig
 	25, // 28: persys.control.v1.VMSpec.cloud_init:type_name -> persys.control.v1.CloudInitConfig
 	26, // 29: persys.control.v1.VMSpec.managed_volumes:type_name -> persys.control.v1.ManagedVolumeSpec
-	63, // 30: persys.control.v1.WorkloadUsageSnapshot.collected_at:type_name -> google.protobuf.Timestamp
-	63, // 31: persys.control.v1.ReasonDetail.last_transition:type_name -> google.protobuf.Timestamp
-	63, // 32: persys.control.v1.ReasonDetail.next_retry_at:type_name -> google.protobuf.Timestamp
+	68, // 30: persys.control.v1.WorkloadUsageSnapshot.collected_at:type_name -> google.protobuf.Timestamp
+	68, // 31: persys.control.v1.ReasonDetail.last_transition:type_name -> google.protobuf.Timestamp
+	68, // 32: persys.control.v1.ReasonDetail.next_retry_at:type_name -> google.protobuf.Timestamp
 	1,  // 33: persys.control.v1.WorkloadStatus.failure_reason:type_name -> persys.control.v1.FailureReason
-	63, // 34: persys.control.v1.WorkloadStatus.last_transition:type_name -> google.protobuf.Timestamp
+	68, // 34: persys.control.v1.WorkloadStatus.last_transition:type_name -> google.protobuf.Timestamp
 	28, // 35: persys.control.v1.WorkloadStatus.reason:type_name -> persys.control.v1.ReasonDetail
 	27, // 36: persys.control.v1.WorkloadStatus.usage:type_name -> persys.control.v1.WorkloadUsageSnapshot
 	49, // 37: persys.control.v1.DrainNodeResponse.node:type_name -> persys.control.v1.NodeView
@@ -4514,62 +4830,70 @@ var file_control_proto_depIdxs = []int32{
 	49, // 43: persys.control.v1.DeleteNodeLabelResponse.node:type_name -> persys.control.v1.NodeView
 	49, // 44: persys.control.v1.ListNodesResponse.nodes:type_name -> persys.control.v1.NodeView
 	49, // 45: persys.control.v1.GetNodeResponse.node:type_name -> persys.control.v1.NodeView
-	63, // 46: persys.control.v1.NodeView.status_updated_at:type_name -> google.protobuf.Timestamp
-	63, // 47: persys.control.v1.NodeView.last_heartbeat:type_name -> google.protobuf.Timestamp
-	62, // 48: persys.control.v1.NodeView.labels:type_name -> persys.control.v1.NodeView.LabelsEntry
+	68, // 46: persys.control.v1.NodeView.status_updated_at:type_name -> google.protobuf.Timestamp
+	68, // 47: persys.control.v1.NodeView.last_heartbeat:type_name -> google.protobuf.Timestamp
+	66, // 48: persys.control.v1.NodeView.labels:type_name -> persys.control.v1.NodeView.LabelsEntry
 	36, // 49: persys.control.v1.NodeView.taints:type_name -> persys.control.v1.NodeTaint
-	54, // 50: persys.control.v1.ListWorkloadsResponse.workloads:type_name -> persys.control.v1.WorkloadView
-	54, // 51: persys.control.v1.GetWorkloadResponse.workload:type_name -> persys.control.v1.WorkloadView
-	63, // 52: persys.control.v1.WorkloadView.retry_next_at:type_name -> google.protobuf.Timestamp
-	63, // 53: persys.control.v1.WorkloadView.last_updated:type_name -> google.protobuf.Timestamp
-	28, // 54: persys.control.v1.WorkloadView.reason:type_name -> persys.control.v1.ReasonDetail
-	27, // 55: persys.control.v1.WorkloadView.usage:type_name -> persys.control.v1.WorkloadUsageSnapshot
-	63, // 56: persys.control.v1.GetClusterSummaryResponse.generated_at:type_name -> google.protobuf.Timestamp
-	5,  // 57: persys.control.v1.ControlMessage.register:type_name -> persys.control.v1.RegisterNodeRequest
-	9,  // 58: persys.control.v1.ControlMessage.heartbeat:type_name -> persys.control.v1.HeartbeatRequest
-	12, // 59: persys.control.v1.ControlMessage.apply:type_name -> persys.control.v1.ApplyWorkloadRequest
-	14, // 60: persys.control.v1.ControlMessage.delete:type_name -> persys.control.v1.DeleteWorkloadRequest
-	5,  // 61: persys.control.v1.AgentControl.RegisterNode:input_type -> persys.control.v1.RegisterNodeRequest
-	9,  // 62: persys.control.v1.AgentControl.Heartbeat:input_type -> persys.control.v1.HeartbeatRequest
-	12, // 63: persys.control.v1.AgentControl.ApplyWorkload:input_type -> persys.control.v1.ApplyWorkloadRequest
-	14, // 64: persys.control.v1.AgentControl.DeleteWorkload:input_type -> persys.control.v1.DeleteWorkloadRequest
-	30, // 65: persys.control.v1.AgentControl.RetryWorkload:input_type -> persys.control.v1.RetryWorkloadRequest
-	32, // 66: persys.control.v1.AgentControl.DrainNode:input_type -> persys.control.v1.DrainNodeRequest
-	34, // 67: persys.control.v1.AgentControl.UndrainNode:input_type -> persys.control.v1.UndrainNodeRequest
-	37, // 68: persys.control.v1.AgentControl.TaintNode:input_type -> persys.control.v1.TaintNodeRequest
-	39, // 69: persys.control.v1.AgentControl.UntaintNode:input_type -> persys.control.v1.UntaintNodeRequest
-	41, // 70: persys.control.v1.AgentControl.SetNodeLabel:input_type -> persys.control.v1.SetNodeLabelRequest
-	43, // 71: persys.control.v1.AgentControl.DeleteNodeLabel:input_type -> persys.control.v1.DeleteNodeLabelRequest
-	3,  // 72: persys.control.v1.AgentControl.SubmitAutomationSuggestion:input_type -> persys.control.v1.SubmitAutomationSuggestionRequest
-	45, // 73: persys.control.v1.AgentControl.ListNodes:input_type -> persys.control.v1.ListNodesRequest
-	46, // 74: persys.control.v1.AgentControl.GetNode:input_type -> persys.control.v1.GetNodeRequest
-	50, // 75: persys.control.v1.AgentControl.ListWorkloads:input_type -> persys.control.v1.ListWorkloadsRequest
-	51, // 76: persys.control.v1.AgentControl.GetWorkload:input_type -> persys.control.v1.GetWorkloadRequest
-	55, // 77: persys.control.v1.AgentControl.GetClusterSummary:input_type -> persys.control.v1.GetClusterSummaryRequest
-	57, // 78: persys.control.v1.AgentControl.ControlStream:input_type -> persys.control.v1.ControlMessage
-	8,  // 79: persys.control.v1.AgentControl.RegisterNode:output_type -> persys.control.v1.RegisterNodeResponse
-	11, // 80: persys.control.v1.AgentControl.Heartbeat:output_type -> persys.control.v1.HeartbeatResponse
-	13, // 81: persys.control.v1.AgentControl.ApplyWorkload:output_type -> persys.control.v1.ApplyWorkloadResponse
-	15, // 82: persys.control.v1.AgentControl.DeleteWorkload:output_type -> persys.control.v1.DeleteWorkloadResponse
-	31, // 83: persys.control.v1.AgentControl.RetryWorkload:output_type -> persys.control.v1.RetryWorkloadResponse
-	33, // 84: persys.control.v1.AgentControl.DrainNode:output_type -> persys.control.v1.DrainNodeResponse
-	35, // 85: persys.control.v1.AgentControl.UndrainNode:output_type -> persys.control.v1.UndrainNodeResponse
-	38, // 86: persys.control.v1.AgentControl.TaintNode:output_type -> persys.control.v1.TaintNodeResponse
-	40, // 87: persys.control.v1.AgentControl.UntaintNode:output_type -> persys.control.v1.UntaintNodeResponse
-	42, // 88: persys.control.v1.AgentControl.SetNodeLabel:output_type -> persys.control.v1.SetNodeLabelResponse
-	44, // 89: persys.control.v1.AgentControl.DeleteNodeLabel:output_type -> persys.control.v1.DeleteNodeLabelResponse
-	4,  // 90: persys.control.v1.AgentControl.SubmitAutomationSuggestion:output_type -> persys.control.v1.SubmitAutomationSuggestionResponse
-	47, // 91: persys.control.v1.AgentControl.ListNodes:output_type -> persys.control.v1.ListNodesResponse
-	48, // 92: persys.control.v1.AgentControl.GetNode:output_type -> persys.control.v1.GetNodeResponse
-	52, // 93: persys.control.v1.AgentControl.ListWorkloads:output_type -> persys.control.v1.ListWorkloadsResponse
-	53, // 94: persys.control.v1.AgentControl.GetWorkload:output_type -> persys.control.v1.GetWorkloadResponse
-	56, // 95: persys.control.v1.AgentControl.GetClusterSummary:output_type -> persys.control.v1.GetClusterSummaryResponse
-	57, // 96: persys.control.v1.AgentControl.ControlStream:output_type -> persys.control.v1.ControlMessage
-	79, // [79:97] is the sub-list for method output_type
-	61, // [61:79] is the sub-list for method input_type
-	61, // [61:61] is the sub-list for extension type_name
-	61, // [61:61] is the sub-list for extension extendee
-	0,  // [0:61] is the sub-list for field type_name
+	68, // 50: persys.control.v1.SchedulerEventView.timestamp:type_name -> google.protobuf.Timestamp
+	67, // 51: persys.control.v1.SchedulerEventView.details:type_name -> persys.control.v1.SchedulerEventView.DetailsEntry
+	51, // 52: persys.control.v1.ListEventsResponse.events:type_name -> persys.control.v1.SchedulerEventView
+	58, // 53: persys.control.v1.ListWorkloadsResponse.workloads:type_name -> persys.control.v1.WorkloadView
+	58, // 54: persys.control.v1.GetWorkloadResponse.workload:type_name -> persys.control.v1.WorkloadView
+	68, // 55: persys.control.v1.WorkloadView.retry_next_at:type_name -> google.protobuf.Timestamp
+	68, // 56: persys.control.v1.WorkloadView.last_updated:type_name -> google.protobuf.Timestamp
+	28, // 57: persys.control.v1.WorkloadView.reason:type_name -> persys.control.v1.ReasonDetail
+	27, // 58: persys.control.v1.WorkloadView.usage:type_name -> persys.control.v1.WorkloadUsageSnapshot
+	68, // 59: persys.control.v1.WorkloadView.created_at:type_name -> google.protobuf.Timestamp
+	68, // 60: persys.control.v1.GetClusterSummaryResponse.generated_at:type_name -> google.protobuf.Timestamp
+	5,  // 61: persys.control.v1.ControlMessage.register:type_name -> persys.control.v1.RegisterNodeRequest
+	9,  // 62: persys.control.v1.ControlMessage.heartbeat:type_name -> persys.control.v1.HeartbeatRequest
+	12, // 63: persys.control.v1.ControlMessage.apply:type_name -> persys.control.v1.ApplyWorkloadRequest
+	14, // 64: persys.control.v1.ControlMessage.delete:type_name -> persys.control.v1.DeleteWorkloadRequest
+	5,  // 65: persys.control.v1.AgentControl.RegisterNode:input_type -> persys.control.v1.RegisterNodeRequest
+	9,  // 66: persys.control.v1.AgentControl.Heartbeat:input_type -> persys.control.v1.HeartbeatRequest
+	12, // 67: persys.control.v1.AgentControl.ApplyWorkload:input_type -> persys.control.v1.ApplyWorkloadRequest
+	14, // 68: persys.control.v1.AgentControl.DeleteWorkload:input_type -> persys.control.v1.DeleteWorkloadRequest
+	30, // 69: persys.control.v1.AgentControl.RetryWorkload:input_type -> persys.control.v1.RetryWorkloadRequest
+	32, // 70: persys.control.v1.AgentControl.DrainNode:input_type -> persys.control.v1.DrainNodeRequest
+	34, // 71: persys.control.v1.AgentControl.UndrainNode:input_type -> persys.control.v1.UndrainNodeRequest
+	37, // 72: persys.control.v1.AgentControl.TaintNode:input_type -> persys.control.v1.TaintNodeRequest
+	39, // 73: persys.control.v1.AgentControl.UntaintNode:input_type -> persys.control.v1.UntaintNodeRequest
+	41, // 74: persys.control.v1.AgentControl.SetNodeLabel:input_type -> persys.control.v1.SetNodeLabelRequest
+	43, // 75: persys.control.v1.AgentControl.DeleteNodeLabel:input_type -> persys.control.v1.DeleteNodeLabelRequest
+	3,  // 76: persys.control.v1.AgentControl.SubmitAutomationSuggestion:input_type -> persys.control.v1.SubmitAutomationSuggestionRequest
+	45, // 77: persys.control.v1.AgentControl.ListNodes:input_type -> persys.control.v1.ListNodesRequest
+	46, // 78: persys.control.v1.AgentControl.GetNode:input_type -> persys.control.v1.GetNodeRequest
+	50, // 79: persys.control.v1.AgentControl.ListWorkloads:input_type -> persys.control.v1.ListWorkloadsRequest
+	55, // 80: persys.control.v1.AgentControl.GetWorkload:input_type -> persys.control.v1.GetWorkloadRequest
+	59, // 81: persys.control.v1.AgentControl.GetClusterSummary:input_type -> persys.control.v1.GetClusterSummaryRequest
+	52, // 82: persys.control.v1.AgentControl.ListEvents:input_type -> persys.control.v1.ListEventsRequest
+	54, // 83: persys.control.v1.AgentControl.WatchEvents:input_type -> persys.control.v1.WatchEventsRequest
+	61, // 84: persys.control.v1.AgentControl.ControlStream:input_type -> persys.control.v1.ControlMessage
+	8,  // 85: persys.control.v1.AgentControl.RegisterNode:output_type -> persys.control.v1.RegisterNodeResponse
+	11, // 86: persys.control.v1.AgentControl.Heartbeat:output_type -> persys.control.v1.HeartbeatResponse
+	13, // 87: persys.control.v1.AgentControl.ApplyWorkload:output_type -> persys.control.v1.ApplyWorkloadResponse
+	15, // 88: persys.control.v1.AgentControl.DeleteWorkload:output_type -> persys.control.v1.DeleteWorkloadResponse
+	31, // 89: persys.control.v1.AgentControl.RetryWorkload:output_type -> persys.control.v1.RetryWorkloadResponse
+	33, // 90: persys.control.v1.AgentControl.DrainNode:output_type -> persys.control.v1.DrainNodeResponse
+	35, // 91: persys.control.v1.AgentControl.UndrainNode:output_type -> persys.control.v1.UndrainNodeResponse
+	38, // 92: persys.control.v1.AgentControl.TaintNode:output_type -> persys.control.v1.TaintNodeResponse
+	40, // 93: persys.control.v1.AgentControl.UntaintNode:output_type -> persys.control.v1.UntaintNodeResponse
+	42, // 94: persys.control.v1.AgentControl.SetNodeLabel:output_type -> persys.control.v1.SetNodeLabelResponse
+	44, // 95: persys.control.v1.AgentControl.DeleteNodeLabel:output_type -> persys.control.v1.DeleteNodeLabelResponse
+	4,  // 96: persys.control.v1.AgentControl.SubmitAutomationSuggestion:output_type -> persys.control.v1.SubmitAutomationSuggestionResponse
+	47, // 97: persys.control.v1.AgentControl.ListNodes:output_type -> persys.control.v1.ListNodesResponse
+	48, // 98: persys.control.v1.AgentControl.GetNode:output_type -> persys.control.v1.GetNodeResponse
+	56, // 99: persys.control.v1.AgentControl.ListWorkloads:output_type -> persys.control.v1.ListWorkloadsResponse
+	57, // 100: persys.control.v1.AgentControl.GetWorkload:output_type -> persys.control.v1.GetWorkloadResponse
+	60, // 101: persys.control.v1.AgentControl.GetClusterSummary:output_type -> persys.control.v1.GetClusterSummaryResponse
+	53, // 102: persys.control.v1.AgentControl.ListEvents:output_type -> persys.control.v1.ListEventsResponse
+	51, // 103: persys.control.v1.AgentControl.WatchEvents:output_type -> persys.control.v1.SchedulerEventView
+	61, // 104: persys.control.v1.AgentControl.ControlStream:output_type -> persys.control.v1.ControlMessage
+	85, // [85:105] is the sub-list for method output_type
+	65, // [65:85] is the sub-list for method input_type
+	65, // [65:65] is the sub-list for extension type_name
+	65, // [65:65] is the sub-list for extension extendee
+	0,  // [0:65] is the sub-list for field type_name
 }
 
 func init() { file_control_proto_init() }
@@ -4582,7 +4906,7 @@ func file_control_proto_init() {
 		(*WorkloadSpec_Compose)(nil),
 		(*WorkloadSpec_Vm)(nil),
 	}
-	file_control_proto_msgTypes[55].OneofWrappers = []any{
+	file_control_proto_msgTypes[59].OneofWrappers = []any{
 		(*ControlMessage_Register)(nil),
 		(*ControlMessage_Heartbeat)(nil),
 		(*ControlMessage_Apply)(nil),
@@ -4594,7 +4918,7 @@ func file_control_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_control_proto_rawDesc), len(file_control_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   61,
+			NumMessages:   66,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
