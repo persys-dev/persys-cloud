@@ -47,7 +47,7 @@ vault-manager/
 
 ```bash
 cd vault-manager
-go run ./cmd/vault-manager --vault-addr=http://localhost:8200
+go run ./cmd/main.go --vault-addr=http://localhost:8200
 ```
 
 On first run against an uninitialized Vault, the unseal key and root token
@@ -56,14 +56,14 @@ afterward. On subsequent runs against an already-initialized Vault, set
 `VAULT_ROOT_TOKEN` in the environment instead:
 
 ```bash
-VAULT_ROOT_TOKEN=hvs.xxxxx go run ./cmd/vault-manager --vault-addr=http://localhost:8200
+VAULT_ROOT_TOKEN=hvs.xxxxx go run ./cmd/main.go --vault-addr=http://localhost:8200
 ```
 
 To provision once with root and then drop root privileges for the life of
 the process:
 
 ```bash
-go run ./cmd/vault-manager --vault-addr=http://localhost:8200 --secure
+go run ./cmd/main.go --vault-addr=http://localhost:8200 --secure
 ```
 
 ## CLI flags
@@ -78,6 +78,7 @@ go run ./cmd/vault-manager --vault-addr=http://localhost:8200 --secure
 | `--manager-role`     | `vault-manager-bootstrap`                                                                                                                        | AppRole name used for the `--secure` bootstrap handoff    |
 | `--manager-policy`   | `vault-manager-bootstrap-policy`                                                                                                                 | ACL policy name for the bootstrap manager AppRole         |
 | `--services`         | `persys-gateway,persys-scheduler,persysctl,compute-agent,persys-forgery,persys-services,persys-automation,persys-intelligence,persys-sdk`        | Comma-separated list of services to provision             |
+| `--bootstrap-file`   | `/var/lib/persys/vault/bootstrap.json`                                                                                                           | Persistent recovery credentials (unseal keys + auth)        |
 | `--secure`           | `false`                                                                                                                                          | Provision a bootstrap AppRole and revoke the root token after setup |
 
 ## Environment variables
@@ -124,6 +125,27 @@ logs (method, status code, duration, and any error) for each call.
 
 In docker compose, this is used by the `vault-manager` profile in
 `infra/docker/docker-compose.yml`.
+
+
+## Restart / recovery
+
+Unseal keys and auth credentials are written to `--bootstrap-file`
+(default `/var/lib/persys/vault/bootstrap.json`) on first init.
+
+After `docker compose down` (without `-v`) and `up` again:
+
+1. Vault comes back **sealed**.
+2. vault-manager loads the bootstrap file from the `vault_manager_data` volume.
+3. It unseals Vault with the stored keys, then authenticates (manager AppRole or root token).
+
+**Requirements:**
+
+- Named volume mounted at `/var/lib/persys/vault/` (as in compose).
+- Do **not** use `docker compose down -v` unless you intend to wipe recovery state.
+- The image entrypoint chowns the volume so the non-root `app` user can write `bootstrap.json`.
+
+If the bootstrap file is missing on an already-initialized Vault, set
+`VAULT_ROOT_TOKEN` once; after a successful run the file is rewritten.
 
 ## Operational notes
 
