@@ -10,6 +10,7 @@ import (
 )
 
 const (
+	DefaultBootstrapFile        = "/opt/persys/vault/bootstrap.json"
 	DefaultVaultAddr            = "https://vault:8200"
 	DefaultPKIRootMount         = "pki"
 	DefaultPKIIntermediateMount = "pki_int"
@@ -17,7 +18,7 @@ const (
 	DefaultIntCommonName        = "Persys Cloud Intermediate CA"
 	DefaultManagerRoleName      = "vault-manager-bootstrap"
 	DefaultManagerPolicyName    = "vault-manager-bootstrap-policy"
-	DefaultServicesCSV          = "persys-gateway,persys-scheduler,persysctl,compute-agent,persys-forgery,persys-services,persys-automation,persys-intelligence,persys-sdk"
+	DefaultServicesCSV          = "persys-gateway,persys-scheduler,persysctl,compute-agent,persys-forgery,persys-services,persys-automation,persys-intelligence,persys-dashboard,persys-sdk"
 	GRPCListenAddr              = ":50069"
 )
 
@@ -34,6 +35,7 @@ type Config struct {
 	ManagerRoleName      string
 	ManagerPolicyName    string
 	ServiceNames         []string
+	BootstrapFile        string
 	Secure               bool
 }
 
@@ -52,6 +54,7 @@ func ParseFlags() *Config {
 	flag.StringVar(&cfg.ManagerRoleName, "manager-role", DefaultManagerRoleName, "Bootstrap manager AppRole name")
 	flag.StringVar(&cfg.ManagerPolicyName, "manager-policy", DefaultManagerPolicyName, "Bootstrap manager policy name")
 	flag.StringVar(&servicesCSV, "services", DefaultServicesCSV, "Comma-separated service names to provision")
+	flag.StringVar(&cfg.BootstrapFile, "bootstrap-file", DefaultBootstrapFile, "bootstrap credential store")
 	flag.Parse()
 
 	cfg.ServiceNames = ParseServiceNames(servicesCSV)
