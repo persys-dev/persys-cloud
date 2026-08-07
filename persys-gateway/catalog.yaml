@@ -1,0 +1,8 @@
+services:
+  - name: meter
+    path_prefix: /meter
+    upstream_addr: http://persys-meter:9092
+    strip_prefix: true
+    auth: none
+    timeout: 10s
+    enabled: true
