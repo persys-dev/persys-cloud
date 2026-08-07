@@ -19,8 +19,8 @@ import (
 
 // InitResult holds the credentials returned by a fresh Vault initialization.
 type InitResult struct {
-	RootToken string
-	UnsealKey string
+	RootToken  string
+	UnsealKeys []string
 }
 
 // New creates a Vault API client pointed at addr, optionally authenticated
@@ -38,12 +38,18 @@ func New(addr, token string) (*vault.Client, error) {
 	return client, nil
 }
 
-// WaitUntilReady blocks until Vault responds to a health check.
-func WaitUntilReady(client *vault.Client) {
+// WaitUntilReady blocks until Vault answers the seal-status endpoint.
+// Sealed Vault is considered ready — callers unseal explicitly afterward.
+// Using /sys/health is wrong here: sealed nodes return 503 and the API
+// client treats that as an error, which would hang forever after a Vault restart.
+func WaitUntilReady(addr string) {
 	for {
-		_, err := client.Sys().Health()
+		resp, err := http.Get(addr + "/v1/sys/seal-status")
 		if err == nil {
-			return
+			resp.Body.Close()
+			if resp.StatusCode >= 200 && resp.StatusCode < 500 {
+				return
+			}
 		}
 		config.Log.Println("Waiting for Vault...")
 		time.Sleep(2 * time.Second)
@@ -66,7 +72,7 @@ func IsInitialized(addr string) (bool, error) {
 }
 
 // Initialize performs a single-shard Vault initialization and returns the
-// root token and unseal key.
+// root token and unseal key(s).
 func Initialize(addr string) (*InitResult, error) {
 	body := map[string]interface{}{
 		"secret_shares":    1,
@@ -112,8 +118,8 @@ func Initialize(addr string) (*InitResult, error) {
 	}
 
 	return &InitResult{
-		RootToken: data.RootToken,
-		UnsealKey: unsealKeys[0],
+		RootToken:  data.RootToken,
+		UnsealKeys: unsealKeys,
 	}, nil
 }
 
@@ -143,4 +149,87 @@ func Unseal(addr, unsealKey string) error {
 		return fmt.Errorf("vault unseal failed with status %s", resp.Status)
 	}
 	return nil
+}
+
+// IsSealed reports whether the Vault at addr is currently sealed.
+func IsSealed(addr string) (bool, error) {
+	resp, err := http.Get(addr + "/v1/sys/seal-status")
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	var out struct {
+		Sealed bool `json:"sealed"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return false, err
+	}
+	return out.Sealed, nil
+}
+
+// UnsealAll submits every key in keys until Vault reports unsealed, or
+// returns an error if it remains sealed after all keys.
+func UnsealAll(addr string, keys []string) error {
+	if len(keys) == 0 {
+		return errors.New("no unseal keys provided")
+	}
+	for _, key := range keys {
+		if strings.TrimSpace(key) == "" {
+			continue
+		}
+		if err := Unseal(addr, key); err != nil {
+			return err
+		}
+		sealed, err := IsSealed(addr)
+		if err != nil {
+			return err
+		}
+		if !sealed {
+			return nil
+		}
+	}
+	return errors.New("vault still sealed after all keys")
+}
+
+// EnsureUnsealed unseals Vault if it is currently sealed, using the given keys.
+// It is a no-op when Vault is already unsealed.
+func EnsureUnsealed(addr string, keys []string) error {
+	sealed, err := IsSealed(addr)
+	if err != nil {
+		return err
+	}
+	if !sealed {
+		config.Log.Println("Vault is already unsealed.")
+		return nil
+	}
+	if len(keys) == 0 {
+		return errors.New("vault is sealed but no unseal keys are available in bootstrap state")
+	}
+	config.Log.Println("Vault is sealed; unsealing with stored keys...")
+	if err := UnsealAll(addr, keys); err != nil {
+		return err
+	}
+	config.Log.Println("Vault unsealed.")
+	return nil
+}
+
+// LoginAppRole authenticates with role_id/secret_id and returns a client
+// holding the resulting token.
+func LoginAppRole(addr, roleID, secretID string) (*vault.Client, error) {
+	base, err := New(addr, "")
+	if err != nil {
+		return nil, err
+	}
+	loginSecret, err := base.Logical().Write("auth/approle/login", map[string]interface{}{
+		"role_id":   roleID,
+		"secret_id": secretID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("approle login failed: %w", err)
+	}
+	if loginSecret == nil || loginSecret.Auth == nil || loginSecret.Auth.ClientToken == "" {
+		return nil, errors.New("approle login returned empty token")
+	}
+	return New(addr, loginSecret.Auth.ClientToken)
 }
