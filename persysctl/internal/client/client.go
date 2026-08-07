@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/tls"
@@ -1009,6 +1010,170 @@ func (c *Client) GatewayClusters() (*GatewayClustersResponse, error) {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 	return &out, nil
+}
+
+func (c *Client) MeterListWorkloads(workloadType string) (map[string]any, error) {
+	if c.cfg.Transport != "http" {
+		return nil, fmt.Errorf("meter API is available only with http transport")
+	}
+	path := "/meter/v1/workloads"
+	q := url.Values{}
+	if trimmed := strings.TrimSpace(workloadType); trimmed != "" {
+		q.Set("workload_type", trimmed)
+	}
+	if encoded := q.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	var out map[string]any
+	if err := c.httpJSONRequest("GET", path, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) MeterGetWorkload(workloadID string) (map[string]any, error) {
+	if c.cfg.Transport != "http" {
+		return nil, fmt.Errorf("meter API is available only with http transport")
+	}
+	path := "/meter/v1/workloads/" + url.PathEscape(strings.TrimSpace(workloadID))
+	var out map[string]any
+	if err := c.httpJSONRequest("GET", path, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) MeterHistory(workloadID string, from, to time.Time, limit int) (map[string]any, error) {
+	if c.cfg.Transport != "http" {
+		return nil, fmt.Errorf("meter API is available only with http transport")
+	}
+	path := "/meter/v1/workloads/" + url.PathEscape(strings.TrimSpace(workloadID)) + "/history"
+	q := url.Values{}
+	if !from.IsZero() {
+		q.Set("from", from.UTC().Format(time.RFC3339))
+	}
+	if !to.IsZero() {
+		q.Set("to", to.UTC().Format(time.RFC3339))
+	}
+	if limit > 0 {
+		q.Set("limit", strconv.Itoa(limit))
+	}
+	if encoded := q.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	var out map[string]any
+	if err := c.httpJSONRequest("GET", path, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) MeterSummary(workloadID string, from, to time.Time) (map[string]any, error) {
+	if c.cfg.Transport != "http" {
+		return nil, fmt.Errorf("meter API is available only with http transport")
+	}
+	path := "/meter/v1/workloads/" + url.PathEscape(strings.TrimSpace(workloadID)) + "/summary"
+	q := url.Values{}
+	if !from.IsZero() {
+		q.Set("from", from.UTC().Format(time.RFC3339))
+	}
+	if !to.IsZero() {
+		q.Set("to", to.UTC().Format(time.RFC3339))
+	}
+	if encoded := q.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	var out map[string]any
+	if err := c.httpJSONRequest("GET", path, nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *Client) WatchGatewayEvents(eventType, workloadID, nodeID string, limit int) ([]map[string]any, error) {
+	if c.cfg.Transport != "http" {
+		return nil, fmt.Errorf("gateway event stream is available only with http transport")
+	}
+	if limit <= 0 {
+		limit = 20
+	}
+
+	path := "/events/watch"
+	q := url.Values{}
+	if trimmed := strings.TrimSpace(eventType); trimmed != "" {
+		q.Set("type", trimmed)
+	}
+	if trimmed := strings.TrimSpace(workloadID); trimmed != "" {
+		q.Set("workload_id", trimmed)
+	}
+	if trimmed := strings.TrimSpace(nodeID); trimmed != "" {
+		q.Set("node_id", trimmed)
+	}
+	if encoded := q.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+
+	timeout := time.Duration(c.cfg.RPCTimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.APIEndpoint+path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	var (
+		events   []map[string]any
+		dataLine string
+	)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "event:") {
+			continue
+		}
+		if strings.HasPrefix(line, "data:") {
+			dataLine = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+			continue
+		}
+		if line == "" && dataLine != "" {
+			var event map[string]any
+			if err := json.Unmarshal([]byte(dataLine), &event); err == nil {
+				events = append(events, event)
+				if len(events) >= limit {
+					return events, nil
+				}
+			}
+			dataLine = ""
+		}
+		if ctx.Err() != nil {
+			return events, nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return events, nil
+		}
+		return nil, fmt.Errorf("failed to read event stream: %w", err)
+	}
+	return events, nil
 }
 
 func (c *Client) TriggerForgeryBuild(req ForgeryBuildTriggerRequest) (map[string]interface{}, error) {

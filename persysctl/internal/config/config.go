@@ -138,7 +138,7 @@ func GetConfig() Config {
 	if cfg.VaultPKIRole == "" {
 		cfg.VaultPKIRole = "persysctl"
 	}
-	cfg.VaultCertTTL = durationOr(stringWithEnv("vault_cert_ttl", "PERSYS_VAULT_CERT_TTL"), 24*time.Hour)
+	cfg.VaultCertTTL = durationOr(stringWithEnv("vault_cert_ttl", "PERSYS_VAULT_CERT_TTL"), 1*time.Hour)
 	cfg.VaultServiceName = strings.TrimSpace(stringWithEnv("vault_service_name", "PERSYS_VAULT_SERVICE_NAME"))
 	if cfg.VaultServiceName == "" {
 		cfg.VaultServiceName = "persysctl"

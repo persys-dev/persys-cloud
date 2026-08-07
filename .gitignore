@@ -4,15 +4,12 @@
 .idea
 *.log
 __pycache__
-.old/azure-pipeline/azure-pipelines.yml
 .old/**
 *.bak
 terraform.tfvars
 **/bin/
-certs/
-vault-mtls-mock/certs-runtime/
-vault-mtls-mock/
 .env
 persys-automation/DESIGN_SPEC.md
 persys-intelligence/DESIGN_SPEC.md
-third_party/
+.zip
+.tar.gz

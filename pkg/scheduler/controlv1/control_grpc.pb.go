@@ -36,6 +36,8 @@ const (
 	AgentControl_ListWorkloads_FullMethodName              = "/persys.control.v1.AgentControl/ListWorkloads"
 	AgentControl_GetWorkload_FullMethodName                = "/persys.control.v1.AgentControl/GetWorkload"
 	AgentControl_GetClusterSummary_FullMethodName          = "/persys.control.v1.AgentControl/GetClusterSummary"
+	AgentControl_ListEvents_FullMethodName                 = "/persys.control.v1.AgentControl/ListEvents"
+	AgentControl_WatchEvents_FullMethodName                = "/persys.control.v1.AgentControl/WatchEvents"
 	AgentControl_ControlStream_FullMethodName              = "/persys.control.v1.AgentControl/ControlStream"
 )
 
@@ -66,6 +68,18 @@ type AgentControlClient interface {
 	ListWorkloads(ctx context.Context, in *ListWorkloadsRequest, opts ...grpc.CallOption) (*ListWorkloadsResponse, error)
 	GetWorkload(ctx context.Context, in *GetWorkloadRequest, opts ...grpc.CallOption) (*GetWorkloadResponse, error)
 	GetClusterSummary(ctx context.Context, in *GetClusterSummaryRequest, opts ...grpc.CallOption) (*GetClusterSummaryResponse, error)
+	// Cluster-wide events: node joined, node lost, node left, workload
+	// scheduled, drift detected, retries, reschedules, etc (see
+	// internal/scheduler/events.go for producers). ListEvents is a
+	// plain unary call (auto-bridged to REST by persys-gateway's
+	// reflection-based grpcbridge, no gateway changes needed). WatchEvents
+	// is a server-streaming call — grpcbridge explicitly does not bridge
+	// streaming RPCs, so consumers that need HTTP (e.g. a browser
+	// dashboard) go through a hand-written SSE endpoint on the gateway
+	// instead of the generic bridge; a gRPC client (e.g. persysctl) can
+	// call it directly.
+	ListEvents(ctx context.Context, in *ListEventsRequest, opts ...grpc.CallOption) (*ListEventsResponse, error)
+	WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SchedulerEventView], error)
 	// Optional future streaming channel
 	ControlStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ControlMessage, ControlMessage], error)
 }
@@ -248,9 +262,38 @@ func (c *agentControlClient) GetClusterSummary(ctx context.Context, in *GetClust
 	return out, nil
 }
 
+func (c *agentControlClient) ListEvents(ctx context.Context, in *ListEventsRequest, opts ...grpc.CallOption) (*ListEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListEventsResponse)
+	err := c.cc.Invoke(ctx, AgentControl_ListEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SchedulerEventView], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentControl_ServiceDesc.Streams[0], AgentControl_WatchEvents_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WatchEventsRequest, SchedulerEventView]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentControl_WatchEventsClient = grpc.ServerStreamingClient[SchedulerEventView]
+
 func (c *agentControlClient) ControlStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ControlMessage, ControlMessage], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentControl_ServiceDesc.Streams[0], AgentControl_ControlStream_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentControl_ServiceDesc.Streams[1], AgentControl_ControlStream_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -288,6 +331,18 @@ type AgentControlServer interface {
 	ListWorkloads(context.Context, *ListWorkloadsRequest) (*ListWorkloadsResponse, error)
 	GetWorkload(context.Context, *GetWorkloadRequest) (*GetWorkloadResponse, error)
 	GetClusterSummary(context.Context, *GetClusterSummaryRequest) (*GetClusterSummaryResponse, error)
+	// Cluster-wide events: node joined, node lost, node left, workload
+	// scheduled, drift detected, retries, reschedules, etc (see
+	// internal/scheduler/events.go for producers). ListEvents is a
+	// plain unary call (auto-bridged to REST by persys-gateway's
+	// reflection-based grpcbridge, no gateway changes needed). WatchEvents
+	// is a server-streaming call — grpcbridge explicitly does not bridge
+	// streaming RPCs, so consumers that need HTTP (e.g. a browser
+	// dashboard) go through a hand-written SSE endpoint on the gateway
+	// instead of the generic bridge; a gRPC client (e.g. persysctl) can
+	// call it directly.
+	ListEvents(context.Context, *ListEventsRequest) (*ListEventsResponse, error)
+	WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[SchedulerEventView]) error
 	// Optional future streaming channel
 	ControlStream(grpc.BidiStreamingServer[ControlMessage, ControlMessage]) error
 	mustEmbedUnimplementedAgentControlServer()
@@ -350,6 +405,12 @@ func (UnimplementedAgentControlServer) GetWorkload(context.Context, *GetWorkload
 }
 func (UnimplementedAgentControlServer) GetClusterSummary(context.Context, *GetClusterSummaryRequest) (*GetClusterSummaryResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetClusterSummary not implemented")
+}
+func (UnimplementedAgentControlServer) ListEvents(context.Context, *ListEventsRequest) (*ListEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListEvents not implemented")
+}
+func (UnimplementedAgentControlServer) WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[SchedulerEventView]) error {
+	return status.Error(codes.Unimplemented, "method WatchEvents not implemented")
 }
 func (UnimplementedAgentControlServer) ControlStream(grpc.BidiStreamingServer[ControlMessage, ControlMessage]) error {
 	return status.Error(codes.Unimplemented, "method ControlStream not implemented")
@@ -681,6 +742,35 @@ func _AgentControl_GetClusterSummary_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentControl_ListEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).ListEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_ListEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).ListEvents(ctx, req.(*ListEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_WatchEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchEventsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentControlServer).WatchEvents(m, &grpc.GenericServerStream[WatchEventsRequest, SchedulerEventView]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentControl_WatchEventsServer = grpc.ServerStreamingServer[SchedulerEventView]
+
 func _AgentControl_ControlStream_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(AgentControlServer).ControlStream(&grpc.GenericServerStream[ControlMessage, ControlMessage]{ServerStream: stream})
 }
@@ -763,8 +853,17 @@ var AgentControl_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetClusterSummary",
 			Handler:    _AgentControl_GetClusterSummary_Handler,
 		},
+		{
+			MethodName: "ListEvents",
+			Handler:    _AgentControl_ListEvents_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "WatchEvents",
+			Handler:       _AgentControl_WatchEvents_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "ControlStream",
 			Handler:       _AgentControl_ControlStream_Handler,
