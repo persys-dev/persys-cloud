@@ -10,11 +10,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w' -o
 
 FROM alpine:latest
 
-RUN apk add --no-cache ca-certificates \
-	&& addgroup -S app \
-	&& adduser -S -G app app
+RUN apk add --no-cache ca-certificates
 
 COPY --from=build /out/vault-manager /usr/local/bin/vault-manager
 
-USER app
 ENTRYPOINT ["vault-manager"]
