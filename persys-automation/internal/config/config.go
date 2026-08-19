@@ -80,7 +80,7 @@ func Load() (*Config, error) {
 		),
 		VaultPKIMount:      envOr("AUTOMATION_VAULT_PKI_MOUNT", "pki"),
 		VaultPKIRole:       envOr("AUTOMATION_VAULT_PKI_ROLE", "persys-automation"),
-		VaultCertTTL:       envDurationOr("AUTOMATION_VAULT_CERT_TTL", 1*time.Hour),
+		VaultCertTTL:       envDurationOr("AUTOMATION_VAULT_CERT_TTL", 24*time.Hour),
 		VaultServiceName:   envOr("AUTOMATION_VAULT_SERVICE_NAME", "persys-automation"),
 		VaultServiceDomain: strings.TrimSpace(os.Getenv("AUTOMATION_VAULT_SERVICE_DOMAIN")),
 		VaultRetryInterval: envDurationOr("AUTOMATION_VAULT_RETRY_INTERVAL", 30*time.Second),
