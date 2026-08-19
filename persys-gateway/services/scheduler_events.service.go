@@ -6,8 +6,6 @@ import (
 	"io"
 
 	controlv1 "github.com/persys-dev/persys-cloud/persys-gateway/internal/controlv1"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 // WatchEventsForClient opens a server-streaming WatchEvents call against a
@@ -32,10 +30,7 @@ func (s *ClusterControlService) WatchEventsForClient(ctx context.Context, cluste
 
 	var lastErr error
 	for _, target := range candidates {
-		conn, dialErr := grpc.DialContext(ctx, target.Address,
-			grpc.WithTransportCredentials(credentials.NewTLS(s.clientTLS)),
-			grpc.WithBlock(),
-		)
+		conn, dialErr := dialGRPCTLS(ctx, target.Address, s.clientTLS, s.certMgr)
 		if dialErr != nil {
 			s.schedulerPool.MarkUnhealthy(clusterID, target.Address)
 			lastErr = dialErr
