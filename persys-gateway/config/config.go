@@ -343,7 +343,7 @@ func (c *Config) applyDefaults() {
 		c.Vault.ManagerAddr = "vault-manager:50069"
 	}
 	if c.Vault.CertTTL == time.Duration(0) {
-		c.Vault.CertTTL = 1 * time.Hour
+		c.Vault.CertTTL = 24 * time.Hour
 	}
 	if c.Vault.RetryInterval == time.Duration(0) {
 		c.Vault.RetryInterval = 30 * time.Second
