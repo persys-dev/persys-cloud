@@ -24,6 +24,7 @@ const (
 	rotationFractionNumerator   = 80
 	rotationFractionDenominator = 100
 	minRotationWait             = 30 * time.Second
+	minForceRotateGap           = 15 * time.Second // anti-thundering-herd
 )
 
 type Config struct {
@@ -56,6 +57,10 @@ type Manager struct {
 
 	mu      sync.RWMutex
 	current certMeta
+
+	// serializes scheduled rotation + ForceRotate
+	rotateMu  sync.Mutex
+	lastForce time.Time
 }
 
 type certMeta struct {
@@ -187,7 +192,8 @@ func (m *Manager) rotationLoop(ctx context.Context) {
 			wait = minRotationWait
 		}
 
-		m.logger.WithField("next_rotation", renewAt.UTC().Format(time.RFC3339)).Info("Next certificate rotation scheduled")
+		m.logger.WithField("next_rotation", renewAt.UTC().Format(time.RFC3339)).
+			Info("Next certificate rotation scheduled")
 
 		select {
 		case <-ctx.Done():
@@ -195,12 +201,20 @@ func (m *Manager) rotationLoop(ctx context.Context) {
 		case <-time.After(wait):
 		}
 
+		m.rotateMu.Lock()
 		cli, err := m.newVaultClient()
 		if err != nil {
+			m.rotateMu.Unlock()
 			m.logger.WithError(err).Warn("Vault not reachable during rotation window; retrying later")
 			continue
 		}
-		if err := m.issueAndPersist(ctx, cli); err != nil {
+		err = m.issueAndPersist(ctx, cli)
+		if err == nil {
+			m.lastForce = time.Now() // treat success as a recent rotation
+		}
+		m.rotateMu.Unlock()
+
+		if err != nil {
 			m.logger.WithError(err).Warn("Certificate rotation failed; retrying later")
 			continue
 		}
@@ -338,6 +352,36 @@ func (m *Manager) issueAndPersist(ctx context.Context, client *vault.Client) err
 		"ip_sans":    strings.Join(ipSANs, ","),
 	}).Info("Issued and installed certificate from Vault")
 
+	return nil
+}
+
+// ForceRotate re-issues a certificate from Vault immediately and writes it
+// to disk. Concurrent calls are serialized; calls within minForceRotateGap
+// of a successful force are no-ops so many clients failing at once do not
+// stampede Vault.
+func (m *Manager) ForceRotate(ctx context.Context) error {
+	if !m.cfg.TLSEnabled || !m.cfg.VaultEnabled {
+		return fmt.Errorf("force rotate: vault TLS cert manager is not enabled")
+	}
+
+	m.rotateMu.Lock()
+	defer m.rotateMu.Unlock()
+
+	if time.Since(m.lastForce) < minForceRotateGap {
+		m.logger.Debug("ForceRotate skipped; recent rotation already occurred")
+		return nil
+	}
+
+	cli, err := m.newVaultClient()
+	if err != nil {
+		return fmt.Errorf("force rotate: vault client: %w", err)
+	}
+	if err := m.issueAndPersist(ctx, cli); err != nil {
+		return fmt.Errorf("force rotate: issue: %w", err)
+	}
+
+	m.lastForce = time.Now()
+	m.logger.Info("ForceRotate completed; new certificate installed")
 	return nil
 }
 
