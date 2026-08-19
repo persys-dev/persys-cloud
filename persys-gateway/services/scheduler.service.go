@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/persys-dev/persys-cloud/persys-gateway/config"
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	"os"
 )
 
@@ -15,6 +16,7 @@ type ClusterControlService struct {
 	clientTLS     *tls.Config
 	serverTLS     *tls.Config
 	schedulerPool *SchedulerPoolManager
+	certMgr       *certmanager.Manager
 }
 
 func NewClusterControlService(cfg *config.Config) *ClusterControlService {
@@ -38,24 +40,49 @@ func (s *ClusterControlService) Start(ctx context.Context) {
 }
 
 func (s *ClusterControlService) loadTLSConfigs() error {
+	clientTLS, err := LiveClientTLSConfig(s.config.TLS.CertPath, s.config.TLS.KeyPath, s.config.TLS.CAPath)
+	if err != nil {
+		return fmt.Errorf("failed to load client TLS config: %w", err)
+	}
+	s.clientTLS = clientTLS
+
+	// Server-side config still needs a concrete certificate for GetCertificate-style
+	// use; load once and also expose ClientCAs from the same CA path.
 	cert, err := tls.LoadX509KeyPair(s.config.TLS.CertPath, s.config.TLS.KeyPath)
 	if err != nil {
-		return fmt.Errorf("failed to load client certificate: %w", err)
+		return fmt.Errorf("failed to load server certificate: %w", err)
 	}
-
 	caCert, err := os.ReadFile(s.config.TLS.CAPath)
 	if err != nil {
 		return fmt.Errorf("failed to read CA certificate: %w", err)
 	}
-
 	caCertPool := x509.NewCertPool()
 	if !caCertPool.AppendCertsFromPEM(caCert) {
 		return fmt.Errorf("failed to append CA certificate")
 	}
-
-	s.clientTLS = &tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caCertPool}
-	s.serverTLS = &tls.Config{Certificates: []tls.Certificate{cert}, ClientCAs: caCertPool, ClientAuth: tls.RequireAndVerifyClientCert}
+	s.serverTLS = &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		Certificates: []tls.Certificate{cert},
+		ClientCAs:    caCertPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		GetCertificate: func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+			c, err := tls.LoadX509KeyPair(s.config.TLS.CertPath, s.config.TLS.KeyPath)
+			if err != nil {
+				return nil, err
+			}
+			return &c, nil
+		},
+	}
 	return nil
+}
+
+// SetCertManager wires certmanager so outbound scheduler dials can ForceRotate
+// and retry on cert-related TLS failures. Propagates to the scheduler pool.
+func (s *ClusterControlService) SetCertManager(m *certmanager.Manager) {
+	s.certMgr = m
+	if s.schedulerPool != nil {
+		s.schedulerPool.SetCertManager(m)
+	}
 }
 
 func (s *ClusterControlService) DiscoverAndPrintSchedulers() {
