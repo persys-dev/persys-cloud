@@ -87,6 +87,18 @@ func ClusterControlBinding(clusterControl ClusterControlBindingInvoker, r *Route
 			// DeleteNodeLabelRequest.NodeId (Key is a flat top-level field)
 			{Method: "DeleteNodeLabel", Verb: "DELETE", Path: "/nodes/:id/labels", PathParams: map[string]string{"id": "node_id"}},
 			{Method: "GetClusterSummary", Verb: "GET", Path: "/cluster/metrics"},
+			// Standalone disks (AgentControl mTLS gRPC)
+			{Method: "ListDisks", Verb: "GET", Path: "/disks"},
+			{Method: "CreateDisk", Verb: "POST", Path: "/disks"},
+			{Method: "GetDisk", Verb: "GET", Path: "/disks/:id", PathParams: map[string]string{"id": "disk_id"}},
+			{Method: "DeleteDisk", Verb: "DELETE", Path: "/disks/:id", PathParams: map[string]string{"id": "disk_id"}},
+			// Object storage (Ceph RGW / S3)
+			{Method: "ListBuckets", Verb: "GET", Path: "/buckets"},
+			{Method: "CreateBucket", Verb: "POST", Path: "/buckets"},
+			{Method: "GetBucket", Verb: "GET", Path: "/buckets/:id", PathParams: map[string]string{"id": "bucket_id"}},
+			{Method: "DeleteBucket", Verb: "DELETE", Path: "/buckets/:id", PathParams: map[string]string{"id": "bucket_id"}},
+			{Method: "GetBucketAccess", Verb: "GET", Path: "/buckets/:id/access", PathParams: map[string]string{"id": "bucket_id"}},
+			{Method: "ListBucketObjects", Verb: "GET", Path: "/buckets/:id/objects", PathParams: map[string]string{"id": "bucket_id"}},
 			// RegisterNode, Heartbeat: intentionally NOT aliased — those
 			// are compute-agent-to-scheduler internal calls, not
 			// SDK/persysctl surface. Still technically reachable via

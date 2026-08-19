@@ -15,13 +15,12 @@ import (
 	"time"
 
 	"github.com/persys-dev/persys-cloud/persys-gateway/config"
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	forgeryv1 "github.com/persys-dev/persys-cloud/persys-gateway/internal/forgeryv1"
 	"github.com/persys-dev/persys-cloud/persys-gateway/internal/store"
 	"github.com/persys-dev/persys-cloud/persys-gateway/models"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 type WebhookService interface {
@@ -39,6 +38,8 @@ type webhookService struct {
 	cacheMu        sync.Mutex
 	deliverySeenAt map[string]time.Time
 	jobs           chan forwardJob
+
+	certMgr        *certmanager.Manager
 }
 
 type forwardJob struct {
@@ -91,6 +92,11 @@ func NewWebhookService(cfg *config.Config, tlsClient *tls.Config, st *store.Stor
 		jobs:           make(chan forwardJob, 1024),
 	}, nil
 }
+
+func (w *webhookService) SetCertManager(m *certmanager.Manager) {
+	w.certMgr = m
+}
+
 
 func (w *webhookService) Start(ctx context.Context) {
 	for i := 0; i < 2; i++ {
@@ -285,10 +291,7 @@ func (w *webhookService) forwardGRPC(ctx context.Context, eventName, repo, clust
 
 	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	conn, err := grpc.DialContext(dialCtx, w.cfg.Forgery.GRPCAddr,
-		grpc.WithTransportCredentials(credentials.NewTLS(w.tlsConfig)),
-		grpc.WithBlock(),
-	)
+	conn, err := dialGRPCTLS(dialCtx, w.cfg.Forgery.GRPCAddr, w.tlsConfig, w.certMgr)
 	if err != nil {
 		return err
 	}

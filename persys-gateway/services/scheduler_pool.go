@@ -14,9 +14,8 @@ import (
 	"time"
 
 	"github.com/persys-dev/persys-cloud/persys-gateway/config"
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 var (
@@ -52,6 +51,7 @@ type Cluster struct {
 type SchedulerPoolManager struct {
 	cfg               *config.Config
 	tlsClient         *tls.Config
+	certMgr           *certmanager.Manager
 	healthPath        string
 	healthInterval    time.Duration
 	discoveryInterval time.Duration
@@ -98,6 +98,12 @@ func NewSchedulerPoolManager(cfg *config.Config, tlsClient *tls.Config) (*Schedu
 	}
 
 	return m, nil
+}
+
+// SetCertManager enables ForceRotate + retry on cert-related TLS failures
+// during health probes and (via ClusterControlService) control-plane dials.
+func (m *SchedulerPoolManager) SetCertManager(mgr *certmanager.Manager) {
+	m.certMgr = mgr
 }
 
 func (m *SchedulerPoolManager) Start(ctx context.Context) {
@@ -381,12 +387,7 @@ func (m *SchedulerPoolManager) checkInstanceHealth(ctx context.Context, address 
 	healthCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
 
-	conn, err := grpc.DialContext(
-		healthCtx,
-		address,
-		grpc.WithTransportCredentials(credentials.NewTLS(m.tlsClient)),
-		grpc.WithBlock(),
-	)
+	conn, err := dialGRPCTLS(healthCtx, address, m.tlsClient, m.certMgr)
 	if err != nil {
 		m.logger.WithFields(logrus.Fields{
 			"scheduler": address,

@@ -7,9 +7,8 @@ import (
 	"time"
 
 	"github.com/persys-dev/persys-cloud/persys-gateway/config"
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	automationv1 "github.com/persys-dev/persys-cloud/pkg/automation/automationv1"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 // AutomationService proxies gRPC calls from the gateway to persys-automation.
@@ -17,6 +16,8 @@ type AutomationService struct {
 	config    *config.Config
 	clientTLS *tls.Config
 	timeout   time.Duration
+
+	certMgr   *certmanager.Manager
 }
 
 // NewAutomationService builds an AutomationService, reusing the gateway's own
@@ -28,6 +29,11 @@ func NewAutomationService(cfg *config.Config, clientTLS *tls.Config) (*Automatio
 	}
 	return &AutomationService{config: cfg, clientTLS: clientTLS, timeout: timeout}, nil
 }
+
+func (s *AutomationService) SetCertManager(m *certmanager.Manager) {
+	s.certMgr = m
+}
+
 
 func (s *AutomationService) CreatePolicy(ctx context.Context, req *automationv1.CreatePolicyRequest) (*automationv1.CreatePolicyResponse, error) {
 	resp, err := s.invoke(ctx, func(client automationv1.AutomationControlClient) (any, error) {
@@ -106,10 +112,7 @@ func (s *AutomationService) invoke(ctx context.Context, call func(automationv1.A
 		automationTLS.ServerName = serverName
 	}
 
-	conn, err := grpc.DialContext(callCtx, s.config.Automation.GRPCAddr,
-		grpc.WithTransportCredentials(credentials.NewTLS(automationTLS)),
-		grpc.WithBlock(),
-	)
+	conn, err := dialGRPCTLS(callCtx, s.config.Automation.GRPCAddr, automationTLS, s.certMgr)
 	if err != nil {
 		return nil, fmt.Errorf("dial automation %s: %w", s.config.Automation.GRPCAddr, err)
 	}

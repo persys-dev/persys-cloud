@@ -111,6 +111,12 @@ mTLS API:
 - `GET /clusters/:cluster_id/workloads`
 - `GET /clusters/:cluster_id/nodes`
 - `GET /clusters/:cluster_id/cluster/metrics`
+- `GET/POST /clusters/:cluster_id/disks` — standalone block disks (AgentControl)
+- `GET/DELETE /clusters/:cluster_id/disks/:id`
+- `GET/POST /clusters/:cluster_id/buckets` — object storage (RGW via scheduler)
+- `GET/DELETE /clusters/:cluster_id/buckets/:id`
+- `GET /clusters/:cluster_id/buckets/:id/access` — Vault-backed S3 credentials
+- `GET /clusters/:cluster_id/buckets/:id/objects` — list objects (prefix/pagination)
 - `POST /clusters/:cluster_id/forgery/projects/upsert`
 - `POST /clusters/:cluster_id/forgery/builds/trigger`
 - `POST /clusters/:cluster_id/forgery/webhooks/test`

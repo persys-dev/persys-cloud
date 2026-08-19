@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	controlv1 "github.com/persys-dev/persys-cloud/persys-gateway/internal/controlv1"
 	"go.opentelemetry.io/otel"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
@@ -167,10 +167,7 @@ func (s *ClusterControlService) invokeControlRPC(ctx context.Context, clusterID,
 	var lastErr error
 	for _, target := range candidates {
 		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		conn, dialErr := grpc.DialContext(callCtx, target.Address,
-			grpc.WithTransportCredentials(credentials.NewTLS(s.clientTLS)),
-			grpc.WithBlock(),
-		)
+		conn, dialErr := dialGRPCTLS(callCtx, target.Address, s.clientTLS, s.certMgr)
 		cancel()
 		if dialErr != nil {
 			s.schedulerPool.MarkUnhealthy(clusterID, target.Address)
@@ -183,6 +180,9 @@ func (s *ClusterControlService) invokeControlRPC(ctx context.Context, clusterID,
 		resp, rpcErr := call(clientFromContext(client, callWithTrace))
 		_ = conn.Close()
 		if rpcErr != nil {
+			if certmanager.IsCertRelatedTLSError(rpcErr) && s.certMgr != nil {
+				_ = s.certMgr.ForceRotate(ctx)
+			}
 			s.schedulerPool.MarkUnhealthy(clusterID, target.Address)
 			lastErr = rpcErr
 			continue
@@ -216,10 +216,7 @@ func (s *ClusterControlService) InvokeDynamic(ctx context.Context, clusterID, se
 	var lastErr error
 	for _, target := range candidates {
 		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		conn, dialErr := grpc.DialContext(callCtx, target.Address,
-			grpc.WithTransportCredentials(credentials.NewTLS(s.clientTLS)),
-			grpc.WithBlock(),
-		)
+		conn, dialErr := dialGRPCTLS(callCtx, target.Address, s.clientTLS, s.certMgr)
 		cancel()
 		if dialErr != nil {
 			s.schedulerPool.MarkUnhealthy(clusterID, target.Address)
@@ -231,6 +228,9 @@ func (s *ClusterControlService) InvokeDynamic(ctx context.Context, clusterID, se
 		rpcErr := conn.Invoke(callWithTrace, fullMethod, in, out)
 		_ = conn.Close()
 		if rpcErr != nil {
+			if certmanager.IsCertRelatedTLSError(rpcErr) && s.certMgr != nil {
+				_ = s.certMgr.ForceRotate(ctx)
+			}
 			s.schedulerPool.MarkUnhealthy(clusterID, target.Address)
 			lastErr = rpcErr
 			continue
@@ -258,10 +258,7 @@ func (s *ClusterControlService) DialForReflection(ctx context.Context, clusterID
 	if err != nil || len(candidates) == 0 {
 		return nil, fmt.Errorf("no scheduler candidates for cluster %q: %w", clusterID, err)
 	}
-	return grpc.DialContext(ctx, candidates[0].Address,
-		grpc.WithTransportCredentials(credentials.NewTLS(s.clientTLS)),
-		grpc.WithBlock(),
-	)
+	return dialGRPCTLS(ctx, candidates[0].Address, s.clientTLS, s.certMgr)
 }
 
 // Forgery methods (TriggerBuild, UpsertProject, ForwardWebhookTest,

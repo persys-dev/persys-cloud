@@ -8,15 +8,17 @@ import (
 	"time"
 
 	"github.com/persys-dev/persys-cloud/persys-gateway/config"
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	forgeryv1 "github.com/persys-dev/persys-cloud/persys-gateway/internal/forgeryv1"
 	"github.com/persys-dev/persys-cloud/persys-gateway/models"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 type GithubServiceImpl struct {
 	cfg       *config.Config
 	tlsClient *tls.Config
+
+	certMgr   *certmanager.Manager
 }
 
 // NewGithubService previously took an unused *mongo.Collection parameter
@@ -26,6 +28,11 @@ type GithubServiceImpl struct {
 func NewGithubService(cfg *config.Config, tlsClient *tls.Config) GithubService {
 	return &GithubServiceImpl{cfg: cfg, tlsClient: tlsClient}
 }
+
+func (g *GithubServiceImpl) SetCertManager(m *certmanager.Manager) {
+	g.certMgr = m
+}
+
 
 func (g *GithubServiceImpl) SetAccessToken(user *models.DBResponse) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -105,10 +112,7 @@ func (g *GithubServiceImpl) SetWebhook(user *models.DBResponse, repository strin
 }
 
 func (g *GithubServiceImpl) forgeryClient(ctx context.Context) (forgeryv1.ForgeryControlClient, *grpc.ClientConn, error) {
-	conn, err := grpc.DialContext(ctx, g.cfg.Forgery.GRPCAddr,
-		grpc.WithTransportCredentials(credentials.NewTLS(g.tlsClient)),
-		grpc.WithBlock(),
-	)
+	conn, err := dialGRPCTLS(ctx, g.cfg.Forgery.GRPCAddr, g.tlsClient, g.certMgr)
 	if err != nil {
 		return nil, nil, err
 	}

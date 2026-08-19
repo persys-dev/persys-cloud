@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/persys-dev/persys-cloud/persys-gateway/config"
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	forgeryv1 "github.com/persys-dev/persys-cloud/persys-gateway/internal/forgeryv1"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -22,10 +22,16 @@ import (
 type ForgeryService struct {
 	cfg       *config.Config
 	clientTLS *tls.Config
+
+	certMgr  *certmanager.Manager
 }
 
 func NewForgeryService(cfg *config.Config, clientTLS *tls.Config) *ForgeryService {
 	return &ForgeryService{cfg: cfg, clientTLS: clientTLS}
+}
+
+func (s *ForgeryService) SetCertManager(m *certmanager.Manager) {
+	s.certMgr = m
 }
 
 func (s *ForgeryService) dial(ctx context.Context, timeout time.Duration) (*grpc.ClientConn, error) {
@@ -41,10 +47,7 @@ func (s *ForgeryService) dial(ctx context.Context, timeout time.Duration) (*grpc
 
 	callCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	conn, err := grpc.DialContext(callCtx, s.cfg.Forgery.GRPCAddr,
-		grpc.WithTransportCredentials(credentials.NewTLS(forgeryTLS)),
-		grpc.WithBlock(),
-	)
+	conn, err := dialGRPCTLS(callCtx, s.cfg.Forgery.GRPCAddr, forgeryTLS, s.certMgr)
 	if err != nil {
 		return nil, fmt.Errorf("dial forgery %s: %w", s.cfg.Forgery.GRPCAddr, err)
 	}

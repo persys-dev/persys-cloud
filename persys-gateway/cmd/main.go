@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"log"
 	"net/http"
 	"net/http/pprof"
@@ -171,12 +170,20 @@ func main() {
 
 	app.authService = services.NewAuthService(app.db, ctx, jwtSecret)
 	app.githubService = services.NewGithubService(cnf, webhookTLS)
+	if gs, ok := app.githubService.(interface{ SetCertManager(*certmanager.Manager) }); ok {
+		gs.SetCertManager(vaultCertManager)
+	}
 	app.clusterControl = services.NewClusterControlService(cnf)
+	app.clusterControl.SetCertManager(vaultCertManager)
 	app.clusterControl.Start(ctx)
 	app.forgeryService = services.NewForgeryService(cnf, webhookTLS)
+	app.forgeryService.SetCertManager(vaultCertManager)
 	app.webhookService, err = services.NewWebhookService(cnf, webhookTLS, app.db)
 	if err != nil {
 		log.Fatalf("failed to initialize webhook service: %v", err)
+	}
+	if ws, ok := app.webhookService.(interface{ SetCertManager(*certmanager.Manager) }); ok {
+		ws.SetCertManager(vaultCertManager)
 	}
 	app.webhookService.Start(ctx)
 
@@ -184,6 +191,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to initialize automation service: %v", err)
 	}
+	app.automationService.SetCertManager(vaultCertManager)
 
 	app.authController = controllers.NewAuthController(
 		app.authService, ctx, app.githubService, app.db,
@@ -207,12 +215,12 @@ func main() {
 	mtlsRouter := gin.New()
 	nonMTLSRouter := gin.New()
 
-	mtlsRouter.Use(gin.Logger())
+	mtlsRouter.Use(middleware.AccessLogger())
 	mtlsRouter.Use(cors.New(corsConfig))
 	mtlsRouter.Use(gootelgin.Middleware("persys-gateway-mtls"))
 	mtlsRouter.Use(middleware.ServiceIdentityHeader("persys-gateway"))
 
-	nonMTLSRouter.Use(gin.Logger())
+	nonMTLSRouter.Use(middleware.AccessLogger())
 	nonMTLSRouter.Use(cors.New(corsConfig))
 	nonMTLSRouter.Use(gootelgin.Middleware("persys-gateway-public"))
 	nonMTLSRouter.Use(middleware.ServiceIdentityHeader("persys-gateway"))
@@ -318,7 +326,6 @@ func main() {
 	automationGroup.Use(gwRouter.Resolve(catalog.AuthUser))
 	automationRouteController := routes.NewAutomationRouteController(app.automationController)
 	automationRouteController.AutomationRoute(automationGroup)
-
 	// Webhook stays unauthenticated at the gateway level by design — its
 	// own HMAC signature verification (X-Hub-Signature-256) IS its auth
 	// mechanism, checked inside webhook.service.go. Mounted on the
@@ -359,14 +366,27 @@ func main() {
 	mtlsServer := &http.Server{Addr: cnf.App.HTTPAddr, Handler: mtlsRouter, TLSConfig: tlsConfig}
 	nonMTLSServer := &http.Server{Addr: cnf.App.HTTPAddrPublic, Handler: nonMTLSRouter}
 
+	// goroutine, heap, allocs, block, mutex, threadcreate are served via pprof.Index
+	// through /debug/pprof/{profile-name} automatically once Index is registered
 	debugMux := http.NewServeMux()
 	debugMux.HandleFunc("/debug/pprof/", pprof.Index)
 	debugMux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
 	debugMux.HandleFunc("/debug/pprof/profile", pprof.Profile)
 	debugMux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+
 	debugMux.HandleFunc("/debug/pprof/trace", pprof.Trace)
-	// goroutine, heap, allocs, block, mutex, threadcreate are served via pprof.Index
-	// through /debug/pprof/{profile-name} automatically once Index is registered
+	// debugMux.HandleFunc("/debug/force-rotate", func(w http.ResponseWriter, r *http.Request) {
+	// 	if r.Method != http.MethodPost {
+	// 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+	// 		return
+	// 	}
+	// 	if err := vaultCertManager.ForceRotate(r.Context()); err != nil {
+	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// 	w.Header().Set("Content-Type", "application/json")
+	// 	_, _ = w.Write([]byte(`{"status":"rotated"}`))
+	// })
 
 	debugServer := &http.Server{
 		Addr:    "0.0.0.0:6060",
@@ -414,17 +434,6 @@ func main() {
 }
 
 func buildMTLSClientConfig(cnf *config.Config) (*tls.Config, error) {
-	cert, err := tls.LoadX509KeyPair(cnf.TLS.CertPath, cnf.TLS.KeyPath)
-	if err != nil {
-		return nil, err
-	}
-	caCert, err := os.ReadFile(cnf.TLS.CAPath)
-	if err != nil {
-		return nil, err
-	}
-	caPool := x509.NewCertPool()
-	if !caPool.AppendCertsFromPEM(caCert) {
-		return nil, fmt.Errorf("invalid CA bundle")
-	}
-	return &tls.Config{Certificates: []tls.Certificate{cert}, RootCAs: caPool}, nil
+	// Live config: GetClientCertificate reloads from disk after certmanager rotates.
+	return services.LiveClientTLSConfig(cnf.TLS.CertPath, cnf.TLS.KeyPath, cnf.TLS.CAPath)
 }
