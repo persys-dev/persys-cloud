@@ -19,12 +19,30 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentControl_RegisterNode_FullMethodName   = "/persys.control.v1.AgentControl/RegisterNode"
-	AgentControl_Heartbeat_FullMethodName      = "/persys.control.v1.AgentControl/Heartbeat"
-	AgentControl_ApplyWorkload_FullMethodName  = "/persys.control.v1.AgentControl/ApplyWorkload"
-	AgentControl_DeleteWorkload_FullMethodName = "/persys.control.v1.AgentControl/DeleteWorkload"
-	AgentControl_RetryWorkload_FullMethodName  = "/persys.control.v1.AgentControl/RetryWorkload"
-	AgentControl_ControlStream_FullMethodName  = "/persys.control.v1.AgentControl/ControlStream"
+	AgentControl_RegisterNode_FullMethodName               = "/persys.control.v1.AgentControl/RegisterNode"
+	AgentControl_Heartbeat_FullMethodName                  = "/persys.control.v1.AgentControl/Heartbeat"
+	AgentControl_ApplyWorkload_FullMethodName              = "/persys.control.v1.AgentControl/ApplyWorkload"
+	AgentControl_DeleteWorkload_FullMethodName             = "/persys.control.v1.AgentControl/DeleteWorkload"
+	AgentControl_RetryWorkload_FullMethodName              = "/persys.control.v1.AgentControl/RetryWorkload"
+	AgentControl_DrainNode_FullMethodName                  = "/persys.control.v1.AgentControl/DrainNode"
+	AgentControl_UndrainNode_FullMethodName                = "/persys.control.v1.AgentControl/UndrainNode"
+	AgentControl_TaintNode_FullMethodName                  = "/persys.control.v1.AgentControl/TaintNode"
+	AgentControl_UntaintNode_FullMethodName                = "/persys.control.v1.AgentControl/UntaintNode"
+	AgentControl_SetNodeLabel_FullMethodName               = "/persys.control.v1.AgentControl/SetNodeLabel"
+	AgentControl_DeleteNodeLabel_FullMethodName            = "/persys.control.v1.AgentControl/DeleteNodeLabel"
+	AgentControl_SubmitAutomationSuggestion_FullMethodName = "/persys.control.v1.AgentControl/SubmitAutomationSuggestion"
+	AgentControl_ListNodes_FullMethodName                  = "/persys.control.v1.AgentControl/ListNodes"
+	AgentControl_GetNode_FullMethodName                    = "/persys.control.v1.AgentControl/GetNode"
+	AgentControl_ListWorkloads_FullMethodName              = "/persys.control.v1.AgentControl/ListWorkloads"
+	AgentControl_GetWorkload_FullMethodName                = "/persys.control.v1.AgentControl/GetWorkload"
+	AgentControl_GetClusterSummary_FullMethodName          = "/persys.control.v1.AgentControl/GetClusterSummary"
+	AgentControl_ListEvents_FullMethodName                 = "/persys.control.v1.AgentControl/ListEvents"
+	AgentControl_WatchEvents_FullMethodName                = "/persys.control.v1.AgentControl/WatchEvents"
+	AgentControl_ControlStream_FullMethodName              = "/persys.control.v1.AgentControl/ControlStream"
+	AgentControl_CreateDisk_FullMethodName                 = "/persys.control.v1.AgentControl/CreateDisk"
+	AgentControl_ListDisks_FullMethodName                  = "/persys.control.v1.AgentControl/ListDisks"
+	AgentControl_GetDisk_FullMethodName                    = "/persys.control.v1.AgentControl/GetDisk"
+	AgentControl_DeleteDisk_FullMethodName                 = "/persys.control.v1.AgentControl/DeleteDisk"
 )
 
 // AgentControlClient is the client API for AgentControl service.
@@ -40,8 +58,39 @@ type AgentControlClient interface {
 	DeleteWorkload(ctx context.Context, in *DeleteWorkloadRequest, opts ...grpc.CallOption) (*DeleteWorkloadResponse, error)
 	// Retry trigger
 	RetryWorkload(ctx context.Context, in *RetryWorkloadRequest, opts ...grpc.CallOption) (*RetryWorkloadResponse, error)
+	// Node management
+	DrainNode(ctx context.Context, in *DrainNodeRequest, opts ...grpc.CallOption) (*DrainNodeResponse, error)
+	UndrainNode(ctx context.Context, in *UndrainNodeRequest, opts ...grpc.CallOption) (*UndrainNodeResponse, error)
+	TaintNode(ctx context.Context, in *TaintNodeRequest, opts ...grpc.CallOption) (*TaintNodeResponse, error)
+	UntaintNode(ctx context.Context, in *UntaintNodeRequest, opts ...grpc.CallOption) (*UntaintNodeResponse, error)
+	SetNodeLabel(ctx context.Context, in *SetNodeLabelRequest, opts ...grpc.CallOption) (*SetNodeLabelResponse, error)
+	DeleteNodeLabel(ctx context.Context, in *DeleteNodeLabelRequest, opts ...grpc.CallOption) (*DeleteNodeLabelResponse, error)
+	SubmitAutomationSuggestion(ctx context.Context, in *SubmitAutomationSuggestionRequest, opts ...grpc.CallOption) (*SubmitAutomationSuggestionResponse, error)
+	// Cluster and node management visibility
+	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
+	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error)
+	ListWorkloads(ctx context.Context, in *ListWorkloadsRequest, opts ...grpc.CallOption) (*ListWorkloadsResponse, error)
+	GetWorkload(ctx context.Context, in *GetWorkloadRequest, opts ...grpc.CallOption) (*GetWorkloadResponse, error)
+	GetClusterSummary(ctx context.Context, in *GetClusterSummaryRequest, opts ...grpc.CallOption) (*GetClusterSummaryResponse, error)
+	// Cluster-wide events: node joined, node lost, node left, workload
+	// scheduled, drift detected, retries, reschedules, etc (see
+	// internal/scheduler/events.go for producers). ListEvents is a
+	// plain unary call (auto-bridged to REST by persys-gateway's
+	// reflection-based grpcbridge, no gateway changes needed). WatchEvents
+	// is a server-streaming call — grpcbridge explicitly does not bridge
+	// streaming RPCs, so consumers that need HTTP (e.g. a browser
+	// dashboard) go through a hand-written SSE endpoint on the gateway
+	// instead of the generic bridge; a gRPC client (e.g. persysctl) can
+	// call it directly.
+	ListEvents(ctx context.Context, in *ListEventsRequest, opts ...grpc.CallOption) (*ListEventsResponse, error)
+	WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SchedulerEventView], error)
 	// Optional future streaming channel
 	ControlStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ControlMessage, ControlMessage], error)
+	// Standalone disk inventory (managed volumes)
+	CreateDisk(ctx context.Context, in *CreateDiskRequest, opts ...grpc.CallOption) (*CreateDiskResponse, error)
+	ListDisks(ctx context.Context, in *ListDisksRequest, opts ...grpc.CallOption) (*ListDisksResponse, error)
+	GetDisk(ctx context.Context, in *GetDiskRequest, opts ...grpc.CallOption) (*GetDiskResponse, error)
+	DeleteDisk(ctx context.Context, in *DeleteDiskRequest, opts ...grpc.CallOption) (*DeleteDiskResponse, error)
 }
 
 type agentControlClient struct {
@@ -102,9 +151,158 @@ func (c *agentControlClient) RetryWorkload(ctx context.Context, in *RetryWorkloa
 	return out, nil
 }
 
+func (c *agentControlClient) DrainNode(ctx context.Context, in *DrainNodeRequest, opts ...grpc.CallOption) (*DrainNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DrainNodeResponse)
+	err := c.cc.Invoke(ctx, AgentControl_DrainNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) UndrainNode(ctx context.Context, in *UndrainNodeRequest, opts ...grpc.CallOption) (*UndrainNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UndrainNodeResponse)
+	err := c.cc.Invoke(ctx, AgentControl_UndrainNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) TaintNode(ctx context.Context, in *TaintNodeRequest, opts ...grpc.CallOption) (*TaintNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TaintNodeResponse)
+	err := c.cc.Invoke(ctx, AgentControl_TaintNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) UntaintNode(ctx context.Context, in *UntaintNodeRequest, opts ...grpc.CallOption) (*UntaintNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UntaintNodeResponse)
+	err := c.cc.Invoke(ctx, AgentControl_UntaintNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) SetNodeLabel(ctx context.Context, in *SetNodeLabelRequest, opts ...grpc.CallOption) (*SetNodeLabelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetNodeLabelResponse)
+	err := c.cc.Invoke(ctx, AgentControl_SetNodeLabel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) DeleteNodeLabel(ctx context.Context, in *DeleteNodeLabelRequest, opts ...grpc.CallOption) (*DeleteNodeLabelResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteNodeLabelResponse)
+	err := c.cc.Invoke(ctx, AgentControl_DeleteNodeLabel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) SubmitAutomationSuggestion(ctx context.Context, in *SubmitAutomationSuggestionRequest, opts ...grpc.CallOption) (*SubmitAutomationSuggestionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SubmitAutomationSuggestionResponse)
+	err := c.cc.Invoke(ctx, AgentControl_SubmitAutomationSuggestion_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNodesResponse)
+	err := c.cc.Invoke(ctx, AgentControl_ListNodes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetNodeResponse)
+	err := c.cc.Invoke(ctx, AgentControl_GetNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) ListWorkloads(ctx context.Context, in *ListWorkloadsRequest, opts ...grpc.CallOption) (*ListWorkloadsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListWorkloadsResponse)
+	err := c.cc.Invoke(ctx, AgentControl_ListWorkloads_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) GetWorkload(ctx context.Context, in *GetWorkloadRequest, opts ...grpc.CallOption) (*GetWorkloadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetWorkloadResponse)
+	err := c.cc.Invoke(ctx, AgentControl_GetWorkload_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) GetClusterSummary(ctx context.Context, in *GetClusterSummaryRequest, opts ...grpc.CallOption) (*GetClusterSummaryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetClusterSummaryResponse)
+	err := c.cc.Invoke(ctx, AgentControl_GetClusterSummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) ListEvents(ctx context.Context, in *ListEventsRequest, opts ...grpc.CallOption) (*ListEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListEventsResponse)
+	err := c.cc.Invoke(ctx, AgentControl_ListEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) WatchEvents(ctx context.Context, in *WatchEventsRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SchedulerEventView], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &AgentControl_ServiceDesc.Streams[0], AgentControl_WatchEvents_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[WatchEventsRequest, SchedulerEventView]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentControl_WatchEventsClient = grpc.ServerStreamingClient[SchedulerEventView]
+
 func (c *agentControlClient) ControlStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[ControlMessage, ControlMessage], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &AgentControl_ServiceDesc.Streams[0], AgentControl_ControlStream_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &AgentControl_ServiceDesc.Streams[1], AgentControl_ControlStream_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -114,6 +312,46 @@ func (c *agentControlClient) ControlStream(ctx context.Context, opts ...grpc.Cal
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentControl_ControlStreamClient = grpc.BidiStreamingClient[ControlMessage, ControlMessage]
+
+func (c *agentControlClient) CreateDisk(ctx context.Context, in *CreateDiskRequest, opts ...grpc.CallOption) (*CreateDiskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateDiskResponse)
+	err := c.cc.Invoke(ctx, AgentControl_CreateDisk_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) ListDisks(ctx context.Context, in *ListDisksRequest, opts ...grpc.CallOption) (*ListDisksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDisksResponse)
+	err := c.cc.Invoke(ctx, AgentControl_ListDisks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) GetDisk(ctx context.Context, in *GetDiskRequest, opts ...grpc.CallOption) (*GetDiskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetDiskResponse)
+	err := c.cc.Invoke(ctx, AgentControl_GetDisk_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) DeleteDisk(ctx context.Context, in *DeleteDiskRequest, opts ...grpc.CallOption) (*DeleteDiskResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteDiskResponse)
+	err := c.cc.Invoke(ctx, AgentControl_DeleteDisk_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 // AgentControlServer is the server API for AgentControl service.
 // All implementations must embed UnimplementedAgentControlServer
@@ -128,8 +366,39 @@ type AgentControlServer interface {
 	DeleteWorkload(context.Context, *DeleteWorkloadRequest) (*DeleteWorkloadResponse, error)
 	// Retry trigger
 	RetryWorkload(context.Context, *RetryWorkloadRequest) (*RetryWorkloadResponse, error)
+	// Node management
+	DrainNode(context.Context, *DrainNodeRequest) (*DrainNodeResponse, error)
+	UndrainNode(context.Context, *UndrainNodeRequest) (*UndrainNodeResponse, error)
+	TaintNode(context.Context, *TaintNodeRequest) (*TaintNodeResponse, error)
+	UntaintNode(context.Context, *UntaintNodeRequest) (*UntaintNodeResponse, error)
+	SetNodeLabel(context.Context, *SetNodeLabelRequest) (*SetNodeLabelResponse, error)
+	DeleteNodeLabel(context.Context, *DeleteNodeLabelRequest) (*DeleteNodeLabelResponse, error)
+	SubmitAutomationSuggestion(context.Context, *SubmitAutomationSuggestionRequest) (*SubmitAutomationSuggestionResponse, error)
+	// Cluster and node management visibility
+	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
+	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
+	ListWorkloads(context.Context, *ListWorkloadsRequest) (*ListWorkloadsResponse, error)
+	GetWorkload(context.Context, *GetWorkloadRequest) (*GetWorkloadResponse, error)
+	GetClusterSummary(context.Context, *GetClusterSummaryRequest) (*GetClusterSummaryResponse, error)
+	// Cluster-wide events: node joined, node lost, node left, workload
+	// scheduled, drift detected, retries, reschedules, etc (see
+	// internal/scheduler/events.go for producers). ListEvents is a
+	// plain unary call (auto-bridged to REST by persys-gateway's
+	// reflection-based grpcbridge, no gateway changes needed). WatchEvents
+	// is a server-streaming call — grpcbridge explicitly does not bridge
+	// streaming RPCs, so consumers that need HTTP (e.g. a browser
+	// dashboard) go through a hand-written SSE endpoint on the gateway
+	// instead of the generic bridge; a gRPC client (e.g. persysctl) can
+	// call it directly.
+	ListEvents(context.Context, *ListEventsRequest) (*ListEventsResponse, error)
+	WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[SchedulerEventView]) error
 	// Optional future streaming channel
 	ControlStream(grpc.BidiStreamingServer[ControlMessage, ControlMessage]) error
+	// Standalone disk inventory (managed volumes)
+	CreateDisk(context.Context, *CreateDiskRequest) (*CreateDiskResponse, error)
+	ListDisks(context.Context, *ListDisksRequest) (*ListDisksResponse, error)
+	GetDisk(context.Context, *GetDiskRequest) (*GetDiskResponse, error)
+	DeleteDisk(context.Context, *DeleteDiskRequest) (*DeleteDiskResponse, error)
 	mustEmbedUnimplementedAgentControlServer()
 }
 
@@ -155,8 +424,62 @@ func (UnimplementedAgentControlServer) DeleteWorkload(context.Context, *DeleteWo
 func (UnimplementedAgentControlServer) RetryWorkload(context.Context, *RetryWorkloadRequest) (*RetryWorkloadResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RetryWorkload not implemented")
 }
+func (UnimplementedAgentControlServer) DrainNode(context.Context, *DrainNodeRequest) (*DrainNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DrainNode not implemented")
+}
+func (UnimplementedAgentControlServer) UndrainNode(context.Context, *UndrainNodeRequest) (*UndrainNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UndrainNode not implemented")
+}
+func (UnimplementedAgentControlServer) TaintNode(context.Context, *TaintNodeRequest) (*TaintNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TaintNode not implemented")
+}
+func (UnimplementedAgentControlServer) UntaintNode(context.Context, *UntaintNodeRequest) (*UntaintNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UntaintNode not implemented")
+}
+func (UnimplementedAgentControlServer) SetNodeLabel(context.Context, *SetNodeLabelRequest) (*SetNodeLabelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetNodeLabel not implemented")
+}
+func (UnimplementedAgentControlServer) DeleteNodeLabel(context.Context, *DeleteNodeLabelRequest) (*DeleteNodeLabelResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteNodeLabel not implemented")
+}
+func (UnimplementedAgentControlServer) SubmitAutomationSuggestion(context.Context, *SubmitAutomationSuggestionRequest) (*SubmitAutomationSuggestionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubmitAutomationSuggestion not implemented")
+}
+func (UnimplementedAgentControlServer) ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodes not implemented")
+}
+func (UnimplementedAgentControlServer) GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNode not implemented")
+}
+func (UnimplementedAgentControlServer) ListWorkloads(context.Context, *ListWorkloadsRequest) (*ListWorkloadsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListWorkloads not implemented")
+}
+func (UnimplementedAgentControlServer) GetWorkload(context.Context, *GetWorkloadRequest) (*GetWorkloadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetWorkload not implemented")
+}
+func (UnimplementedAgentControlServer) GetClusterSummary(context.Context, *GetClusterSummaryRequest) (*GetClusterSummaryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetClusterSummary not implemented")
+}
+func (UnimplementedAgentControlServer) ListEvents(context.Context, *ListEventsRequest) (*ListEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListEvents not implemented")
+}
+func (UnimplementedAgentControlServer) WatchEvents(*WatchEventsRequest, grpc.ServerStreamingServer[SchedulerEventView]) error {
+	return status.Error(codes.Unimplemented, "method WatchEvents not implemented")
+}
 func (UnimplementedAgentControlServer) ControlStream(grpc.BidiStreamingServer[ControlMessage, ControlMessage]) error {
 	return status.Error(codes.Unimplemented, "method ControlStream not implemented")
+}
+func (UnimplementedAgentControlServer) CreateDisk(context.Context, *CreateDiskRequest) (*CreateDiskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateDisk not implemented")
+}
+func (UnimplementedAgentControlServer) ListDisks(context.Context, *ListDisksRequest) (*ListDisksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDisks not implemented")
+}
+func (UnimplementedAgentControlServer) GetDisk(context.Context, *GetDiskRequest) (*GetDiskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDisk not implemented")
+}
+func (UnimplementedAgentControlServer) DeleteDisk(context.Context, *DeleteDiskRequest) (*DeleteDiskResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteDisk not implemented")
 }
 func (UnimplementedAgentControlServer) mustEmbedUnimplementedAgentControlServer() {}
 func (UnimplementedAgentControlServer) testEmbeddedByValue()                      {}
@@ -269,12 +592,329 @@ func _AgentControl_RetryWorkload_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentControl_DrainNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DrainNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).DrainNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_DrainNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).DrainNode(ctx, req.(*DrainNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_UndrainNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UndrainNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).UndrainNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_UndrainNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).UndrainNode(ctx, req.(*UndrainNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_TaintNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TaintNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).TaintNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_TaintNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).TaintNode(ctx, req.(*TaintNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_UntaintNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UntaintNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).UntaintNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_UntaintNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).UntaintNode(ctx, req.(*UntaintNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_SetNodeLabel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeLabelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).SetNodeLabel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_SetNodeLabel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).SetNodeLabel(ctx, req.(*SetNodeLabelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_DeleteNodeLabel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteNodeLabelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).DeleteNodeLabel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_DeleteNodeLabel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).DeleteNodeLabel(ctx, req.(*DeleteNodeLabelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_SubmitAutomationSuggestion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitAutomationSuggestionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).SubmitAutomationSuggestion(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_SubmitAutomationSuggestion_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).SubmitAutomationSuggestion(ctx, req.(*SubmitAutomationSuggestionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_ListNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNodesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).ListNodes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_ListNodes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).ListNodes(ctx, req.(*ListNodesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_GetNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).GetNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_GetNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).GetNode(ctx, req.(*GetNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_ListWorkloads_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListWorkloadsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).ListWorkloads(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_ListWorkloads_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).ListWorkloads(ctx, req.(*ListWorkloadsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_GetWorkload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetWorkloadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).GetWorkload(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_GetWorkload_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).GetWorkload(ctx, req.(*GetWorkloadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_GetClusterSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetClusterSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).GetClusterSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_GetClusterSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).GetClusterSummary(ctx, req.(*GetClusterSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_ListEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).ListEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_ListEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).ListEvents(ctx, req.(*ListEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_WatchEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(WatchEventsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentControlServer).WatchEvents(m, &grpc.GenericServerStream[WatchEventsRequest, SchedulerEventView]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type AgentControl_WatchEventsServer = grpc.ServerStreamingServer[SchedulerEventView]
+
 func _AgentControl_ControlStream_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(AgentControlServer).ControlStream(&grpc.GenericServerStream[ControlMessage, ControlMessage]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type AgentControl_ControlStreamServer = grpc.BidiStreamingServer[ControlMessage, ControlMessage]
+
+func _AgentControl_CreateDisk_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateDiskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).CreateDisk(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_CreateDisk_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).CreateDisk(ctx, req.(*CreateDiskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_ListDisks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDisksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).ListDisks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_ListDisks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).ListDisks(ctx, req.(*ListDisksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_GetDisk_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDiskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).GetDisk(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_GetDisk_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).GetDisk(ctx, req.(*GetDiskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_DeleteDisk_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteDiskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).DeleteDisk(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_DeleteDisk_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).DeleteDisk(ctx, req.(*DeleteDiskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
 
 // AgentControl_ServiceDesc is the grpc.ServiceDesc for AgentControl service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -303,8 +943,81 @@ var AgentControl_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "RetryWorkload",
 			Handler:    _AgentControl_RetryWorkload_Handler,
 		},
+		{
+			MethodName: "DrainNode",
+			Handler:    _AgentControl_DrainNode_Handler,
+		},
+		{
+			MethodName: "UndrainNode",
+			Handler:    _AgentControl_UndrainNode_Handler,
+		},
+		{
+			MethodName: "TaintNode",
+			Handler:    _AgentControl_TaintNode_Handler,
+		},
+		{
+			MethodName: "UntaintNode",
+			Handler:    _AgentControl_UntaintNode_Handler,
+		},
+		{
+			MethodName: "SetNodeLabel",
+			Handler:    _AgentControl_SetNodeLabel_Handler,
+		},
+		{
+			MethodName: "DeleteNodeLabel",
+			Handler:    _AgentControl_DeleteNodeLabel_Handler,
+		},
+		{
+			MethodName: "SubmitAutomationSuggestion",
+			Handler:    _AgentControl_SubmitAutomationSuggestion_Handler,
+		},
+		{
+			MethodName: "ListNodes",
+			Handler:    _AgentControl_ListNodes_Handler,
+		},
+		{
+			MethodName: "GetNode",
+			Handler:    _AgentControl_GetNode_Handler,
+		},
+		{
+			MethodName: "ListWorkloads",
+			Handler:    _AgentControl_ListWorkloads_Handler,
+		},
+		{
+			MethodName: "GetWorkload",
+			Handler:    _AgentControl_GetWorkload_Handler,
+		},
+		{
+			MethodName: "GetClusterSummary",
+			Handler:    _AgentControl_GetClusterSummary_Handler,
+		},
+		{
+			MethodName: "ListEvents",
+			Handler:    _AgentControl_ListEvents_Handler,
+		},
+		{
+			MethodName: "CreateDisk",
+			Handler:    _AgentControl_CreateDisk_Handler,
+		},
+		{
+			MethodName: "ListDisks",
+			Handler:    _AgentControl_ListDisks_Handler,
+		},
+		{
+			MethodName: "GetDisk",
+			Handler:    _AgentControl_GetDisk_Handler,
+		},
+		{
+			MethodName: "DeleteDisk",
+			Handler:    _AgentControl_DeleteDisk_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "WatchEvents",
+			Handler:       _AgentControl_WatchEvents_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "ControlStream",
 			Handler:       _AgentControl_ControlStream_Handler,

@@ -22,6 +22,61 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type AutomationActionType int32
+
+const (
+	AutomationActionType_AUTOMATION_ACTION_TYPE_UNSPECIFIED  AutomationActionType = 0
+	AutomationActionType_AUTOMATION_ACTION_SET_DESIRED_STATE AutomationActionType = 1
+	AutomationActionType_AUTOMATION_ACTION_RETRY_WORKLOAD    AutomationActionType = 2
+	AutomationActionType_AUTOMATION_ACTION_DELETE_WORKLOAD   AutomationActionType = 3
+	AutomationActionType_AUTOMATION_ACTION_SCALE_REPLICAS    AutomationActionType = 4
+)
+
+// Enum value maps for AutomationActionType.
+var (
+	AutomationActionType_name = map[int32]string{
+		0: "AUTOMATION_ACTION_TYPE_UNSPECIFIED",
+		1: "AUTOMATION_ACTION_SET_DESIRED_STATE",
+		2: "AUTOMATION_ACTION_RETRY_WORKLOAD",
+		3: "AUTOMATION_ACTION_DELETE_WORKLOAD",
+		4: "AUTOMATION_ACTION_SCALE_REPLICAS",
+	}
+	AutomationActionType_value = map[string]int32{
+		"AUTOMATION_ACTION_TYPE_UNSPECIFIED":  0,
+		"AUTOMATION_ACTION_SET_DESIRED_STATE": 1,
+		"AUTOMATION_ACTION_RETRY_WORKLOAD":    2,
+		"AUTOMATION_ACTION_DELETE_WORKLOAD":   3,
+		"AUTOMATION_ACTION_SCALE_REPLICAS":    4,
+	}
+)
+
+func (x AutomationActionType) Enum() *AutomationActionType {
+	p := new(AutomationActionType)
+	*p = x
+	return p
+}
+
+func (x AutomationActionType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AutomationActionType) Descriptor() protoreflect.EnumDescriptor {
+	return file_control_proto_enumTypes[0].Descriptor()
+}
+
+func (AutomationActionType) Type() protoreflect.EnumType {
+	return &file_control_proto_enumTypes[0]
+}
+
+func (x AutomationActionType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AutomationActionType.Descriptor instead.
+func (AutomationActionType) EnumDescriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{0}
+}
+
 type FailureReason int32
 
 const (
@@ -73,11 +128,11 @@ func (x FailureReason) String() string {
 }
 
 func (FailureReason) Descriptor() protoreflect.EnumDescriptor {
-	return file_control_proto_enumTypes[0].Descriptor()
+	return file_control_proto_enumTypes[1].Descriptor()
 }
 
 func (FailureReason) Type() protoreflect.EnumType {
-	return &file_control_proto_enumTypes[0]
+	return &file_control_proto_enumTypes[1]
 }
 
 func (x FailureReason) Number() protoreflect.EnumNumber {
@@ -86,7 +141,243 @@ func (x FailureReason) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use FailureReason.Descriptor instead.
 func (FailureReason) EnumDescriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{1}
+}
+
+type AutomationSuggestion struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	SuggestionId    string                 `protobuf:"bytes,1,opt,name=suggestion_id,json=suggestionId,proto3" json:"suggestion_id,omitempty"`
+	PolicyId        string                 `protobuf:"bytes,2,opt,name=policy_id,json=policyId,proto3" json:"policy_id,omitempty"`
+	PolicyName      string                 `protobuf:"bytes,3,opt,name=policy_name,json=policyName,proto3" json:"policy_name,omitempty"`
+	TargetWorkload  string                 `protobuf:"bytes,4,opt,name=target_workload,json=targetWorkload,proto3" json:"target_workload,omitempty"`
+	ActionType      AutomationActionType   `protobuf:"varint,5,opt,name=action_type,json=actionType,proto3,enum=persys.control.v1.AutomationActionType" json:"action_type,omitempty"`
+	DesiredState    string                 `protobuf:"bytes,6,opt,name=desired_state,json=desiredState,proto3" json:"desired_state,omitempty"`
+	DesiredReplicas int32                  `protobuf:"varint,7,opt,name=desired_replicas,json=desiredReplicas,proto3" json:"desired_replicas,omitempty"`
+	ReplicaDelta    int32                  `protobuf:"varint,8,opt,name=replica_delta,json=replicaDelta,proto3" json:"replica_delta,omitempty"`
+	Reason          string                 `protobuf:"bytes,9,opt,name=reason,proto3" json:"reason,omitempty"`
+	SuggestedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=suggested_at,json=suggestedAt,proto3" json:"suggested_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *AutomationSuggestion) Reset() {
+	*x = AutomationSuggestion{}
+	mi := &file_control_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AutomationSuggestion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AutomationSuggestion) ProtoMessage() {}
+
+func (x *AutomationSuggestion) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AutomationSuggestion.ProtoReflect.Descriptor instead.
+func (*AutomationSuggestion) Descriptor() ([]byte, []int) {
 	return file_control_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *AutomationSuggestion) GetSuggestionId() string {
+	if x != nil {
+		return x.SuggestionId
+	}
+	return ""
+}
+
+func (x *AutomationSuggestion) GetPolicyId() string {
+	if x != nil {
+		return x.PolicyId
+	}
+	return ""
+}
+
+func (x *AutomationSuggestion) GetPolicyName() string {
+	if x != nil {
+		return x.PolicyName
+	}
+	return ""
+}
+
+func (x *AutomationSuggestion) GetTargetWorkload() string {
+	if x != nil {
+		return x.TargetWorkload
+	}
+	return ""
+}
+
+func (x *AutomationSuggestion) GetActionType() AutomationActionType {
+	if x != nil {
+		return x.ActionType
+	}
+	return AutomationActionType_AUTOMATION_ACTION_TYPE_UNSPECIFIED
+}
+
+func (x *AutomationSuggestion) GetDesiredState() string {
+	if x != nil {
+		return x.DesiredState
+	}
+	return ""
+}
+
+func (x *AutomationSuggestion) GetDesiredReplicas() int32 {
+	if x != nil {
+		return x.DesiredReplicas
+	}
+	return 0
+}
+
+func (x *AutomationSuggestion) GetReplicaDelta() int32 {
+	if x != nil {
+		return x.ReplicaDelta
+	}
+	return 0
+}
+
+func (x *AutomationSuggestion) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *AutomationSuggestion) GetSuggestedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.SuggestedAt
+	}
+	return nil
+}
+
+type SubmitAutomationSuggestionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Suggestion    *AutomationSuggestion  `protobuf:"bytes,1,opt,name=suggestion,proto3" json:"suggestion,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubmitAutomationSuggestionRequest) Reset() {
+	*x = SubmitAutomationSuggestionRequest{}
+	mi := &file_control_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitAutomationSuggestionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitAutomationSuggestionRequest) ProtoMessage() {}
+
+func (x *SubmitAutomationSuggestionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitAutomationSuggestionRequest.ProtoReflect.Descriptor instead.
+func (*SubmitAutomationSuggestionRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *SubmitAutomationSuggestionRequest) GetSuggestion() *AutomationSuggestion {
+	if x != nil {
+		return x.Suggestion
+	}
+	return nil
+}
+
+type SubmitAutomationSuggestionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	Decision      string                 `protobuf:"bytes,2,opt,name=decision,proto3" json:"decision,omitempty"`
+	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	AppliedAction string                 `protobuf:"bytes,4,opt,name=applied_action,json=appliedAction,proto3" json:"applied_action,omitempty"`
+	DecidedAt     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=decided_at,json=decidedAt,proto3" json:"decided_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubmitAutomationSuggestionResponse) Reset() {
+	*x = SubmitAutomationSuggestionResponse{}
+	mi := &file_control_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubmitAutomationSuggestionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubmitAutomationSuggestionResponse) ProtoMessage() {}
+
+func (x *SubmitAutomationSuggestionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubmitAutomationSuggestionResponse.ProtoReflect.Descriptor instead.
+func (*SubmitAutomationSuggestionResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *SubmitAutomationSuggestionResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+func (x *SubmitAutomationSuggestionResponse) GetDecision() string {
+	if x != nil {
+		return x.Decision
+	}
+	return ""
+}
+
+func (x *SubmitAutomationSuggestionResponse) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *SubmitAutomationSuggestionResponse) GetAppliedAction() string {
+	if x != nil {
+		return x.AppliedAction
+	}
+	return ""
+}
+
+func (x *SubmitAutomationSuggestionResponse) GetDecidedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.DecidedAt
+	}
+	return nil
 }
 
 type RegisterNodeRequest struct {
@@ -104,7 +395,7 @@ type RegisterNodeRequest struct {
 
 func (x *RegisterNodeRequest) Reset() {
 	*x = RegisterNodeRequest{}
-	mi := &file_control_proto_msgTypes[0]
+	mi := &file_control_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -116,7 +407,7 @@ func (x *RegisterNodeRequest) String() string {
 func (*RegisterNodeRequest) ProtoMessage() {}
 
 func (x *RegisterNodeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[0]
+	mi := &file_control_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -129,7 +420,7 @@ func (x *RegisterNodeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterNodeRequest.ProtoReflect.Descriptor instead.
 func (*RegisterNodeRequest) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{0}
+	return file_control_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *RegisterNodeRequest) GetNodeId() string {
@@ -194,7 +485,7 @@ type NodeCapabilities struct {
 
 func (x *NodeCapabilities) Reset() {
 	*x = NodeCapabilities{}
-	mi := &file_control_proto_msgTypes[1]
+	mi := &file_control_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -206,7 +497,7 @@ func (x *NodeCapabilities) String() string {
 func (*NodeCapabilities) ProtoMessage() {}
 
 func (x *NodeCapabilities) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[1]
+	mi := &file_control_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -219,7 +510,7 @@ func (x *NodeCapabilities) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeCapabilities.ProtoReflect.Descriptor instead.
 func (*NodeCapabilities) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{1}
+	return file_control_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *NodeCapabilities) GetCpuTotalMillicores() int64 {
@@ -268,7 +559,7 @@ type StoragePool struct {
 
 func (x *StoragePool) Reset() {
 	*x = StoragePool{}
-	mi := &file_control_proto_msgTypes[2]
+	mi := &file_control_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -280,7 +571,7 @@ func (x *StoragePool) String() string {
 func (*StoragePool) ProtoMessage() {}
 
 func (x *StoragePool) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[2]
+	mi := &file_control_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -293,7 +584,7 @@ func (x *StoragePool) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StoragePool.ProtoReflect.Descriptor instead.
 func (*StoragePool) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{2}
+	return file_control_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *StoragePool) GetName() string {
@@ -329,7 +620,7 @@ type RegisterNodeResponse struct {
 
 func (x *RegisterNodeResponse) Reset() {
 	*x = RegisterNodeResponse{}
-	mi := &file_control_proto_msgTypes[3]
+	mi := &file_control_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -341,7 +632,7 @@ func (x *RegisterNodeResponse) String() string {
 func (*RegisterNodeResponse) ProtoMessage() {}
 
 func (x *RegisterNodeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[3]
+	mi := &file_control_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -354,7 +645,7 @@ func (x *RegisterNodeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegisterNodeResponse.ProtoReflect.Descriptor instead.
 func (*RegisterNodeResponse) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{3}
+	return file_control_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RegisterNodeResponse) GetAccepted() bool {
@@ -398,7 +689,7 @@ type HeartbeatRequest struct {
 
 func (x *HeartbeatRequest) Reset() {
 	*x = HeartbeatRequest{}
-	mi := &file_control_proto_msgTypes[4]
+	mi := &file_control_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -410,7 +701,7 @@ func (x *HeartbeatRequest) String() string {
 func (*HeartbeatRequest) ProtoMessage() {}
 
 func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[4]
+	mi := &file_control_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -423,7 +714,7 @@ func (x *HeartbeatRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatRequest.ProtoReflect.Descriptor instead.
 func (*HeartbeatRequest) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{4}
+	return file_control_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *HeartbeatRequest) GetNodeId() string {
@@ -475,7 +766,7 @@ type NodeUsage struct {
 
 func (x *NodeUsage) Reset() {
 	*x = NodeUsage{}
-	mi := &file_control_proto_msgTypes[5]
+	mi := &file_control_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -487,7 +778,7 @@ func (x *NodeUsage) String() string {
 func (*NodeUsage) ProtoMessage() {}
 
 func (x *NodeUsage) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[5]
+	mi := &file_control_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -500,7 +791,7 @@ func (x *NodeUsage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeUsage.ProtoReflect.Descriptor instead.
 func (*NodeUsage) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{5}
+	return file_control_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *NodeUsage) GetCpuAllocatedMillicores() int64 {
@@ -556,7 +847,7 @@ type HeartbeatResponse struct {
 
 func (x *HeartbeatResponse) Reset() {
 	*x = HeartbeatResponse{}
-	mi := &file_control_proto_msgTypes[6]
+	mi := &file_control_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -568,7 +859,7 @@ func (x *HeartbeatResponse) String() string {
 func (*HeartbeatResponse) ProtoMessage() {}
 
 func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[6]
+	mi := &file_control_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -581,7 +872,7 @@ func (x *HeartbeatResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatResponse.ProtoReflect.Descriptor instead.
 func (*HeartbeatResponse) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{6}
+	return file_control_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *HeartbeatResponse) GetAcknowledged() bool {
@@ -618,7 +909,7 @@ type ApplyWorkloadRequest struct {
 
 func (x *ApplyWorkloadRequest) Reset() {
 	*x = ApplyWorkloadRequest{}
-	mi := &file_control_proto_msgTypes[7]
+	mi := &file_control_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -630,7 +921,7 @@ func (x *ApplyWorkloadRequest) String() string {
 func (*ApplyWorkloadRequest) ProtoMessage() {}
 
 func (x *ApplyWorkloadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[7]
+	mi := &file_control_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -643,7 +934,7 @@ func (x *ApplyWorkloadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyWorkloadRequest.ProtoReflect.Descriptor instead.
 func (*ApplyWorkloadRequest) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{7}
+	return file_control_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ApplyWorkloadRequest) GetWorkloadId() string {
@@ -685,7 +976,7 @@ type ApplyWorkloadResponse struct {
 
 func (x *ApplyWorkloadResponse) Reset() {
 	*x = ApplyWorkloadResponse{}
-	mi := &file_control_proto_msgTypes[8]
+	mi := &file_control_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -697,7 +988,7 @@ func (x *ApplyWorkloadResponse) String() string {
 func (*ApplyWorkloadResponse) ProtoMessage() {}
 
 func (x *ApplyWorkloadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[8]
+	mi := &file_control_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -710,7 +1001,7 @@ func (x *ApplyWorkloadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyWorkloadResponse.ProtoReflect.Descriptor instead.
 func (*ApplyWorkloadResponse) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{8}
+	return file_control_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ApplyWorkloadResponse) GetSuccess() bool {
@@ -743,7 +1034,7 @@ type DeleteWorkloadRequest struct {
 
 func (x *DeleteWorkloadRequest) Reset() {
 	*x = DeleteWorkloadRequest{}
-	mi := &file_control_proto_msgTypes[9]
+	mi := &file_control_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -755,7 +1046,7 @@ func (x *DeleteWorkloadRequest) String() string {
 func (*DeleteWorkloadRequest) ProtoMessage() {}
 
 func (x *DeleteWorkloadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[9]
+	mi := &file_control_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -768,7 +1059,7 @@ func (x *DeleteWorkloadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWorkloadRequest.ProtoReflect.Descriptor instead.
 func (*DeleteWorkloadRequest) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{9}
+	return file_control_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *DeleteWorkloadRequest) GetWorkloadId() string {
@@ -788,7 +1079,7 @@ type DeleteWorkloadResponse struct {
 
 func (x *DeleteWorkloadResponse) Reset() {
 	*x = DeleteWorkloadResponse{}
-	mi := &file_control_proto_msgTypes[10]
+	mi := &file_control_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -800,7 +1091,7 @@ func (x *DeleteWorkloadResponse) String() string {
 func (*DeleteWorkloadResponse) ProtoMessage() {}
 
 func (x *DeleteWorkloadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[10]
+	mi := &file_control_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -813,7 +1104,7 @@ func (x *DeleteWorkloadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWorkloadResponse.ProtoReflect.Descriptor instead.
 func (*DeleteWorkloadResponse) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{10}
+	return file_control_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *DeleteWorkloadResponse) GetSuccess() bool {
@@ -847,7 +1138,7 @@ type WorkloadSpec struct {
 
 func (x *WorkloadSpec) Reset() {
 	*x = WorkloadSpec{}
-	mi := &file_control_proto_msgTypes[11]
+	mi := &file_control_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -859,7 +1150,7 @@ func (x *WorkloadSpec) String() string {
 func (*WorkloadSpec) ProtoMessage() {}
 
 func (x *WorkloadSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[11]
+	mi := &file_control_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -872,7 +1163,7 @@ func (x *WorkloadSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkloadSpec.ProtoReflect.Descriptor instead.
 func (*WorkloadSpec) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{11}
+	return file_control_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *WorkloadSpec) GetType() string {
@@ -963,7 +1254,7 @@ type ResourceRequirements struct {
 
 func (x *ResourceRequirements) Reset() {
 	*x = ResourceRequirements{}
-	mi := &file_control_proto_msgTypes[12]
+	mi := &file_control_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -975,7 +1266,7 @@ func (x *ResourceRequirements) String() string {
 func (*ResourceRequirements) ProtoMessage() {}
 
 func (x *ResourceRequirements) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[12]
+	mi := &file_control_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -988,7 +1279,7 @@ func (x *ResourceRequirements) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceRequirements.ProtoReflect.Descriptor instead.
 func (*ResourceRequirements) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{12}
+	return file_control_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ResourceRequirements) GetCpuMillicores() int64 {
@@ -1028,7 +1319,7 @@ type ContainerSpec struct {
 
 func (x *ContainerSpec) Reset() {
 	*x = ContainerSpec{}
-	mi := &file_control_proto_msgTypes[13]
+	mi := &file_control_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1040,7 +1331,7 @@ func (x *ContainerSpec) String() string {
 func (*ContainerSpec) ProtoMessage() {}
 
 func (x *ContainerSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[13]
+	mi := &file_control_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1053,7 +1344,7 @@ func (x *ContainerSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ContainerSpec.ProtoReflect.Descriptor instead.
 func (*ContainerSpec) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{13}
+	return file_control_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ContainerSpec) GetImage() string {
@@ -1123,7 +1414,7 @@ type VolumeMount struct {
 
 func (x *VolumeMount) Reset() {
 	*x = VolumeMount{}
-	mi := &file_control_proto_msgTypes[14]
+	mi := &file_control_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1135,7 +1426,7 @@ func (x *VolumeMount) String() string {
 func (*VolumeMount) ProtoMessage() {}
 
 func (x *VolumeMount) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[14]
+	mi := &file_control_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1148,7 +1439,7 @@ func (x *VolumeMount) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VolumeMount.ProtoReflect.Descriptor instead.
 func (*VolumeMount) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{14}
+	return file_control_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *VolumeMount) GetHostPath() string {
@@ -1183,7 +1474,7 @@ type Port struct {
 
 func (x *Port) Reset() {
 	*x = Port{}
-	mi := &file_control_proto_msgTypes[15]
+	mi := &file_control_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1195,7 +1486,7 @@ func (x *Port) String() string {
 func (*Port) ProtoMessage() {}
 
 func (x *Port) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[15]
+	mi := &file_control_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1208,7 +1499,7 @@ func (x *Port) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Port.ProtoReflect.Descriptor instead.
 func (*Port) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{15}
+	return file_control_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *Port) GetHostPort() int32 {
@@ -1245,7 +1536,7 @@ type ComposeSpec struct {
 
 func (x *ComposeSpec) Reset() {
 	*x = ComposeSpec{}
-	mi := &file_control_proto_msgTypes[16]
+	mi := &file_control_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1257,7 +1548,7 @@ func (x *ComposeSpec) String() string {
 func (*ComposeSpec) ProtoMessage() {}
 
 func (x *ComposeSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[16]
+	mi := &file_control_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1270,7 +1561,7 @@ func (x *ComposeSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ComposeSpec.ProtoReflect.Descriptor instead.
 func (*ComposeSpec) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{16}
+	return file_control_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ComposeSpec) GetSourceType() string {
@@ -1323,7 +1614,7 @@ type VMSpec struct {
 
 func (x *VMSpec) Reset() {
 	*x = VMSpec{}
-	mi := &file_control_proto_msgTypes[17]
+	mi := &file_control_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1335,7 +1626,7 @@ func (x *VMSpec) String() string {
 func (*VMSpec) ProtoMessage() {}
 
 func (x *VMSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[17]
+	mi := &file_control_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1348,7 +1639,7 @@ func (x *VMSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VMSpec.ProtoReflect.Descriptor instead.
 func (*VMSpec) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{17}
+	return file_control_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *VMSpec) GetVcpus() int32 {
@@ -1411,7 +1702,7 @@ type DiskConfig struct {
 
 func (x *DiskConfig) Reset() {
 	*x = DiskConfig{}
-	mi := &file_control_proto_msgTypes[18]
+	mi := &file_control_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1423,7 +1714,7 @@ func (x *DiskConfig) String() string {
 func (*DiskConfig) ProtoMessage() {}
 
 func (x *DiskConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[18]
+	mi := &file_control_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1436,7 +1727,7 @@ func (x *DiskConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiskConfig.ProtoReflect.Descriptor instead.
 func (*DiskConfig) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{18}
+	return file_control_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *DiskConfig) GetPoolName() string {
@@ -1471,7 +1762,7 @@ type NetworkConfig struct {
 
 func (x *NetworkConfig) Reset() {
 	*x = NetworkConfig{}
-	mi := &file_control_proto_msgTypes[19]
+	mi := &file_control_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1483,7 +1774,7 @@ func (x *NetworkConfig) String() string {
 func (*NetworkConfig) ProtoMessage() {}
 
 func (x *NetworkConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[19]
+	mi := &file_control_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1496,7 +1787,7 @@ func (x *NetworkConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NetworkConfig.ProtoReflect.Descriptor instead.
 func (*NetworkConfig) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{19}
+	return file_control_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *NetworkConfig) GetBridge() string {
@@ -1532,7 +1823,7 @@ type CloudInitConfig struct {
 
 func (x *CloudInitConfig) Reset() {
 	*x = CloudInitConfig{}
-	mi := &file_control_proto_msgTypes[20]
+	mi := &file_control_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1544,7 +1835,7 @@ func (x *CloudInitConfig) String() string {
 func (*CloudInitConfig) ProtoMessage() {}
 
 func (x *CloudInitConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[20]
+	mi := &file_control_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1557,7 +1848,7 @@ func (x *CloudInitConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CloudInitConfig.ProtoReflect.Descriptor instead.
 func (*CloudInitConfig) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{20}
+	return file_control_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *CloudInitConfig) GetUserData() string {
@@ -1604,7 +1895,7 @@ type ManagedVolumeSpec struct {
 
 func (x *ManagedVolumeSpec) Reset() {
 	*x = ManagedVolumeSpec{}
-	mi := &file_control_proto_msgTypes[21]
+	mi := &file_control_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1616,7 +1907,7 @@ func (x *ManagedVolumeSpec) String() string {
 func (*ManagedVolumeSpec) ProtoMessage() {}
 
 func (x *ManagedVolumeSpec) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[21]
+	mi := &file_control_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1629,7 +1920,7 @@ func (x *ManagedVolumeSpec) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ManagedVolumeSpec.ProtoReflect.Descriptor instead.
 func (*ManagedVolumeSpec) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{21}
+	return file_control_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ManagedVolumeSpec) GetName() string {
@@ -1706,7 +1997,7 @@ type WorkloadUsageSnapshot struct {
 
 func (x *WorkloadUsageSnapshot) Reset() {
 	*x = WorkloadUsageSnapshot{}
-	mi := &file_control_proto_msgTypes[22]
+	mi := &file_control_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1718,7 +2009,7 @@ func (x *WorkloadUsageSnapshot) String() string {
 func (*WorkloadUsageSnapshot) ProtoMessage() {}
 
 func (x *WorkloadUsageSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[22]
+	mi := &file_control_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1731,7 +2022,7 @@ func (x *WorkloadUsageSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkloadUsageSnapshot.ProtoReflect.Descriptor instead.
 func (*WorkloadUsageSnapshot) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{22}
+	return file_control_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *WorkloadUsageSnapshot) GetWorkloadId() string {
@@ -1817,7 +2108,7 @@ type ReasonDetail struct {
 
 func (x *ReasonDetail) Reset() {
 	*x = ReasonDetail{}
-	mi := &file_control_proto_msgTypes[23]
+	mi := &file_control_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1829,7 +2120,7 @@ func (x *ReasonDetail) String() string {
 func (*ReasonDetail) ProtoMessage() {}
 
 func (x *ReasonDetail) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[23]
+	mi := &file_control_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1842,7 +2133,7 @@ func (x *ReasonDetail) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReasonDetail.ProtoReflect.Descriptor instead.
 func (*ReasonDetail) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{23}
+	return file_control_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *ReasonDetail) GetCode() string {
@@ -1895,7 +2186,7 @@ type WorkloadStatus struct {
 
 func (x *WorkloadStatus) Reset() {
 	*x = WorkloadStatus{}
-	mi := &file_control_proto_msgTypes[24]
+	mi := &file_control_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1907,7 +2198,7 @@ func (x *WorkloadStatus) String() string {
 func (*WorkloadStatus) ProtoMessage() {}
 
 func (x *WorkloadStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[24]
+	mi := &file_control_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1920,7 +2211,7 @@ func (x *WorkloadStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkloadStatus.ProtoReflect.Descriptor instead.
 func (*WorkloadStatus) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{24}
+	return file_control_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *WorkloadStatus) GetWorkloadId() string {
@@ -1981,7 +2272,7 @@ type RetryWorkloadRequest struct {
 
 func (x *RetryWorkloadRequest) Reset() {
 	*x = RetryWorkloadRequest{}
-	mi := &file_control_proto_msgTypes[25]
+	mi := &file_control_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1993,7 +2284,7 @@ func (x *RetryWorkloadRequest) String() string {
 func (*RetryWorkloadRequest) ProtoMessage() {}
 
 func (x *RetryWorkloadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[25]
+	mi := &file_control_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2006,7 +2297,7 @@ func (x *RetryWorkloadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetryWorkloadRequest.ProtoReflect.Descriptor instead.
 func (*RetryWorkloadRequest) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{25}
+	return file_control_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *RetryWorkloadRequest) GetWorkloadId() string {
@@ -2025,7 +2316,7 @@ type RetryWorkloadResponse struct {
 
 func (x *RetryWorkloadResponse) Reset() {
 	*x = RetryWorkloadResponse{}
-	mi := &file_control_proto_msgTypes[26]
+	mi := &file_control_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2037,7 +2328,7 @@ func (x *RetryWorkloadResponse) String() string {
 func (*RetryWorkloadResponse) ProtoMessage() {}
 
 func (x *RetryWorkloadResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[26]
+	mi := &file_control_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2050,7 +2341,7 @@ func (x *RetryWorkloadResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetryWorkloadResponse.ProtoReflect.Descriptor instead.
 func (*RetryWorkloadResponse) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{26}
+	return file_control_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RetryWorkloadResponse) GetAccepted() bool {
@@ -2058,6 +2349,1835 @@ func (x *RetryWorkloadResponse) GetAccepted() bool {
 		return x.Accepted
 	}
 	return false
+}
+
+type DrainNodeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DrainNodeRequest) Reset() {
+	*x = DrainNodeRequest{}
+	mi := &file_control_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DrainNodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DrainNodeRequest) ProtoMessage() {}
+
+func (x *DrainNodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DrainNodeRequest.ProtoReflect.Descriptor instead.
+func (*DrainNodeRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *DrainNodeRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *DrainNodeRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type DrainNodeResponse struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Accepted           bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	Message            string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	RelocatedWorkloads int32                  `protobuf:"varint,3,opt,name=relocated_workloads,json=relocatedWorkloads,proto3" json:"relocated_workloads,omitempty"`
+	Node               *NodeView              `protobuf:"bytes,4,opt,name=node,proto3" json:"node,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *DrainNodeResponse) Reset() {
+	*x = DrainNodeResponse{}
+	mi := &file_control_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DrainNodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DrainNodeResponse) ProtoMessage() {}
+
+func (x *DrainNodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DrainNodeResponse.ProtoReflect.Descriptor instead.
+func (*DrainNodeResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *DrainNodeResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+func (x *DrainNodeResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *DrainNodeResponse) GetRelocatedWorkloads() int32 {
+	if x != nil {
+		return x.RelocatedWorkloads
+	}
+	return 0
+}
+
+func (x *DrainNodeResponse) GetNode() *NodeView {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+type UndrainNodeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UndrainNodeRequest) Reset() {
+	*x = UndrainNodeRequest{}
+	mi := &file_control_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UndrainNodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UndrainNodeRequest) ProtoMessage() {}
+
+func (x *UndrainNodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UndrainNodeRequest.ProtoReflect.Descriptor instead.
+func (*UndrainNodeRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *UndrainNodeRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *UndrainNodeRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type UndrainNodeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Node          *NodeView              `protobuf:"bytes,3,opt,name=node,proto3" json:"node,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UndrainNodeResponse) Reset() {
+	*x = UndrainNodeResponse{}
+	mi := &file_control_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UndrainNodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UndrainNodeResponse) ProtoMessage() {}
+
+func (x *UndrainNodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UndrainNodeResponse.ProtoReflect.Descriptor instead.
+func (*UndrainNodeResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *UndrainNodeResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+func (x *UndrainNodeResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *UndrainNodeResponse) GetNode() *NodeView {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+type NodeTaint struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value         string                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	Effect        string                 `protobuf:"bytes,3,opt,name=effect,proto3" json:"effect,omitempty"` // NoSchedule | PreferNoSchedule
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NodeTaint) Reset() {
+	*x = NodeTaint{}
+	mi := &file_control_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeTaint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeTaint) ProtoMessage() {}
+
+func (x *NodeTaint) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeTaint.ProtoReflect.Descriptor instead.
+func (*NodeTaint) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *NodeTaint) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *NodeTaint) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+func (x *NodeTaint) GetEffect() string {
+	if x != nil {
+		return x.Effect
+	}
+	return ""
+}
+
+type TaintNodeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Taint         *NodeTaint             `protobuf:"bytes,2,opt,name=taint,proto3" json:"taint,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaintNodeRequest) Reset() {
+	*x = TaintNodeRequest{}
+	mi := &file_control_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaintNodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaintNodeRequest) ProtoMessage() {}
+
+func (x *TaintNodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaintNodeRequest.ProtoReflect.Descriptor instead.
+func (*TaintNodeRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *TaintNodeRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *TaintNodeRequest) GetTaint() *NodeTaint {
+	if x != nil {
+		return x.Taint
+	}
+	return nil
+}
+
+type TaintNodeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Node          *NodeView              `protobuf:"bytes,3,opt,name=node,proto3" json:"node,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaintNodeResponse) Reset() {
+	*x = TaintNodeResponse{}
+	mi := &file_control_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaintNodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaintNodeResponse) ProtoMessage() {}
+
+func (x *TaintNodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaintNodeResponse.ProtoReflect.Descriptor instead.
+func (*TaintNodeResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *TaintNodeResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+func (x *TaintNodeResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *TaintNodeResponse) GetNode() *NodeView {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+type UntaintNodeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Effect        string                 `protobuf:"bytes,3,opt,name=effect,proto3" json:"effect,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UntaintNodeRequest) Reset() {
+	*x = UntaintNodeRequest{}
+	mi := &file_control_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UntaintNodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UntaintNodeRequest) ProtoMessage() {}
+
+func (x *UntaintNodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UntaintNodeRequest.ProtoReflect.Descriptor instead.
+func (*UntaintNodeRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *UntaintNodeRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *UntaintNodeRequest) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *UntaintNodeRequest) GetEffect() string {
+	if x != nil {
+		return x.Effect
+	}
+	return ""
+}
+
+type UntaintNodeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Node          *NodeView              `protobuf:"bytes,3,opt,name=node,proto3" json:"node,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UntaintNodeResponse) Reset() {
+	*x = UntaintNodeResponse{}
+	mi := &file_control_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UntaintNodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UntaintNodeResponse) ProtoMessage() {}
+
+func (x *UntaintNodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UntaintNodeResponse.ProtoReflect.Descriptor instead.
+func (*UntaintNodeResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *UntaintNodeResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+func (x *UntaintNodeResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *UntaintNodeResponse) GetNode() *NodeView {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+type SetNodeLabelRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Value         string                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetNodeLabelRequest) Reset() {
+	*x = SetNodeLabelRequest{}
+	mi := &file_control_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetNodeLabelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetNodeLabelRequest) ProtoMessage() {}
+
+func (x *SetNodeLabelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetNodeLabelRequest.ProtoReflect.Descriptor instead.
+func (*SetNodeLabelRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *SetNodeLabelRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *SetNodeLabelRequest) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *SetNodeLabelRequest) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
+}
+
+type SetNodeLabelResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Node          *NodeView              `protobuf:"bytes,3,opt,name=node,proto3" json:"node,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetNodeLabelResponse) Reset() {
+	*x = SetNodeLabelResponse{}
+	mi := &file_control_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetNodeLabelResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetNodeLabelResponse) ProtoMessage() {}
+
+func (x *SetNodeLabelResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetNodeLabelResponse.ProtoReflect.Descriptor instead.
+func (*SetNodeLabelResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *SetNodeLabelResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+func (x *SetNodeLabelResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *SetNodeLabelResponse) GetNode() *NodeView {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+type DeleteNodeLabelRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteNodeLabelRequest) Reset() {
+	*x = DeleteNodeLabelRequest{}
+	mi := &file_control_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteNodeLabelRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteNodeLabelRequest) ProtoMessage() {}
+
+func (x *DeleteNodeLabelRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteNodeLabelRequest.ProtoReflect.Descriptor instead.
+func (*DeleteNodeLabelRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *DeleteNodeLabelRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *DeleteNodeLabelRequest) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+type DeleteNodeLabelResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accepted      bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Node          *NodeView              `protobuf:"bytes,3,opt,name=node,proto3" json:"node,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteNodeLabelResponse) Reset() {
+	*x = DeleteNodeLabelResponse{}
+	mi := &file_control_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteNodeLabelResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteNodeLabelResponse) ProtoMessage() {}
+
+func (x *DeleteNodeLabelResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteNodeLabelResponse.ProtoReflect.Descriptor instead.
+func (*DeleteNodeLabelResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *DeleteNodeLabelResponse) GetAccepted() bool {
+	if x != nil {
+		return x.Accepted
+	}
+	return false
+}
+
+func (x *DeleteNodeLabelResponse) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *DeleteNodeLabelResponse) GetNode() *NodeView {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+type ListNodesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"` // optional filter: Ready | NotReady | Draining
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListNodesRequest) Reset() {
+	*x = ListNodesRequest{}
+	mi := &file_control_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListNodesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListNodesRequest) ProtoMessage() {}
+
+func (x *ListNodesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListNodesRequest.ProtoReflect.Descriptor instead.
+func (*ListNodesRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *ListNodesRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type GetNodeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNodeRequest) Reset() {
+	*x = GetNodeRequest{}
+	mi := &file_control_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNodeRequest) ProtoMessage() {}
+
+func (x *GetNodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNodeRequest.ProtoReflect.Descriptor instead.
+func (*GetNodeRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *GetNodeRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+type ListNodesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nodes         []*NodeView            `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListNodesResponse) Reset() {
+	*x = ListNodesResponse{}
+	mi := &file_control_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListNodesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListNodesResponse) ProtoMessage() {}
+
+func (x *ListNodesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListNodesResponse.ProtoReflect.Descriptor instead.
+func (*ListNodesResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *ListNodesResponse) GetNodes() []*NodeView {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
+type GetNodeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Node          *NodeView              `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNodeResponse) Reset() {
+	*x = GetNodeResponse{}
+	mi := &file_control_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNodeResponse) ProtoMessage() {}
+
+func (x *GetNodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNodeResponse.ProtoReflect.Descriptor instead.
+func (*GetNodeResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *GetNodeResponse) GetNode() *NodeView {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+type NodeView struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	NodeId                 string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Status                 string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	StatusReason           string                 `protobuf:"bytes,3,opt,name=status_reason,json=statusReason,proto3" json:"status_reason,omitempty"`
+	StatusUpdatedBy        string                 `protobuf:"bytes,4,opt,name=status_updated_by,json=statusUpdatedBy,proto3" json:"status_updated_by,omitempty"`
+	StatusUpdatedAt        *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=status_updated_at,json=statusUpdatedAt,proto3" json:"status_updated_at,omitempty"`
+	LastHeartbeat          *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=last_heartbeat,json=lastHeartbeat,proto3" json:"last_heartbeat,omitempty"`
+	GrpcEndpoint           string                 `protobuf:"bytes,7,opt,name=grpc_endpoint,json=grpcEndpoint,proto3" json:"grpc_endpoint,omitempty"`
+	TotalCpuCores          float64                `protobuf:"fixed64,8,opt,name=total_cpu_cores,json=totalCpuCores,proto3" json:"total_cpu_cores,omitempty"`
+	AvailableCpuCores      float64                `protobuf:"fixed64,9,opt,name=available_cpu_cores,json=availableCpuCores,proto3" json:"available_cpu_cores,omitempty"`
+	TotalMemoryMb          int64                  `protobuf:"varint,10,opt,name=total_memory_mb,json=totalMemoryMb,proto3" json:"total_memory_mb,omitempty"`
+	AvailableMemoryMb      int64                  `protobuf:"varint,11,opt,name=available_memory_mb,json=availableMemoryMb,proto3" json:"available_memory_mb,omitempty"`
+	SupportedWorkloadTypes []string               `protobuf:"bytes,12,rep,name=supported_workload_types,json=supportedWorkloadTypes,proto3" json:"supported_workload_types,omitempty"`
+	Labels                 map[string]string      `protobuf:"bytes,13,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Taints                 []*NodeTaint           `protobuf:"bytes,14,rep,name=taints,proto3" json:"taints,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *NodeView) Reset() {
+	*x = NodeView{}
+	mi := &file_control_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeView) ProtoMessage() {}
+
+func (x *NodeView) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeView.ProtoReflect.Descriptor instead.
+func (*NodeView) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *NodeView) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *NodeView) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *NodeView) GetStatusReason() string {
+	if x != nil {
+		return x.StatusReason
+	}
+	return ""
+}
+
+func (x *NodeView) GetStatusUpdatedBy() string {
+	if x != nil {
+		return x.StatusUpdatedBy
+	}
+	return ""
+}
+
+func (x *NodeView) GetStatusUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StatusUpdatedAt
+	}
+	return nil
+}
+
+func (x *NodeView) GetLastHeartbeat() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastHeartbeat
+	}
+	return nil
+}
+
+func (x *NodeView) GetGrpcEndpoint() string {
+	if x != nil {
+		return x.GrpcEndpoint
+	}
+	return ""
+}
+
+func (x *NodeView) GetTotalCpuCores() float64 {
+	if x != nil {
+		return x.TotalCpuCores
+	}
+	return 0
+}
+
+func (x *NodeView) GetAvailableCpuCores() float64 {
+	if x != nil {
+		return x.AvailableCpuCores
+	}
+	return 0
+}
+
+func (x *NodeView) GetTotalMemoryMb() int64 {
+	if x != nil {
+		return x.TotalMemoryMb
+	}
+	return 0
+}
+
+func (x *NodeView) GetAvailableMemoryMb() int64 {
+	if x != nil {
+		return x.AvailableMemoryMb
+	}
+	return 0
+}
+
+func (x *NodeView) GetSupportedWorkloadTypes() []string {
+	if x != nil {
+		return x.SupportedWorkloadTypes
+	}
+	return nil
+}
+
+func (x *NodeView) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+func (x *NodeView) GetTaints() []*NodeTaint {
+	if x != nil {
+		return x.Taints
+	}
+	return nil
+}
+
+type ListWorkloadsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeId        string                 `protobuf:"bytes,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"` // optional filter
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`               // optional filter
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListWorkloadsRequest) Reset() {
+	*x = ListWorkloadsRequest{}
+	mi := &file_control_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListWorkloadsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListWorkloadsRequest) ProtoMessage() {}
+
+func (x *ListWorkloadsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListWorkloadsRequest.ProtoReflect.Descriptor instead.
+func (*ListWorkloadsRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *ListWorkloadsRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *ListWorkloadsRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+type SchedulerEventView struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Id         string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type       string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`                               // e.g. "NodeLost", "WorkloadScheduled", "DriftDetected"
+	WorkloadId string                 `protobuf:"bytes,3,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"` // optional, empty if not workload-scoped
+	NodeId     string                 `protobuf:"bytes,4,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`             // optional, empty if not node-scoped
+	Reason     string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	Timestamp  *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	// Free-form auxiliary data. Values are stringified on the way out
+	// (models.SchedulerEvent.Details is map[string]interface{} on the Go
+	// side) — this is a deliberate simplification over a
+	// google.protobuf.Struct, since event details are informational/
+	// display-oriented, not structured data a client needs to
+	// round-trip losslessly.
+	Details       map[string]string `protobuf:"bytes,7,rep,name=details,proto3" json:"details,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SchedulerEventView) Reset() {
+	*x = SchedulerEventView{}
+	mi := &file_control_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SchedulerEventView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SchedulerEventView) ProtoMessage() {}
+
+func (x *SchedulerEventView) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SchedulerEventView.ProtoReflect.Descriptor instead.
+func (*SchedulerEventView) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *SchedulerEventView) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *SchedulerEventView) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *SchedulerEventView) GetWorkloadId() string {
+	if x != nil {
+		return x.WorkloadId
+	}
+	return ""
+}
+
+func (x *SchedulerEventView) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *SchedulerEventView) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *SchedulerEventView) GetTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Timestamp
+	}
+	return nil
+}
+
+func (x *SchedulerEventView) GetDetails() map[string]string {
+	if x != nil {
+		return x.Details
+	}
+	return nil
+}
+
+type ListEventsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Limit         int64                  `protobuf:"varint,1,opt,name=limit,proto3" json:"limit,omitempty"`                            // 0 means server default
+	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`                               // optional filter
+	WorkloadId    string                 `protobuf:"bytes,3,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"` // optional filter
+	NodeId        string                 `protobuf:"bytes,4,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`             // optional filter
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListEventsRequest) Reset() {
+	*x = ListEventsRequest{}
+	mi := &file_control_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListEventsRequest) ProtoMessage() {}
+
+func (x *ListEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListEventsRequest.ProtoReflect.Descriptor instead.
+func (*ListEventsRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *ListEventsRequest) GetLimit() int64 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListEventsRequest) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *ListEventsRequest) GetWorkloadId() string {
+	if x != nil {
+		return x.WorkloadId
+	}
+	return ""
+}
+
+func (x *ListEventsRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+type ListEventsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Events        []*SchedulerEventView  `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListEventsResponse) Reset() {
+	*x = ListEventsResponse{}
+	mi := &file_control_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListEventsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListEventsResponse) ProtoMessage() {}
+
+func (x *ListEventsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListEventsResponse.ProtoReflect.Descriptor instead.
+func (*ListEventsResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *ListEventsResponse) GetEvents() []*SchedulerEventView {
+	if x != nil {
+		return x.Events
+	}
+	return nil
+}
+
+type WatchEventsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Same optional filters as ListEventsRequest. The stream first replays
+	// recent matching events (server-side default limit), then continues
+	// with new matching events as they're emitted.
+	Type          string `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`
+	WorkloadId    string `protobuf:"bytes,2,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`
+	NodeId        string `protobuf:"bytes,3,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WatchEventsRequest) Reset() {
+	*x = WatchEventsRequest{}
+	mi := &file_control_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WatchEventsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WatchEventsRequest) ProtoMessage() {}
+
+func (x *WatchEventsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WatchEventsRequest.ProtoReflect.Descriptor instead.
+func (*WatchEventsRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *WatchEventsRequest) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *WatchEventsRequest) GetWorkloadId() string {
+	if x != nil {
+		return x.WorkloadId
+	}
+	return ""
+}
+
+func (x *WatchEventsRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+type GetWorkloadRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkloadId    string                 `protobuf:"bytes,1,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWorkloadRequest) Reset() {
+	*x = GetWorkloadRequest{}
+	mi := &file_control_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWorkloadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWorkloadRequest) ProtoMessage() {}
+
+func (x *GetWorkloadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWorkloadRequest.ProtoReflect.Descriptor instead.
+func (*GetWorkloadRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *GetWorkloadRequest) GetWorkloadId() string {
+	if x != nil {
+		return x.WorkloadId
+	}
+	return ""
+}
+
+type ListWorkloadsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Workloads     []*WorkloadView        `protobuf:"bytes,1,rep,name=workloads,proto3" json:"workloads,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListWorkloadsResponse) Reset() {
+	*x = ListWorkloadsResponse{}
+	mi := &file_control_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListWorkloadsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListWorkloadsResponse) ProtoMessage() {}
+
+func (x *ListWorkloadsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListWorkloadsResponse.ProtoReflect.Descriptor instead.
+func (*ListWorkloadsResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *ListWorkloadsResponse) GetWorkloads() []*WorkloadView {
+	if x != nil {
+		return x.Workloads
+	}
+	return nil
+}
+
+type GetWorkloadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Workload      *WorkloadView          `protobuf:"bytes,1,opt,name=workload,proto3" json:"workload,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetWorkloadResponse) Reset() {
+	*x = GetWorkloadResponse{}
+	mi := &file_control_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetWorkloadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetWorkloadResponse) ProtoMessage() {}
+
+func (x *GetWorkloadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetWorkloadResponse.ProtoReflect.Descriptor instead.
+func (*GetWorkloadResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *GetWorkloadResponse) GetWorkload() *WorkloadView {
+	if x != nil {
+		return x.Workload
+	}
+	return nil
+}
+
+type WorkloadView struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	WorkloadId       string                 `protobuf:"bytes,1,opt,name=workload_id,json=workloadId,proto3" json:"workload_id,omitempty"`
+	Type             string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	DesiredState     string                 `protobuf:"bytes,3,opt,name=desired_state,json=desiredState,proto3" json:"desired_state,omitempty"`
+	Status           string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+	AssignedNodeId   string                 `protobuf:"bytes,5,opt,name=assigned_node_id,json=assignedNodeId,proto3" json:"assigned_node_id,omitempty"`
+	RevisionId       string                 `protobuf:"bytes,6,opt,name=revision_id,json=revisionId,proto3" json:"revision_id,omitempty"`
+	RetryAttempts    int32                  `protobuf:"varint,7,opt,name=retry_attempts,json=retryAttempts,proto3" json:"retry_attempts,omitempty"`
+	RetryMaxAttempts int32                  `protobuf:"varint,8,opt,name=retry_max_attempts,json=retryMaxAttempts,proto3" json:"retry_max_attempts,omitempty"`
+	RetryNextAt      *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=retry_next_at,json=retryNextAt,proto3" json:"retry_next_at,omitempty"`
+	FailureReason    string                 `protobuf:"bytes,10,opt,name=failure_reason,json=failureReason,proto3" json:"failure_reason,omitempty"`
+	LastUpdated      *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=last_updated,json=lastUpdated,proto3" json:"last_updated,omitempty"`
+	Reason           *ReasonDetail          `protobuf:"bytes,12,opt,name=reason,proto3" json:"reason,omitempty"`
+	Usage            *WorkloadUsageSnapshot `protobuf:"bytes,13,opt,name=usage,proto3" json:"usage,omitempty"`
+	CreatedAt        *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *WorkloadView) Reset() {
+	*x = WorkloadView{}
+	mi := &file_control_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WorkloadView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WorkloadView) ProtoMessage() {}
+
+func (x *WorkloadView) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WorkloadView.ProtoReflect.Descriptor instead.
+func (*WorkloadView) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *WorkloadView) GetWorkloadId() string {
+	if x != nil {
+		return x.WorkloadId
+	}
+	return ""
+}
+
+func (x *WorkloadView) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *WorkloadView) GetDesiredState() string {
+	if x != nil {
+		return x.DesiredState
+	}
+	return ""
+}
+
+func (x *WorkloadView) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *WorkloadView) GetAssignedNodeId() string {
+	if x != nil {
+		return x.AssignedNodeId
+	}
+	return ""
+}
+
+func (x *WorkloadView) GetRevisionId() string {
+	if x != nil {
+		return x.RevisionId
+	}
+	return ""
+}
+
+func (x *WorkloadView) GetRetryAttempts() int32 {
+	if x != nil {
+		return x.RetryAttempts
+	}
+	return 0
+}
+
+func (x *WorkloadView) GetRetryMaxAttempts() int32 {
+	if x != nil {
+		return x.RetryMaxAttempts
+	}
+	return 0
+}
+
+func (x *WorkloadView) GetRetryNextAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.RetryNextAt
+	}
+	return nil
+}
+
+func (x *WorkloadView) GetFailureReason() string {
+	if x != nil {
+		return x.FailureReason
+	}
+	return ""
+}
+
+func (x *WorkloadView) GetLastUpdated() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastUpdated
+	}
+	return nil
+}
+
+func (x *WorkloadView) GetReason() *ReasonDetail {
+	if x != nil {
+		return x.Reason
+	}
+	return nil
+}
+
+func (x *WorkloadView) GetUsage() *WorkloadUsageSnapshot {
+	if x != nil {
+		return x.Usage
+	}
+	return nil
+}
+
+func (x *WorkloadView) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+type GetClusterSummaryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetClusterSummaryRequest) Reset() {
+	*x = GetClusterSummaryRequest{}
+	mi := &file_control_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetClusterSummaryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetClusterSummaryRequest) ProtoMessage() {}
+
+func (x *GetClusterSummaryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetClusterSummaryRequest.ProtoReflect.Descriptor instead.
+func (*GetClusterSummaryRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{57}
+}
+
+type GetClusterSummaryResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	TotalNodes       int32                  `protobuf:"varint,1,opt,name=total_nodes,json=totalNodes,proto3" json:"total_nodes,omitempty"`
+	ReadyNodes       int32                  `protobuf:"varint,2,opt,name=ready_nodes,json=readyNodes,proto3" json:"ready_nodes,omitempty"`
+	NotReadyNodes    int32                  `protobuf:"varint,3,opt,name=not_ready_nodes,json=notReadyNodes,proto3" json:"not_ready_nodes,omitempty"`
+	TotalWorkloads   int32                  `protobuf:"varint,4,opt,name=total_workloads,json=totalWorkloads,proto3" json:"total_workloads,omitempty"`
+	RunningWorkloads int32                  `protobuf:"varint,5,opt,name=running_workloads,json=runningWorkloads,proto3" json:"running_workloads,omitempty"`
+	PendingWorkloads int32                  `protobuf:"varint,6,opt,name=pending_workloads,json=pendingWorkloads,proto3" json:"pending_workloads,omitempty"`
+	FailedWorkloads  int32                  `protobuf:"varint,7,opt,name=failed_workloads,json=failedWorkloads,proto3" json:"failed_workloads,omitempty"`
+	DeletedWorkloads int32                  `protobuf:"varint,8,opt,name=deleted_workloads,json=deletedWorkloads,proto3" json:"deleted_workloads,omitempty"`
+	GeneratedAt      *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=generated_at,json=generatedAt,proto3" json:"generated_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *GetClusterSummaryResponse) Reset() {
+	*x = GetClusterSummaryResponse{}
+	mi := &file_control_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetClusterSummaryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetClusterSummaryResponse) ProtoMessage() {}
+
+func (x *GetClusterSummaryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetClusterSummaryResponse.ProtoReflect.Descriptor instead.
+func (*GetClusterSummaryResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *GetClusterSummaryResponse) GetTotalNodes() int32 {
+	if x != nil {
+		return x.TotalNodes
+	}
+	return 0
+}
+
+func (x *GetClusterSummaryResponse) GetReadyNodes() int32 {
+	if x != nil {
+		return x.ReadyNodes
+	}
+	return 0
+}
+
+func (x *GetClusterSummaryResponse) GetNotReadyNodes() int32 {
+	if x != nil {
+		return x.NotReadyNodes
+	}
+	return 0
+}
+
+func (x *GetClusterSummaryResponse) GetTotalWorkloads() int32 {
+	if x != nil {
+		return x.TotalWorkloads
+	}
+	return 0
+}
+
+func (x *GetClusterSummaryResponse) GetRunningWorkloads() int32 {
+	if x != nil {
+		return x.RunningWorkloads
+	}
+	return 0
+}
+
+func (x *GetClusterSummaryResponse) GetPendingWorkloads() int32 {
+	if x != nil {
+		return x.PendingWorkloads
+	}
+	return 0
+}
+
+func (x *GetClusterSummaryResponse) GetFailedWorkloads() int32 {
+	if x != nil {
+		return x.FailedWorkloads
+	}
+	return 0
+}
+
+func (x *GetClusterSummaryResponse) GetDeletedWorkloads() int32 {
+	if x != nil {
+		return x.DeletedWorkloads
+	}
+	return 0
+}
+
+func (x *GetClusterSummaryResponse) GetGeneratedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.GeneratedAt
+	}
+	return nil
 }
 
 type ControlMessage struct {
@@ -2075,7 +4195,7 @@ type ControlMessage struct {
 
 func (x *ControlMessage) Reset() {
 	*x = ControlMessage{}
-	mi := &file_control_proto_msgTypes[27]
+	mi := &file_control_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2087,7 +4207,7 @@ func (x *ControlMessage) String() string {
 func (*ControlMessage) ProtoMessage() {}
 
 func (x *ControlMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_control_proto_msgTypes[27]
+	mi := &file_control_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2100,7 +4220,7 @@ func (x *ControlMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ControlMessage.ProtoReflect.Descriptor instead.
 func (*ControlMessage) Descriptor() ([]byte, []int) {
-	return file_control_proto_rawDescGZIP(), []int{27}
+	return file_control_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ControlMessage) GetMessage() isControlMessage_Message {
@@ -2174,11 +4294,624 @@ func (*ControlMessage_Apply) isControlMessage_Message() {}
 
 func (*ControlMessage_Delete) isControlMessage_Message() {}
 
+type CreateDiskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Driver        string                 `protobuf:"bytes,2,opt,name=driver,proto3" json:"driver,omitempty"` // local | ceph-rbd | nfs
+	SizeGb        int64                  `protobuf:"varint,3,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
+	FsType        string                 `protobuf:"bytes,4,opt,name=fs_type,json=fsType,proto3" json:"fs_type,omitempty"`
+	AccessMode    string                 `protobuf:"bytes,5,opt,name=access_mode,json=accessMode,proto3" json:"access_mode,omitempty"`
+	RetainPolicy  string                 `protobuf:"bytes,6,opt,name=retain_policy,json=retainPolicy,proto3" json:"retain_policy,omitempty"` // Delete | Retain
+	NodeId        string                 `protobuf:"bytes,7,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`                   // optional pre-pin for local
+	MountPath     string                 `protobuf:"bytes,8,opt,name=mount_path,json=mountPath,proto3" json:"mount_path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateDiskRequest) Reset() {
+	*x = CreateDiskRequest{}
+	mi := &file_control_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateDiskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateDiskRequest) ProtoMessage() {}
+
+func (x *CreateDiskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateDiskRequest.ProtoReflect.Descriptor instead.
+func (*CreateDiskRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *CreateDiskRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateDiskRequest) GetDriver() string {
+	if x != nil {
+		return x.Driver
+	}
+	return ""
+}
+
+func (x *CreateDiskRequest) GetSizeGb() int64 {
+	if x != nil {
+		return x.SizeGb
+	}
+	return 0
+}
+
+func (x *CreateDiskRequest) GetFsType() string {
+	if x != nil {
+		return x.FsType
+	}
+	return ""
+}
+
+func (x *CreateDiskRequest) GetAccessMode() string {
+	if x != nil {
+		return x.AccessMode
+	}
+	return ""
+}
+
+func (x *CreateDiskRequest) GetRetainPolicy() string {
+	if x != nil {
+		return x.RetainPolicy
+	}
+	return ""
+}
+
+func (x *CreateDiskRequest) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *CreateDiskRequest) GetMountPath() string {
+	if x != nil {
+		return x.MountPath
+	}
+	return ""
+}
+
+type CreateDiskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Disk          *DiskView              `protobuf:"bytes,1,opt,name=disk,proto3" json:"disk,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateDiskResponse) Reset() {
+	*x = CreateDiskResponse{}
+	mi := &file_control_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateDiskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateDiskResponse) ProtoMessage() {}
+
+func (x *CreateDiskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateDiskResponse.ProtoReflect.Descriptor instead.
+func (*CreateDiskResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *CreateDiskResponse) GetDisk() *DiskView {
+	if x != nil {
+		return x.Disk
+	}
+	return nil
+}
+
+type ListDisksRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDisksRequest) Reset() {
+	*x = ListDisksRequest{}
+	mi := &file_control_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDisksRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDisksRequest) ProtoMessage() {}
+
+func (x *ListDisksRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDisksRequest.ProtoReflect.Descriptor instead.
+func (*ListDisksRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{62}
+}
+
+type ListDisksResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Disks         []*DiskView            `protobuf:"bytes,1,rep,name=disks,proto3" json:"disks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListDisksResponse) Reset() {
+	*x = ListDisksResponse{}
+	mi := &file_control_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListDisksResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListDisksResponse) ProtoMessage() {}
+
+func (x *ListDisksResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListDisksResponse.ProtoReflect.Descriptor instead.
+func (*ListDisksResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *ListDisksResponse) GetDisks() []*DiskView {
+	if x != nil {
+		return x.Disks
+	}
+	return nil
+}
+
+type GetDiskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DiskId        string                 `protobuf:"bytes,1,opt,name=disk_id,json=diskId,proto3" json:"disk_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDiskRequest) Reset() {
+	*x = GetDiskRequest{}
+	mi := &file_control_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDiskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDiskRequest) ProtoMessage() {}
+
+func (x *GetDiskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDiskRequest.ProtoReflect.Descriptor instead.
+func (*GetDiskRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{64}
+}
+
+func (x *GetDiskRequest) GetDiskId() string {
+	if x != nil {
+		return x.DiskId
+	}
+	return ""
+}
+
+type GetDiskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Disk          *DiskView              `protobuf:"bytes,1,opt,name=disk,proto3" json:"disk,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDiskResponse) Reset() {
+	*x = GetDiskResponse{}
+	mi := &file_control_proto_msgTypes[65]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDiskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDiskResponse) ProtoMessage() {}
+
+func (x *GetDiskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[65]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDiskResponse.ProtoReflect.Descriptor instead.
+func (*GetDiskResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{65}
+}
+
+func (x *GetDiskResponse) GetDisk() *DiskView {
+	if x != nil {
+		return x.Disk
+	}
+	return nil
+}
+
+type DeleteDiskRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DiskId        string                 `protobuf:"bytes,1,opt,name=disk_id,json=diskId,proto3" json:"disk_id,omitempty"`
+	Force         bool                   `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteDiskRequest) Reset() {
+	*x = DeleteDiskRequest{}
+	mi := &file_control_proto_msgTypes[66]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteDiskRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteDiskRequest) ProtoMessage() {}
+
+func (x *DeleteDiskRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[66]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteDiskRequest.ProtoReflect.Descriptor instead.
+func (*DeleteDiskRequest) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{66}
+}
+
+func (x *DeleteDiskRequest) GetDiskId() string {
+	if x != nil {
+		return x.DiskId
+	}
+	return ""
+}
+
+func (x *DeleteDiskRequest) GetForce() bool {
+	if x != nil {
+		return x.Force
+	}
+	return false
+}
+
+type DeleteDiskResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteDiskResponse) Reset() {
+	*x = DeleteDiskResponse{}
+	mi := &file_control_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteDiskResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteDiskResponse) ProtoMessage() {}
+
+func (x *DeleteDiskResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteDiskResponse.ProtoReflect.Descriptor instead.
+func (*DeleteDiskResponse) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *DeleteDiskResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *DeleteDiskResponse) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+type DiskView struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Driver        string                 `protobuf:"bytes,3,opt,name=driver,proto3" json:"driver,omitempty"`
+	SizeGb        int64                  `protobuf:"varint,4,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
+	FsType        string                 `protobuf:"bytes,5,opt,name=fs_type,json=fsType,proto3" json:"fs_type,omitempty"`
+	AccessMode    string                 `protobuf:"bytes,6,opt,name=access_mode,json=accessMode,proto3" json:"access_mode,omitempty"`
+	RetainPolicy  string                 `protobuf:"bytes,7,opt,name=retain_policy,json=retainPolicy,proto3" json:"retain_policy,omitempty"`
+	Phase         string                 `protobuf:"bytes,8,opt,name=phase,proto3" json:"phase,omitempty"`
+	LastError     string                 `protobuf:"bytes,9,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	NodeId        string                 `protobuf:"bytes,10,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
+	Device        string                 `protobuf:"bytes,11,opt,name=device,proto3" json:"device,omitempty"`
+	Standalone    bool                   `protobuf:"varint,12,opt,name=standalone,proto3" json:"standalone,omitempty"`
+	MountPath     string                 `protobuf:"bytes,13,opt,name=mount_path,json=mountPath,proto3" json:"mount_path,omitempty"`
+	WorkloadRefs  []string               `protobuf:"bytes,14,rep,name=workload_refs,json=workloadRefs,proto3" json:"workload_refs,omitempty"`
+	AttachedNodes []string               `protobuf:"bytes,15,rep,name=attached_nodes,json=attachedNodes,proto3" json:"attached_nodes,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,17,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DiskView) Reset() {
+	*x = DiskView{}
+	mi := &file_control_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DiskView) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DiskView) ProtoMessage() {}
+
+func (x *DiskView) ProtoReflect() protoreflect.Message {
+	mi := &file_control_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DiskView.ProtoReflect.Descriptor instead.
+func (*DiskView) Descriptor() ([]byte, []int) {
+	return file_control_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *DiskView) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *DiskView) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *DiskView) GetDriver() string {
+	if x != nil {
+		return x.Driver
+	}
+	return ""
+}
+
+func (x *DiskView) GetSizeGb() int64 {
+	if x != nil {
+		return x.SizeGb
+	}
+	return 0
+}
+
+func (x *DiskView) GetFsType() string {
+	if x != nil {
+		return x.FsType
+	}
+	return ""
+}
+
+func (x *DiskView) GetAccessMode() string {
+	if x != nil {
+		return x.AccessMode
+	}
+	return ""
+}
+
+func (x *DiskView) GetRetainPolicy() string {
+	if x != nil {
+		return x.RetainPolicy
+	}
+	return ""
+}
+
+func (x *DiskView) GetPhase() string {
+	if x != nil {
+		return x.Phase
+	}
+	return ""
+}
+
+func (x *DiskView) GetLastError() string {
+	if x != nil {
+		return x.LastError
+	}
+	return ""
+}
+
+func (x *DiskView) GetNodeId() string {
+	if x != nil {
+		return x.NodeId
+	}
+	return ""
+}
+
+func (x *DiskView) GetDevice() string {
+	if x != nil {
+		return x.Device
+	}
+	return ""
+}
+
+func (x *DiskView) GetStandalone() bool {
+	if x != nil {
+		return x.Standalone
+	}
+	return false
+}
+
+func (x *DiskView) GetMountPath() string {
+	if x != nil {
+		return x.MountPath
+	}
+	return ""
+}
+
+func (x *DiskView) GetWorkloadRefs() []string {
+	if x != nil {
+		return x.WorkloadRefs
+	}
+	return nil
+}
+
+func (x *DiskView) GetAttachedNodes() []string {
+	if x != nil {
+		return x.AttachedNodes
+	}
+	return nil
+}
+
+func (x *DiskView) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *DiskView) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
 var File_control_proto protoreflect.FileDescriptor
 
 const file_control_proto_rawDesc = "" +
 	"\n" +
-	"\rcontrol.proto\x12\x11persys.control.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa1\x03\n" +
+	"\rcontrol.proto\x12\x11persys.control.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb8\x03\n" +
+	"\x14AutomationSuggestion\x12#\n" +
+	"\rsuggestion_id\x18\x01 \x01(\tR\fsuggestionId\x12\x1b\n" +
+	"\tpolicy_id\x18\x02 \x01(\tR\bpolicyId\x12\x1f\n" +
+	"\vpolicy_name\x18\x03 \x01(\tR\n" +
+	"policyName\x12'\n" +
+	"\x0ftarget_workload\x18\x04 \x01(\tR\x0etargetWorkload\x12H\n" +
+	"\vaction_type\x18\x05 \x01(\x0e2'.persys.control.v1.AutomationActionTypeR\n" +
+	"actionType\x12#\n" +
+	"\rdesired_state\x18\x06 \x01(\tR\fdesiredState\x12)\n" +
+	"\x10desired_replicas\x18\a \x01(\x05R\x0fdesiredReplicas\x12#\n" +
+	"\rreplica_delta\x18\b \x01(\x05R\freplicaDelta\x12\x16\n" +
+	"\x06reason\x18\t \x01(\tR\x06reason\x12=\n" +
+	"\fsuggested_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\vsuggestedAt\"l\n" +
+	"!SubmitAutomationSuggestionRequest\x12G\n" +
+	"\n" +
+	"suggestion\x18\x01 \x01(\v2'.persys.control.v1.AutomationSuggestionR\n" +
+	"suggestion\"\xd6\x01\n" +
+	"\"SubmitAutomationSuggestionResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x1a\n" +
+	"\bdecision\x18\x02 \x01(\tR\bdecision\x12\x16\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x12%\n" +
+	"\x0eapplied_action\x18\x04 \x01(\tR\rappliedAction\x129\n" +
+	"\n" +
+	"decided_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\tdecidedAt\"\xa1\x03\n" +
 	"\x13RegisterNodeRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12G\n" +
 	"\fcapabilities\x18\x02 \x01(\v2#.persys.control.v1.NodeCapabilitiesR\fcapabilities\x12J\n" +
@@ -2364,13 +5097,214 @@ const file_control_proto_rawDesc = "" +
 	"\vworkload_id\x18\x01 \x01(\tR\n" +
 	"workloadId\"3\n" +
 	"\x15RetryWorkloadResponse\x12\x1a\n" +
-	"\baccepted\x18\x01 \x01(\bR\baccepted\"\xab\x02\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\"C\n" +
+	"\x10DrainNodeRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xab\x01\n" +
+	"\x11DrainNodeResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12/\n" +
+	"\x13relocated_workloads\x18\x03 \x01(\x05R\x12relocatedWorkloads\x12/\n" +
+	"\x04node\x18\x04 \x01(\v2\x1b.persys.control.v1.NodeViewR\x04node\"E\n" +
+	"\x12UndrainNodeRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"|\n" +
+	"\x13UndrainNodeResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12/\n" +
+	"\x04node\x18\x03 \x01(\v2\x1b.persys.control.v1.NodeViewR\x04node\"K\n" +
+	"\tNodeTaint\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\x12\x16\n" +
+	"\x06effect\x18\x03 \x01(\tR\x06effect\"_\n" +
+	"\x10TaintNodeRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x122\n" +
+	"\x05taint\x18\x02 \x01(\v2\x1c.persys.control.v1.NodeTaintR\x05taint\"z\n" +
+	"\x11TaintNodeResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12/\n" +
+	"\x04node\x18\x03 \x01(\v2\x1b.persys.control.v1.NodeViewR\x04node\"W\n" +
+	"\x12UntaintNodeRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\x12\x16\n" +
+	"\x06effect\x18\x03 \x01(\tR\x06effect\"|\n" +
+	"\x13UntaintNodeResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12/\n" +
+	"\x04node\x18\x03 \x01(\v2\x1b.persys.control.v1.NodeViewR\x04node\"V\n" +
+	"\x13SetNodeLabelRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x03 \x01(\tR\x05value\"}\n" +
+	"\x14SetNodeLabelResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12/\n" +
+	"\x04node\x18\x03 \x01(\v2\x1b.persys.control.v1.NodeViewR\x04node\"C\n" +
+	"\x16DeleteNodeLabelRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x10\n" +
+	"\x03key\x18\x02 \x01(\tR\x03key\"\x80\x01\n" +
+	"\x17DeleteNodeLabelResponse\x12\x1a\n" +
+	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12/\n" +
+	"\x04node\x18\x03 \x01(\v2\x1b.persys.control.v1.NodeViewR\x04node\"*\n" +
+	"\x10ListNodesRequest\x12\x16\n" +
+	"\x06status\x18\x01 \x01(\tR\x06status\")\n" +
+	"\x0eGetNodeRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"F\n" +
+	"\x11ListNodesResponse\x121\n" +
+	"\x05nodes\x18\x01 \x03(\v2\x1b.persys.control.v1.NodeViewR\x05nodes\"B\n" +
+	"\x0fGetNodeResponse\x12/\n" +
+	"\x04node\x18\x01 \x01(\v2\x1b.persys.control.v1.NodeViewR\x04node\"\xd8\x05\n" +
+	"\bNodeView\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12#\n" +
+	"\rstatus_reason\x18\x03 \x01(\tR\fstatusReason\x12*\n" +
+	"\x11status_updated_by\x18\x04 \x01(\tR\x0fstatusUpdatedBy\x12F\n" +
+	"\x11status_updated_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x0fstatusUpdatedAt\x12A\n" +
+	"\x0elast_heartbeat\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\rlastHeartbeat\x12#\n" +
+	"\rgrpc_endpoint\x18\a \x01(\tR\fgrpcEndpoint\x12&\n" +
+	"\x0ftotal_cpu_cores\x18\b \x01(\x01R\rtotalCpuCores\x12.\n" +
+	"\x13available_cpu_cores\x18\t \x01(\x01R\x11availableCpuCores\x12&\n" +
+	"\x0ftotal_memory_mb\x18\n" +
+	" \x01(\x03R\rtotalMemoryMb\x12.\n" +
+	"\x13available_memory_mb\x18\v \x01(\x03R\x11availableMemoryMb\x128\n" +
+	"\x18supported_workload_types\x18\f \x03(\tR\x16supportedWorkloadTypes\x12?\n" +
+	"\x06labels\x18\r \x03(\v2'.persys.control.v1.NodeView.LabelsEntryR\x06labels\x124\n" +
+	"\x06taints\x18\x0e \x03(\v2\x1c.persys.control.v1.NodeTaintR\x06taints\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"G\n" +
+	"\x14ListWorkloadsRequest\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\"\xce\x02\n" +
+	"\x12SchedulerEventView\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1f\n" +
+	"\vworkload_id\x18\x03 \x01(\tR\n" +
+	"workloadId\x12\x17\n" +
+	"\anode_id\x18\x04 \x01(\tR\x06nodeId\x12\x16\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x128\n" +
+	"\ttimestamp\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12L\n" +
+	"\adetails\x18\a \x03(\v22.persys.control.v1.SchedulerEventView.DetailsEntryR\adetails\x1a:\n" +
+	"\fDetailsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"w\n" +
+	"\x11ListEventsRequest\x12\x14\n" +
+	"\x05limit\x18\x01 \x01(\x03R\x05limit\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x1f\n" +
+	"\vworkload_id\x18\x03 \x01(\tR\n" +
+	"workloadId\x12\x17\n" +
+	"\anode_id\x18\x04 \x01(\tR\x06nodeId\"S\n" +
+	"\x12ListEventsResponse\x12=\n" +
+	"\x06events\x18\x01 \x03(\v2%.persys.control.v1.SchedulerEventViewR\x06events\"b\n" +
+	"\x12WatchEventsRequest\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\x12\x1f\n" +
+	"\vworkload_id\x18\x02 \x01(\tR\n" +
+	"workloadId\x12\x17\n" +
+	"\anode_id\x18\x03 \x01(\tR\x06nodeId\"5\n" +
+	"\x12GetWorkloadRequest\x12\x1f\n" +
+	"\vworkload_id\x18\x01 \x01(\tR\n" +
+	"workloadId\"V\n" +
+	"\x15ListWorkloadsResponse\x12=\n" +
+	"\tworkloads\x18\x01 \x03(\v2\x1f.persys.control.v1.WorkloadViewR\tworkloads\"R\n" +
+	"\x13GetWorkloadResponse\x12;\n" +
+	"\bworkload\x18\x01 \x01(\v2\x1f.persys.control.v1.WorkloadViewR\bworkload\"\xfa\x04\n" +
+	"\fWorkloadView\x12\x1f\n" +
+	"\vworkload_id\x18\x01 \x01(\tR\n" +
+	"workloadId\x12\x12\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12#\n" +
+	"\rdesired_state\x18\x03 \x01(\tR\fdesiredState\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12(\n" +
+	"\x10assigned_node_id\x18\x05 \x01(\tR\x0eassignedNodeId\x12\x1f\n" +
+	"\vrevision_id\x18\x06 \x01(\tR\n" +
+	"revisionId\x12%\n" +
+	"\x0eretry_attempts\x18\a \x01(\x05R\rretryAttempts\x12,\n" +
+	"\x12retry_max_attempts\x18\b \x01(\x05R\x10retryMaxAttempts\x12>\n" +
+	"\rretry_next_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vretryNextAt\x12%\n" +
+	"\x0efailure_reason\x18\n" +
+	" \x01(\tR\rfailureReason\x12=\n" +
+	"\flast_updated\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\vlastUpdated\x127\n" +
+	"\x06reason\x18\f \x01(\v2\x1f.persys.control.v1.ReasonDetailR\x06reason\x12>\n" +
+	"\x05usage\x18\r \x01(\v2(.persys.control.v1.WorkloadUsageSnapshotR\x05usage\x129\n" +
+	"\n" +
+	"created_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\x1a\n" +
+	"\x18GetClusterSummaryRequest\"\x9f\x03\n" +
+	"\x19GetClusterSummaryResponse\x12\x1f\n" +
+	"\vtotal_nodes\x18\x01 \x01(\x05R\n" +
+	"totalNodes\x12\x1f\n" +
+	"\vready_nodes\x18\x02 \x01(\x05R\n" +
+	"readyNodes\x12&\n" +
+	"\x0fnot_ready_nodes\x18\x03 \x01(\x05R\rnotReadyNodes\x12'\n" +
+	"\x0ftotal_workloads\x18\x04 \x01(\x05R\x0etotalWorkloads\x12+\n" +
+	"\x11running_workloads\x18\x05 \x01(\x05R\x10runningWorkloads\x12+\n" +
+	"\x11pending_workloads\x18\x06 \x01(\x05R\x10pendingWorkloads\x12)\n" +
+	"\x10failed_workloads\x18\a \x01(\x05R\x0ffailedWorkloads\x12+\n" +
+	"\x11deleted_workloads\x18\b \x01(\x05R\x10deletedWorkloads\x12=\n" +
+	"\fgenerated_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\vgeneratedAt\"\xab\x02\n" +
 	"\x0eControlMessage\x12D\n" +
 	"\bregister\x18\x01 \x01(\v2&.persys.control.v1.RegisterNodeRequestH\x00R\bregister\x12C\n" +
 	"\theartbeat\x18\x02 \x01(\v2#.persys.control.v1.HeartbeatRequestH\x00R\theartbeat\x12?\n" +
 	"\x05apply\x18\x03 \x01(\v2'.persys.control.v1.ApplyWorkloadRequestH\x00R\x05apply\x12B\n" +
 	"\x06delete\x18\x04 \x01(\v2(.persys.control.v1.DeleteWorkloadRequestH\x00R\x06deleteB\t\n" +
-	"\amessage*\xd6\x01\n" +
+	"\amessage\"\xef\x01\n" +
+	"\x11CreateDiskRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
+	"\x06driver\x18\x02 \x01(\tR\x06driver\x12\x17\n" +
+	"\asize_gb\x18\x03 \x01(\x03R\x06sizeGb\x12\x17\n" +
+	"\afs_type\x18\x04 \x01(\tR\x06fsType\x12\x1f\n" +
+	"\vaccess_mode\x18\x05 \x01(\tR\n" +
+	"accessMode\x12#\n" +
+	"\rretain_policy\x18\x06 \x01(\tR\fretainPolicy\x12\x17\n" +
+	"\anode_id\x18\a \x01(\tR\x06nodeId\x12\x1d\n" +
+	"\n" +
+	"mount_path\x18\b \x01(\tR\tmountPath\"E\n" +
+	"\x12CreateDiskResponse\x12/\n" +
+	"\x04disk\x18\x01 \x01(\v2\x1b.persys.control.v1.DiskViewR\x04disk\"\x12\n" +
+	"\x10ListDisksRequest\"F\n" +
+	"\x11ListDisksResponse\x121\n" +
+	"\x05disks\x18\x01 \x03(\v2\x1b.persys.control.v1.DiskViewR\x05disks\")\n" +
+	"\x0eGetDiskRequest\x12\x17\n" +
+	"\adisk_id\x18\x01 \x01(\tR\x06diskId\"B\n" +
+	"\x0fGetDiskResponse\x12/\n" +
+	"\x04disk\x18\x01 \x01(\v2\x1b.persys.control.v1.DiskViewR\x04disk\"B\n" +
+	"\x11DeleteDiskRequest\x12\x17\n" +
+	"\adisk_id\x18\x01 \x01(\tR\x06diskId\x12\x14\n" +
+	"\x05force\x18\x02 \x01(\bR\x05force\"S\n" +
+	"\x12DeleteDiskResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12#\n" +
+	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\"\xa5\x04\n" +
+	"\bDiskView\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
+	"\x06driver\x18\x03 \x01(\tR\x06driver\x12\x17\n" +
+	"\asize_gb\x18\x04 \x01(\x03R\x06sizeGb\x12\x17\n" +
+	"\afs_type\x18\x05 \x01(\tR\x06fsType\x12\x1f\n" +
+	"\vaccess_mode\x18\x06 \x01(\tR\n" +
+	"accessMode\x12#\n" +
+	"\rretain_policy\x18\a \x01(\tR\fretainPolicy\x12\x14\n" +
+	"\x05phase\x18\b \x01(\tR\x05phase\x12\x1d\n" +
+	"\n" +
+	"last_error\x18\t \x01(\tR\tlastError\x12\x17\n" +
+	"\anode_id\x18\n" +
+	" \x01(\tR\x06nodeId\x12\x16\n" +
+	"\x06device\x18\v \x01(\tR\x06device\x12\x1e\n" +
+	"\n" +
+	"standalone\x18\f \x01(\bR\n" +
+	"standalone\x12\x1d\n" +
+	"\n" +
+	"mount_path\x18\r \x01(\tR\tmountPath\x12#\n" +
+	"\rworkload_refs\x18\x0e \x03(\tR\fworkloadRefs\x12%\n" +
+	"\x0eattached_nodes\x18\x0f \x03(\tR\rattachedNodes\x129\n" +
+	"\n" +
+	"created_at\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
+	"\n" +
+	"updated_at\x18\x11 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt*\xda\x01\n" +
+	"\x14AutomationActionType\x12&\n" +
+	"\"AUTOMATION_ACTION_TYPE_UNSPECIFIED\x10\x00\x12'\n" +
+	"#AUTOMATION_ACTION_SET_DESIRED_STATE\x10\x01\x12$\n" +
+	" AUTOMATION_ACTION_RETRY_WORKLOAD\x10\x02\x12%\n" +
+	"!AUTOMATION_ACTION_DELETE_WORKLOAD\x10\x03\x12$\n" +
+	" AUTOMATION_ACTION_SCALE_REPLICAS\x10\x04*\xd6\x01\n" +
 	"\rFailureReason\x12\x1e\n" +
 	"\x1aFAILURE_REASON_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11IMAGE_PULL_FAILED\x10\x01\x12\x13\n" +
@@ -2380,14 +5314,35 @@ const file_control_proto_rawDesc = "" +
 	"\rRUNTIME_ERROR\x10\x05\x12\x11\n" +
 	"\rNETWORK_ERROR\x10\x06\x12\x11\n" +
 	"\rSTORAGE_ERROR\x10\a\x12\x12\n" +
-	"\x0eVM_BOOT_FAILED\x10\b2\xd1\x04\n" +
+	"\x0eVM_BOOT_FAILED\x10\b2\x8a\x12\n" +
 	"\fAgentControl\x12_\n" +
 	"\fRegisterNode\x12&.persys.control.v1.RegisterNodeRequest\x1a'.persys.control.v1.RegisterNodeResponse\x12V\n" +
 	"\tHeartbeat\x12#.persys.control.v1.HeartbeatRequest\x1a$.persys.control.v1.HeartbeatResponse\x12b\n" +
 	"\rApplyWorkload\x12'.persys.control.v1.ApplyWorkloadRequest\x1a(.persys.control.v1.ApplyWorkloadResponse\x12e\n" +
 	"\x0eDeleteWorkload\x12(.persys.control.v1.DeleteWorkloadRequest\x1a).persys.control.v1.DeleteWorkloadResponse\x12b\n" +
-	"\rRetryWorkload\x12'.persys.control.v1.RetryWorkloadRequest\x1a(.persys.control.v1.RetryWorkloadResponse\x12Y\n" +
-	"\rControlStream\x12!.persys.control.v1.ControlMessage\x1a!.persys.control.v1.ControlMessage(\x010\x01B:Z8github.com/persys/compute-agent/pkg/control/v1;controlv1b\x06proto3"
+	"\rRetryWorkload\x12'.persys.control.v1.RetryWorkloadRequest\x1a(.persys.control.v1.RetryWorkloadResponse\x12V\n" +
+	"\tDrainNode\x12#.persys.control.v1.DrainNodeRequest\x1a$.persys.control.v1.DrainNodeResponse\x12\\\n" +
+	"\vUndrainNode\x12%.persys.control.v1.UndrainNodeRequest\x1a&.persys.control.v1.UndrainNodeResponse\x12V\n" +
+	"\tTaintNode\x12#.persys.control.v1.TaintNodeRequest\x1a$.persys.control.v1.TaintNodeResponse\x12\\\n" +
+	"\vUntaintNode\x12%.persys.control.v1.UntaintNodeRequest\x1a&.persys.control.v1.UntaintNodeResponse\x12_\n" +
+	"\fSetNodeLabel\x12&.persys.control.v1.SetNodeLabelRequest\x1a'.persys.control.v1.SetNodeLabelResponse\x12h\n" +
+	"\x0fDeleteNodeLabel\x12).persys.control.v1.DeleteNodeLabelRequest\x1a*.persys.control.v1.DeleteNodeLabelResponse\x12\x89\x01\n" +
+	"\x1aSubmitAutomationSuggestion\x124.persys.control.v1.SubmitAutomationSuggestionRequest\x1a5.persys.control.v1.SubmitAutomationSuggestionResponse\x12V\n" +
+	"\tListNodes\x12#.persys.control.v1.ListNodesRequest\x1a$.persys.control.v1.ListNodesResponse\x12P\n" +
+	"\aGetNode\x12!.persys.control.v1.GetNodeRequest\x1a\".persys.control.v1.GetNodeResponse\x12b\n" +
+	"\rListWorkloads\x12'.persys.control.v1.ListWorkloadsRequest\x1a(.persys.control.v1.ListWorkloadsResponse\x12\\\n" +
+	"\vGetWorkload\x12%.persys.control.v1.GetWorkloadRequest\x1a&.persys.control.v1.GetWorkloadResponse\x12n\n" +
+	"\x11GetClusterSummary\x12+.persys.control.v1.GetClusterSummaryRequest\x1a,.persys.control.v1.GetClusterSummaryResponse\x12Y\n" +
+	"\n" +
+	"ListEvents\x12$.persys.control.v1.ListEventsRequest\x1a%.persys.control.v1.ListEventsResponse\x12]\n" +
+	"\vWatchEvents\x12%.persys.control.v1.WatchEventsRequest\x1a%.persys.control.v1.SchedulerEventView0\x01\x12Y\n" +
+	"\rControlStream\x12!.persys.control.v1.ControlMessage\x1a!.persys.control.v1.ControlMessage(\x010\x01\x12Y\n" +
+	"\n" +
+	"CreateDisk\x12$.persys.control.v1.CreateDiskRequest\x1a%.persys.control.v1.CreateDiskResponse\x12V\n" +
+	"\tListDisks\x12#.persys.control.v1.ListDisksRequest\x1a$.persys.control.v1.ListDisksResponse\x12P\n" +
+	"\aGetDisk\x12!.persys.control.v1.GetDiskRequest\x1a\".persys.control.v1.GetDiskResponse\x12Y\n" +
+	"\n" +
+	"DeleteDisk\x12$.persys.control.v1.DeleteDiskRequest\x1a%.persys.control.v1.DeleteDiskResponseB7Z5github.com/persys-dev/persys/api/control/v1;controlv1b\x06proto3"
 
 var (
 	file_control_proto_rawDescOnce sync.Once
@@ -2401,99 +5356,212 @@ func file_control_proto_rawDescGZIP() []byte {
 	return file_control_proto_rawDescData
 }
 
-var file_control_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_control_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
+var file_control_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_control_proto_msgTypes = make([]protoimpl.MessageInfo, 75)
 var file_control_proto_goTypes = []any{
-	(FailureReason)(0),             // 0: persys.control.v1.FailureReason
-	(*RegisterNodeRequest)(nil),    // 1: persys.control.v1.RegisterNodeRequest
-	(*NodeCapabilities)(nil),       // 2: persys.control.v1.NodeCapabilities
-	(*StoragePool)(nil),            // 3: persys.control.v1.StoragePool
-	(*RegisterNodeResponse)(nil),   // 4: persys.control.v1.RegisterNodeResponse
-	(*HeartbeatRequest)(nil),       // 5: persys.control.v1.HeartbeatRequest
-	(*NodeUsage)(nil),              // 6: persys.control.v1.NodeUsage
-	(*HeartbeatResponse)(nil),      // 7: persys.control.v1.HeartbeatResponse
-	(*ApplyWorkloadRequest)(nil),   // 8: persys.control.v1.ApplyWorkloadRequest
-	(*ApplyWorkloadResponse)(nil),  // 9: persys.control.v1.ApplyWorkloadResponse
-	(*DeleteWorkloadRequest)(nil),  // 10: persys.control.v1.DeleteWorkloadRequest
-	(*DeleteWorkloadResponse)(nil), // 11: persys.control.v1.DeleteWorkloadResponse
-	(*WorkloadSpec)(nil),           // 12: persys.control.v1.WorkloadSpec
-	(*ResourceRequirements)(nil),   // 13: persys.control.v1.ResourceRequirements
-	(*ContainerSpec)(nil),          // 14: persys.control.v1.ContainerSpec
-	(*VolumeMount)(nil),            // 15: persys.control.v1.VolumeMount
-	(*Port)(nil),                   // 16: persys.control.v1.Port
-	(*ComposeSpec)(nil),            // 17: persys.control.v1.ComposeSpec
-	(*VMSpec)(nil),                 // 18: persys.control.v1.VMSpec
-	(*DiskConfig)(nil),             // 19: persys.control.v1.DiskConfig
-	(*NetworkConfig)(nil),          // 20: persys.control.v1.NetworkConfig
-	(*CloudInitConfig)(nil),        // 21: persys.control.v1.CloudInitConfig
-	(*ManagedVolumeSpec)(nil),      // 22: persys.control.v1.ManagedVolumeSpec
-	(*WorkloadUsageSnapshot)(nil),  // 23: persys.control.v1.WorkloadUsageSnapshot
-	(*ReasonDetail)(nil),           // 24: persys.control.v1.ReasonDetail
-	(*WorkloadStatus)(nil),         // 25: persys.control.v1.WorkloadStatus
-	(*RetryWorkloadRequest)(nil),   // 26: persys.control.v1.RetryWorkloadRequest
-	(*RetryWorkloadResponse)(nil),  // 27: persys.control.v1.RetryWorkloadResponse
-	(*ControlMessage)(nil),         // 28: persys.control.v1.ControlMessage
-	nil,                            // 29: persys.control.v1.RegisterNodeRequest.LabelsEntry
-	nil,                            // 30: persys.control.v1.WorkloadSpec.MetadataEntry
-	nil,                            // 31: persys.control.v1.ContainerSpec.EnvEntry
-	nil,                            // 32: persys.control.v1.ComposeSpec.EnvEntry
-	(*timestamppb.Timestamp)(nil),  // 33: google.protobuf.Timestamp
+	(AutomationActionType)(0),                  // 0: persys.control.v1.AutomationActionType
+	(FailureReason)(0),                         // 1: persys.control.v1.FailureReason
+	(*AutomationSuggestion)(nil),               // 2: persys.control.v1.AutomationSuggestion
+	(*SubmitAutomationSuggestionRequest)(nil),  // 3: persys.control.v1.SubmitAutomationSuggestionRequest
+	(*SubmitAutomationSuggestionResponse)(nil), // 4: persys.control.v1.SubmitAutomationSuggestionResponse
+	(*RegisterNodeRequest)(nil),                // 5: persys.control.v1.RegisterNodeRequest
+	(*NodeCapabilities)(nil),                   // 6: persys.control.v1.NodeCapabilities
+	(*StoragePool)(nil),                        // 7: persys.control.v1.StoragePool
+	(*RegisterNodeResponse)(nil),               // 8: persys.control.v1.RegisterNodeResponse
+	(*HeartbeatRequest)(nil),                   // 9: persys.control.v1.HeartbeatRequest
+	(*NodeUsage)(nil),                          // 10: persys.control.v1.NodeUsage
+	(*HeartbeatResponse)(nil),                  // 11: persys.control.v1.HeartbeatResponse
+	(*ApplyWorkloadRequest)(nil),               // 12: persys.control.v1.ApplyWorkloadRequest
+	(*ApplyWorkloadResponse)(nil),              // 13: persys.control.v1.ApplyWorkloadResponse
+	(*DeleteWorkloadRequest)(nil),              // 14: persys.control.v1.DeleteWorkloadRequest
+	(*DeleteWorkloadResponse)(nil),             // 15: persys.control.v1.DeleteWorkloadResponse
+	(*WorkloadSpec)(nil),                       // 16: persys.control.v1.WorkloadSpec
+	(*ResourceRequirements)(nil),               // 17: persys.control.v1.ResourceRequirements
+	(*ContainerSpec)(nil),                      // 18: persys.control.v1.ContainerSpec
+	(*VolumeMount)(nil),                        // 19: persys.control.v1.VolumeMount
+	(*Port)(nil),                               // 20: persys.control.v1.Port
+	(*ComposeSpec)(nil),                        // 21: persys.control.v1.ComposeSpec
+	(*VMSpec)(nil),                             // 22: persys.control.v1.VMSpec
+	(*DiskConfig)(nil),                         // 23: persys.control.v1.DiskConfig
+	(*NetworkConfig)(nil),                      // 24: persys.control.v1.NetworkConfig
+	(*CloudInitConfig)(nil),                    // 25: persys.control.v1.CloudInitConfig
+	(*ManagedVolumeSpec)(nil),                  // 26: persys.control.v1.ManagedVolumeSpec
+	(*WorkloadUsageSnapshot)(nil),              // 27: persys.control.v1.WorkloadUsageSnapshot
+	(*ReasonDetail)(nil),                       // 28: persys.control.v1.ReasonDetail
+	(*WorkloadStatus)(nil),                     // 29: persys.control.v1.WorkloadStatus
+	(*RetryWorkloadRequest)(nil),               // 30: persys.control.v1.RetryWorkloadRequest
+	(*RetryWorkloadResponse)(nil),              // 31: persys.control.v1.RetryWorkloadResponse
+	(*DrainNodeRequest)(nil),                   // 32: persys.control.v1.DrainNodeRequest
+	(*DrainNodeResponse)(nil),                  // 33: persys.control.v1.DrainNodeResponse
+	(*UndrainNodeRequest)(nil),                 // 34: persys.control.v1.UndrainNodeRequest
+	(*UndrainNodeResponse)(nil),                // 35: persys.control.v1.UndrainNodeResponse
+	(*NodeTaint)(nil),                          // 36: persys.control.v1.NodeTaint
+	(*TaintNodeRequest)(nil),                   // 37: persys.control.v1.TaintNodeRequest
+	(*TaintNodeResponse)(nil),                  // 38: persys.control.v1.TaintNodeResponse
+	(*UntaintNodeRequest)(nil),                 // 39: persys.control.v1.UntaintNodeRequest
+	(*UntaintNodeResponse)(nil),                // 40: persys.control.v1.UntaintNodeResponse
+	(*SetNodeLabelRequest)(nil),                // 41: persys.control.v1.SetNodeLabelRequest
+	(*SetNodeLabelResponse)(nil),               // 42: persys.control.v1.SetNodeLabelResponse
+	(*DeleteNodeLabelRequest)(nil),             // 43: persys.control.v1.DeleteNodeLabelRequest
+	(*DeleteNodeLabelResponse)(nil),            // 44: persys.control.v1.DeleteNodeLabelResponse
+	(*ListNodesRequest)(nil),                   // 45: persys.control.v1.ListNodesRequest
+	(*GetNodeRequest)(nil),                     // 46: persys.control.v1.GetNodeRequest
+	(*ListNodesResponse)(nil),                  // 47: persys.control.v1.ListNodesResponse
+	(*GetNodeResponse)(nil),                    // 48: persys.control.v1.GetNodeResponse
+	(*NodeView)(nil),                           // 49: persys.control.v1.NodeView
+	(*ListWorkloadsRequest)(nil),               // 50: persys.control.v1.ListWorkloadsRequest
+	(*SchedulerEventView)(nil),                 // 51: persys.control.v1.SchedulerEventView
+	(*ListEventsRequest)(nil),                  // 52: persys.control.v1.ListEventsRequest
+	(*ListEventsResponse)(nil),                 // 53: persys.control.v1.ListEventsResponse
+	(*WatchEventsRequest)(nil),                 // 54: persys.control.v1.WatchEventsRequest
+	(*GetWorkloadRequest)(nil),                 // 55: persys.control.v1.GetWorkloadRequest
+	(*ListWorkloadsResponse)(nil),              // 56: persys.control.v1.ListWorkloadsResponse
+	(*GetWorkloadResponse)(nil),                // 57: persys.control.v1.GetWorkloadResponse
+	(*WorkloadView)(nil),                       // 58: persys.control.v1.WorkloadView
+	(*GetClusterSummaryRequest)(nil),           // 59: persys.control.v1.GetClusterSummaryRequest
+	(*GetClusterSummaryResponse)(nil),          // 60: persys.control.v1.GetClusterSummaryResponse
+	(*ControlMessage)(nil),                     // 61: persys.control.v1.ControlMessage
+	(*CreateDiskRequest)(nil),                  // 62: persys.control.v1.CreateDiskRequest
+	(*CreateDiskResponse)(nil),                 // 63: persys.control.v1.CreateDiskResponse
+	(*ListDisksRequest)(nil),                   // 64: persys.control.v1.ListDisksRequest
+	(*ListDisksResponse)(nil),                  // 65: persys.control.v1.ListDisksResponse
+	(*GetDiskRequest)(nil),                     // 66: persys.control.v1.GetDiskRequest
+	(*GetDiskResponse)(nil),                    // 67: persys.control.v1.GetDiskResponse
+	(*DeleteDiskRequest)(nil),                  // 68: persys.control.v1.DeleteDiskRequest
+	(*DeleteDiskResponse)(nil),                 // 69: persys.control.v1.DeleteDiskResponse
+	(*DiskView)(nil),                           // 70: persys.control.v1.DiskView
+	nil,                                        // 71: persys.control.v1.RegisterNodeRequest.LabelsEntry
+	nil,                                        // 72: persys.control.v1.WorkloadSpec.MetadataEntry
+	nil,                                        // 73: persys.control.v1.ContainerSpec.EnvEntry
+	nil,                                        // 74: persys.control.v1.ComposeSpec.EnvEntry
+	nil,                                        // 75: persys.control.v1.NodeView.LabelsEntry
+	nil,                                        // 76: persys.control.v1.SchedulerEventView.DetailsEntry
+	(*timestamppb.Timestamp)(nil),              // 77: google.protobuf.Timestamp
 }
 var file_control_proto_depIdxs = []int32{
-	2,  // 0: persys.control.v1.RegisterNodeRequest.capabilities:type_name -> persys.control.v1.NodeCapabilities
-	29, // 1: persys.control.v1.RegisterNodeRequest.labels:type_name -> persys.control.v1.RegisterNodeRequest.LabelsEntry
-	33, // 2: persys.control.v1.RegisterNodeRequest.timestamp:type_name -> google.protobuf.Timestamp
-	3,  // 3: persys.control.v1.NodeCapabilities.storage_pools:type_name -> persys.control.v1.StoragePool
-	33, // 4: persys.control.v1.RegisterNodeResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
-	6,  // 5: persys.control.v1.HeartbeatRequest.usage:type_name -> persys.control.v1.NodeUsage
-	25, // 6: persys.control.v1.HeartbeatRequest.workload_statuses:type_name -> persys.control.v1.WorkloadStatus
-	33, // 7: persys.control.v1.HeartbeatRequest.timestamp:type_name -> google.protobuf.Timestamp
-	23, // 8: persys.control.v1.HeartbeatRequest.workload_usage:type_name -> persys.control.v1.WorkloadUsageSnapshot
-	33, // 9: persys.control.v1.HeartbeatResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
-	12, // 10: persys.control.v1.ApplyWorkloadRequest.spec:type_name -> persys.control.v1.WorkloadSpec
-	0,  // 11: persys.control.v1.ApplyWorkloadResponse.failure_reason:type_name -> persys.control.v1.FailureReason
-	13, // 12: persys.control.v1.WorkloadSpec.resources:type_name -> persys.control.v1.ResourceRequirements
-	14, // 13: persys.control.v1.WorkloadSpec.container:type_name -> persys.control.v1.ContainerSpec
-	17, // 14: persys.control.v1.WorkloadSpec.compose:type_name -> persys.control.v1.ComposeSpec
-	18, // 15: persys.control.v1.WorkloadSpec.vm:type_name -> persys.control.v1.VMSpec
-	30, // 16: persys.control.v1.WorkloadSpec.metadata:type_name -> persys.control.v1.WorkloadSpec.MetadataEntry
-	31, // 17: persys.control.v1.ContainerSpec.env:type_name -> persys.control.v1.ContainerSpec.EnvEntry
-	15, // 18: persys.control.v1.ContainerSpec.volumes:type_name -> persys.control.v1.VolumeMount
-	16, // 19: persys.control.v1.ContainerSpec.ports:type_name -> persys.control.v1.Port
-	22, // 20: persys.control.v1.ContainerSpec.managed_volumes:type_name -> persys.control.v1.ManagedVolumeSpec
-	32, // 21: persys.control.v1.ComposeSpec.env:type_name -> persys.control.v1.ComposeSpec.EnvEntry
-	19, // 22: persys.control.v1.VMSpec.disks:type_name -> persys.control.v1.DiskConfig
-	20, // 23: persys.control.v1.VMSpec.networks:type_name -> persys.control.v1.NetworkConfig
-	21, // 24: persys.control.v1.VMSpec.cloud_init:type_name -> persys.control.v1.CloudInitConfig
-	22, // 25: persys.control.v1.VMSpec.managed_volumes:type_name -> persys.control.v1.ManagedVolumeSpec
-	33, // 26: persys.control.v1.WorkloadUsageSnapshot.collected_at:type_name -> google.protobuf.Timestamp
-	33, // 27: persys.control.v1.ReasonDetail.last_transition:type_name -> google.protobuf.Timestamp
-	33, // 28: persys.control.v1.ReasonDetail.next_retry_at:type_name -> google.protobuf.Timestamp
-	0,  // 29: persys.control.v1.WorkloadStatus.failure_reason:type_name -> persys.control.v1.FailureReason
-	33, // 30: persys.control.v1.WorkloadStatus.last_transition:type_name -> google.protobuf.Timestamp
-	24, // 31: persys.control.v1.WorkloadStatus.reason:type_name -> persys.control.v1.ReasonDetail
-	23, // 32: persys.control.v1.WorkloadStatus.usage:type_name -> persys.control.v1.WorkloadUsageSnapshot
-	1,  // 33: persys.control.v1.ControlMessage.register:type_name -> persys.control.v1.RegisterNodeRequest
-	5,  // 34: persys.control.v1.ControlMessage.heartbeat:type_name -> persys.control.v1.HeartbeatRequest
-	8,  // 35: persys.control.v1.ControlMessage.apply:type_name -> persys.control.v1.ApplyWorkloadRequest
-	10, // 36: persys.control.v1.ControlMessage.delete:type_name -> persys.control.v1.DeleteWorkloadRequest
-	1,  // 37: persys.control.v1.AgentControl.RegisterNode:input_type -> persys.control.v1.RegisterNodeRequest
-	5,  // 38: persys.control.v1.AgentControl.Heartbeat:input_type -> persys.control.v1.HeartbeatRequest
-	8,  // 39: persys.control.v1.AgentControl.ApplyWorkload:input_type -> persys.control.v1.ApplyWorkloadRequest
-	10, // 40: persys.control.v1.AgentControl.DeleteWorkload:input_type -> persys.control.v1.DeleteWorkloadRequest
-	26, // 41: persys.control.v1.AgentControl.RetryWorkload:input_type -> persys.control.v1.RetryWorkloadRequest
-	28, // 42: persys.control.v1.AgentControl.ControlStream:input_type -> persys.control.v1.ControlMessage
-	4,  // 43: persys.control.v1.AgentControl.RegisterNode:output_type -> persys.control.v1.RegisterNodeResponse
-	7,  // 44: persys.control.v1.AgentControl.Heartbeat:output_type -> persys.control.v1.HeartbeatResponse
-	9,  // 45: persys.control.v1.AgentControl.ApplyWorkload:output_type -> persys.control.v1.ApplyWorkloadResponse
-	11, // 46: persys.control.v1.AgentControl.DeleteWorkload:output_type -> persys.control.v1.DeleteWorkloadResponse
-	27, // 47: persys.control.v1.AgentControl.RetryWorkload:output_type -> persys.control.v1.RetryWorkloadResponse
-	28, // 48: persys.control.v1.AgentControl.ControlStream:output_type -> persys.control.v1.ControlMessage
-	43, // [43:49] is the sub-list for method output_type
-	37, // [37:43] is the sub-list for method input_type
-	37, // [37:37] is the sub-list for extension type_name
-	37, // [37:37] is the sub-list for extension extendee
-	0,  // [0:37] is the sub-list for field type_name
+	0,  // 0: persys.control.v1.AutomationSuggestion.action_type:type_name -> persys.control.v1.AutomationActionType
+	77, // 1: persys.control.v1.AutomationSuggestion.suggested_at:type_name -> google.protobuf.Timestamp
+	2,  // 2: persys.control.v1.SubmitAutomationSuggestionRequest.suggestion:type_name -> persys.control.v1.AutomationSuggestion
+	77, // 3: persys.control.v1.SubmitAutomationSuggestionResponse.decided_at:type_name -> google.protobuf.Timestamp
+	6,  // 4: persys.control.v1.RegisterNodeRequest.capabilities:type_name -> persys.control.v1.NodeCapabilities
+	71, // 5: persys.control.v1.RegisterNodeRequest.labels:type_name -> persys.control.v1.RegisterNodeRequest.LabelsEntry
+	77, // 6: persys.control.v1.RegisterNodeRequest.timestamp:type_name -> google.protobuf.Timestamp
+	7,  // 7: persys.control.v1.NodeCapabilities.storage_pools:type_name -> persys.control.v1.StoragePool
+	77, // 8: persys.control.v1.RegisterNodeResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	10, // 9: persys.control.v1.HeartbeatRequest.usage:type_name -> persys.control.v1.NodeUsage
+	29, // 10: persys.control.v1.HeartbeatRequest.workload_statuses:type_name -> persys.control.v1.WorkloadStatus
+	77, // 11: persys.control.v1.HeartbeatRequest.timestamp:type_name -> google.protobuf.Timestamp
+	27, // 12: persys.control.v1.HeartbeatRequest.workload_usage:type_name -> persys.control.v1.WorkloadUsageSnapshot
+	77, // 13: persys.control.v1.HeartbeatResponse.lease_expires_at:type_name -> google.protobuf.Timestamp
+	16, // 14: persys.control.v1.ApplyWorkloadRequest.spec:type_name -> persys.control.v1.WorkloadSpec
+	1,  // 15: persys.control.v1.ApplyWorkloadResponse.failure_reason:type_name -> persys.control.v1.FailureReason
+	17, // 16: persys.control.v1.WorkloadSpec.resources:type_name -> persys.control.v1.ResourceRequirements
+	18, // 17: persys.control.v1.WorkloadSpec.container:type_name -> persys.control.v1.ContainerSpec
+	21, // 18: persys.control.v1.WorkloadSpec.compose:type_name -> persys.control.v1.ComposeSpec
+	22, // 19: persys.control.v1.WorkloadSpec.vm:type_name -> persys.control.v1.VMSpec
+	72, // 20: persys.control.v1.WorkloadSpec.metadata:type_name -> persys.control.v1.WorkloadSpec.MetadataEntry
+	73, // 21: persys.control.v1.ContainerSpec.env:type_name -> persys.control.v1.ContainerSpec.EnvEntry
+	19, // 22: persys.control.v1.ContainerSpec.volumes:type_name -> persys.control.v1.VolumeMount
+	20, // 23: persys.control.v1.ContainerSpec.ports:type_name -> persys.control.v1.Port
+	26, // 24: persys.control.v1.ContainerSpec.managed_volumes:type_name -> persys.control.v1.ManagedVolumeSpec
+	74, // 25: persys.control.v1.ComposeSpec.env:type_name -> persys.control.v1.ComposeSpec.EnvEntry
+	23, // 26: persys.control.v1.VMSpec.disks:type_name -> persys.control.v1.DiskConfig
+	24, // 27: persys.control.v1.VMSpec.networks:type_name -> persys.control.v1.NetworkConfig
+	25, // 28: persys.control.v1.VMSpec.cloud_init:type_name -> persys.control.v1.CloudInitConfig
+	26, // 29: persys.control.v1.VMSpec.managed_volumes:type_name -> persys.control.v1.ManagedVolumeSpec
+	77, // 30: persys.control.v1.WorkloadUsageSnapshot.collected_at:type_name -> google.protobuf.Timestamp
+	77, // 31: persys.control.v1.ReasonDetail.last_transition:type_name -> google.protobuf.Timestamp
+	77, // 32: persys.control.v1.ReasonDetail.next_retry_at:type_name -> google.protobuf.Timestamp
+	1,  // 33: persys.control.v1.WorkloadStatus.failure_reason:type_name -> persys.control.v1.FailureReason
+	77, // 34: persys.control.v1.WorkloadStatus.last_transition:type_name -> google.protobuf.Timestamp
+	28, // 35: persys.control.v1.WorkloadStatus.reason:type_name -> persys.control.v1.ReasonDetail
+	27, // 36: persys.control.v1.WorkloadStatus.usage:type_name -> persys.control.v1.WorkloadUsageSnapshot
+	49, // 37: persys.control.v1.DrainNodeResponse.node:type_name -> persys.control.v1.NodeView
+	49, // 38: persys.control.v1.UndrainNodeResponse.node:type_name -> persys.control.v1.NodeView
+	36, // 39: persys.control.v1.TaintNodeRequest.taint:type_name -> persys.control.v1.NodeTaint
+	49, // 40: persys.control.v1.TaintNodeResponse.node:type_name -> persys.control.v1.NodeView
+	49, // 41: persys.control.v1.UntaintNodeResponse.node:type_name -> persys.control.v1.NodeView
+	49, // 42: persys.control.v1.SetNodeLabelResponse.node:type_name -> persys.control.v1.NodeView
+	49, // 43: persys.control.v1.DeleteNodeLabelResponse.node:type_name -> persys.control.v1.NodeView
+	49, // 44: persys.control.v1.ListNodesResponse.nodes:type_name -> persys.control.v1.NodeView
+	49, // 45: persys.control.v1.GetNodeResponse.node:type_name -> persys.control.v1.NodeView
+	77, // 46: persys.control.v1.NodeView.status_updated_at:type_name -> google.protobuf.Timestamp
+	77, // 47: persys.control.v1.NodeView.last_heartbeat:type_name -> google.protobuf.Timestamp
+	75, // 48: persys.control.v1.NodeView.labels:type_name -> persys.control.v1.NodeView.LabelsEntry
+	36, // 49: persys.control.v1.NodeView.taints:type_name -> persys.control.v1.NodeTaint
+	77, // 50: persys.control.v1.SchedulerEventView.timestamp:type_name -> google.protobuf.Timestamp
+	76, // 51: persys.control.v1.SchedulerEventView.details:type_name -> persys.control.v1.SchedulerEventView.DetailsEntry
+	51, // 52: persys.control.v1.ListEventsResponse.events:type_name -> persys.control.v1.SchedulerEventView
+	58, // 53: persys.control.v1.ListWorkloadsResponse.workloads:type_name -> persys.control.v1.WorkloadView
+	58, // 54: persys.control.v1.GetWorkloadResponse.workload:type_name -> persys.control.v1.WorkloadView
+	77, // 55: persys.control.v1.WorkloadView.retry_next_at:type_name -> google.protobuf.Timestamp
+	77, // 56: persys.control.v1.WorkloadView.last_updated:type_name -> google.protobuf.Timestamp
+	28, // 57: persys.control.v1.WorkloadView.reason:type_name -> persys.control.v1.ReasonDetail
+	27, // 58: persys.control.v1.WorkloadView.usage:type_name -> persys.control.v1.WorkloadUsageSnapshot
+	77, // 59: persys.control.v1.WorkloadView.created_at:type_name -> google.protobuf.Timestamp
+	77, // 60: persys.control.v1.GetClusterSummaryResponse.generated_at:type_name -> google.protobuf.Timestamp
+	5,  // 61: persys.control.v1.ControlMessage.register:type_name -> persys.control.v1.RegisterNodeRequest
+	9,  // 62: persys.control.v1.ControlMessage.heartbeat:type_name -> persys.control.v1.HeartbeatRequest
+	12, // 63: persys.control.v1.ControlMessage.apply:type_name -> persys.control.v1.ApplyWorkloadRequest
+	14, // 64: persys.control.v1.ControlMessage.delete:type_name -> persys.control.v1.DeleteWorkloadRequest
+	70, // 65: persys.control.v1.CreateDiskResponse.disk:type_name -> persys.control.v1.DiskView
+	70, // 66: persys.control.v1.ListDisksResponse.disks:type_name -> persys.control.v1.DiskView
+	70, // 67: persys.control.v1.GetDiskResponse.disk:type_name -> persys.control.v1.DiskView
+	77, // 68: persys.control.v1.DiskView.created_at:type_name -> google.protobuf.Timestamp
+	77, // 69: persys.control.v1.DiskView.updated_at:type_name -> google.protobuf.Timestamp
+	5,  // 70: persys.control.v1.AgentControl.RegisterNode:input_type -> persys.control.v1.RegisterNodeRequest
+	9,  // 71: persys.control.v1.AgentControl.Heartbeat:input_type -> persys.control.v1.HeartbeatRequest
+	12, // 72: persys.control.v1.AgentControl.ApplyWorkload:input_type -> persys.control.v1.ApplyWorkloadRequest
+	14, // 73: persys.control.v1.AgentControl.DeleteWorkload:input_type -> persys.control.v1.DeleteWorkloadRequest
+	30, // 74: persys.control.v1.AgentControl.RetryWorkload:input_type -> persys.control.v1.RetryWorkloadRequest
+	32, // 75: persys.control.v1.AgentControl.DrainNode:input_type -> persys.control.v1.DrainNodeRequest
+	34, // 76: persys.control.v1.AgentControl.UndrainNode:input_type -> persys.control.v1.UndrainNodeRequest
+	37, // 77: persys.control.v1.AgentControl.TaintNode:input_type -> persys.control.v1.TaintNodeRequest
+	39, // 78: persys.control.v1.AgentControl.UntaintNode:input_type -> persys.control.v1.UntaintNodeRequest
+	41, // 79: persys.control.v1.AgentControl.SetNodeLabel:input_type -> persys.control.v1.SetNodeLabelRequest
+	43, // 80: persys.control.v1.AgentControl.DeleteNodeLabel:input_type -> persys.control.v1.DeleteNodeLabelRequest
+	3,  // 81: persys.control.v1.AgentControl.SubmitAutomationSuggestion:input_type -> persys.control.v1.SubmitAutomationSuggestionRequest
+	45, // 82: persys.control.v1.AgentControl.ListNodes:input_type -> persys.control.v1.ListNodesRequest
+	46, // 83: persys.control.v1.AgentControl.GetNode:input_type -> persys.control.v1.GetNodeRequest
+	50, // 84: persys.control.v1.AgentControl.ListWorkloads:input_type -> persys.control.v1.ListWorkloadsRequest
+	55, // 85: persys.control.v1.AgentControl.GetWorkload:input_type -> persys.control.v1.GetWorkloadRequest
+	59, // 86: persys.control.v1.AgentControl.GetClusterSummary:input_type -> persys.control.v1.GetClusterSummaryRequest
+	52, // 87: persys.control.v1.AgentControl.ListEvents:input_type -> persys.control.v1.ListEventsRequest
+	54, // 88: persys.control.v1.AgentControl.WatchEvents:input_type -> persys.control.v1.WatchEventsRequest
+	61, // 89: persys.control.v1.AgentControl.ControlStream:input_type -> persys.control.v1.ControlMessage
+	62, // 90: persys.control.v1.AgentControl.CreateDisk:input_type -> persys.control.v1.CreateDiskRequest
+	64, // 91: persys.control.v1.AgentControl.ListDisks:input_type -> persys.control.v1.ListDisksRequest
+	66, // 92: persys.control.v1.AgentControl.GetDisk:input_type -> persys.control.v1.GetDiskRequest
+	68, // 93: persys.control.v1.AgentControl.DeleteDisk:input_type -> persys.control.v1.DeleteDiskRequest
+	8,  // 94: persys.control.v1.AgentControl.RegisterNode:output_type -> persys.control.v1.RegisterNodeResponse
+	11, // 95: persys.control.v1.AgentControl.Heartbeat:output_type -> persys.control.v1.HeartbeatResponse
+	13, // 96: persys.control.v1.AgentControl.ApplyWorkload:output_type -> persys.control.v1.ApplyWorkloadResponse
+	15, // 97: persys.control.v1.AgentControl.DeleteWorkload:output_type -> persys.control.v1.DeleteWorkloadResponse
+	31, // 98: persys.control.v1.AgentControl.RetryWorkload:output_type -> persys.control.v1.RetryWorkloadResponse
+	33, // 99: persys.control.v1.AgentControl.DrainNode:output_type -> persys.control.v1.DrainNodeResponse
+	35, // 100: persys.control.v1.AgentControl.UndrainNode:output_type -> persys.control.v1.UndrainNodeResponse
+	38, // 101: persys.control.v1.AgentControl.TaintNode:output_type -> persys.control.v1.TaintNodeResponse
+	40, // 102: persys.control.v1.AgentControl.UntaintNode:output_type -> persys.control.v1.UntaintNodeResponse
+	42, // 103: persys.control.v1.AgentControl.SetNodeLabel:output_type -> persys.control.v1.SetNodeLabelResponse
+	44, // 104: persys.control.v1.AgentControl.DeleteNodeLabel:output_type -> persys.control.v1.DeleteNodeLabelResponse
+	4,  // 105: persys.control.v1.AgentControl.SubmitAutomationSuggestion:output_type -> persys.control.v1.SubmitAutomationSuggestionResponse
+	47, // 106: persys.control.v1.AgentControl.ListNodes:output_type -> persys.control.v1.ListNodesResponse
+	48, // 107: persys.control.v1.AgentControl.GetNode:output_type -> persys.control.v1.GetNodeResponse
+	56, // 108: persys.control.v1.AgentControl.ListWorkloads:output_type -> persys.control.v1.ListWorkloadsResponse
+	57, // 109: persys.control.v1.AgentControl.GetWorkload:output_type -> persys.control.v1.GetWorkloadResponse
+	60, // 110: persys.control.v1.AgentControl.GetClusterSummary:output_type -> persys.control.v1.GetClusterSummaryResponse
+	53, // 111: persys.control.v1.AgentControl.ListEvents:output_type -> persys.control.v1.ListEventsResponse
+	51, // 112: persys.control.v1.AgentControl.WatchEvents:output_type -> persys.control.v1.SchedulerEventView
+	61, // 113: persys.control.v1.AgentControl.ControlStream:output_type -> persys.control.v1.ControlMessage
+	63, // 114: persys.control.v1.AgentControl.CreateDisk:output_type -> persys.control.v1.CreateDiskResponse
+	65, // 115: persys.control.v1.AgentControl.ListDisks:output_type -> persys.control.v1.ListDisksResponse
+	67, // 116: persys.control.v1.AgentControl.GetDisk:output_type -> persys.control.v1.GetDiskResponse
+	69, // 117: persys.control.v1.AgentControl.DeleteDisk:output_type -> persys.control.v1.DeleteDiskResponse
+	94, // [94:118] is the sub-list for method output_type
+	70, // [70:94] is the sub-list for method input_type
+	70, // [70:70] is the sub-list for extension type_name
+	70, // [70:70] is the sub-list for extension extendee
+	0,  // [0:70] is the sub-list for field type_name
 }
 
 func init() { file_control_proto_init() }
@@ -2501,12 +5569,12 @@ func file_control_proto_init() {
 	if File_control_proto != nil {
 		return
 	}
-	file_control_proto_msgTypes[11].OneofWrappers = []any{
+	file_control_proto_msgTypes[14].OneofWrappers = []any{
 		(*WorkloadSpec_Container)(nil),
 		(*WorkloadSpec_Compose)(nil),
 		(*WorkloadSpec_Vm)(nil),
 	}
-	file_control_proto_msgTypes[27].OneofWrappers = []any{
+	file_control_proto_msgTypes[59].OneofWrappers = []any{
 		(*ControlMessage_Register)(nil),
 		(*ControlMessage_Heartbeat)(nil),
 		(*ControlMessage_Apply)(nil),
@@ -2517,8 +5585,8 @@ func file_control_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_control_proto_rawDesc), len(file_control_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   32,
+			NumEnums:      2,
+			NumMessages:   75,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
