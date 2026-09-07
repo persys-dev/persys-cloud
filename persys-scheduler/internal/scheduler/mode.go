@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/models"
@@ -60,8 +61,9 @@ func (s *Scheduler) requireWritable() error {
 
 func (s *Scheduler) enterDegraded(reason string) {
 	s.modeMu.Lock()
-	defer s.modeMu.Unlock()
-	if s.mode == ModeDegraded {
+	from := s.mode
+	if from == ModeDegraded {
+		s.modeMu.Unlock()
 		return
 	}
 	s.mode = ModeDegraded
@@ -75,13 +77,24 @@ func (s *Scheduler) enterDegraded(reason string) {
 		Workloads:   workloads,
 		Assignments: assignments,
 	}
-	schedulerLogger.WithField("reason", reason).Warn("scheduler entered degraded mode")
+	changedAt := s.modeChangedAt
+	s.modeMu.Unlock()
+
+	schedulerLogger.WithField("reason", reason).WithField("from", string(from)).WithField("to", string(ModeDegraded)).Warn("scheduler entered degraded mode")
+	s.emitEvent("SchedulerModeChanged", "", "", reason, map[string]interface{}{
+		"from":       string(from),
+		"to":         string(ModeDegraded),
+		"reason":     reason,
+		"changed_at": changedAt.UTC().Format(time.RFC3339),
+		"writable":   false,
+	})
 }
 
 func (s *Scheduler) enterRecovery(reason string) {
 	s.modeMu.Lock()
-	defer s.modeMu.Unlock()
-	if s.mode == ModeRecovery {
+	from := s.mode
+	if from == ModeRecovery {
+		s.modeMu.Unlock()
 		return
 	}
 	s.mode = ModeRecovery
@@ -97,20 +110,41 @@ func (s *Scheduler) enterRecovery(reason string) {
 			Assignments: assignments,
 		}
 	}
-	schedulerLogger.WithField("reason", reason).Warn("scheduler entered recovery mode")
+	changedAt := s.modeChangedAt
+	s.modeMu.Unlock()
+
+	schedulerLogger.WithField("reason", reason).WithField("from", string(from)).WithField("to", string(ModeRecovery)).Warn("scheduler entered recovery mode")
+	s.emitEvent("SchedulerModeChanged", "", "", reason, map[string]interface{}{
+		"from":       string(from),
+		"to":         string(ModeRecovery),
+		"reason":     reason,
+		"changed_at": changedAt.UTC().Format(time.RFC3339),
+		"writable":   false,
+	})
 }
 
 func (s *Scheduler) enterNormal(reason string) {
 	s.modeMu.Lock()
-	defer s.modeMu.Unlock()
-	if s.mode == ModeNormal {
+	from := s.mode
+	if from == ModeNormal {
+		s.modeMu.Unlock()
 		return
 	}
 	s.mode = ModeNormal
 	s.modeReasonText = reason
 	s.modeChangedAt = time.Now().UTC()
 	s.frozen = nil
-	schedulerLogger.WithField("reason", reason).Info("scheduler returned to normal mode")
+	changedAt := s.modeChangedAt
+	s.modeMu.Unlock()
+
+	schedulerLogger.WithField("reason", reason).WithField("from", string(from)).WithField("to", string(ModeNormal)).Info("scheduler returned to normal mode")
+	s.emitEvent("SchedulerModeChanged", "", "", reason, map[string]interface{}{
+		"from":       string(from),
+		"to":         string(ModeNormal),
+		"reason":     reason,
+		"changed_at": changedAt.UTC().Format(time.RFC3339),
+		"writable":   true,
+	})
 }
 
 func (s *Scheduler) ModeSnapshot() (OperatingMode, string, time.Time) {
@@ -215,6 +249,33 @@ func cacheSnapshot[T any](in map[string]T) []T {
 		out = append(out, v)
 	}
 	return out
+}
+
+// runBounded calls fn once per item, with at most concurrency goroutines in
+// flight at a time, and waits for all of them to finish before returning.
+// Shared by MonitorNodes, MonitorWorkloads, and detectDriftOnce so each
+// doesn't reimplement the same semaphore+WaitGroup boilerplate; all three
+// were originally plain sequential for-loops making one synchronous
+// network call per item; this gives them the same bounded-concurrency
+// treatment the reconciler already got, without changing the fan-out shape
+// of what each loop iteration does.
+func runBounded[T any](items []T, concurrency int, fn func(T)) {
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	sem := make(chan struct{}, concurrency)
+	var wg sync.WaitGroup
+	for _, item := range items {
+		item := item
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			fn(item)
+		}()
+	}
+	wg.Wait()
 }
 
 func (s *Scheduler) withCacheLock(fn func()) {
