@@ -4,7 +4,7 @@
 // 	protoc        v3.21.12
 // source: agent.proto
 
-package agentpb
+package v1
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -28,6 +28,8 @@ const (
 	WorkloadType_WORKLOAD_TYPE_CONTAINER   WorkloadType = 1
 	WorkloadType_WORKLOAD_TYPE_COMPOSE     WorkloadType = 2
 	WorkloadType_WORKLOAD_TYPE_VM          WorkloadType = 3
+	// Firecracker microVM. Shares WorkloadSpec.vm oneof with KVM VMs.
+	WorkloadType_WORKLOAD_TYPE_MICROVM WorkloadType = 4
 )
 
 // Enum value maps for WorkloadType.
@@ -37,12 +39,14 @@ var (
 		1: "WORKLOAD_TYPE_CONTAINER",
 		2: "WORKLOAD_TYPE_COMPOSE",
 		3: "WORKLOAD_TYPE_VM",
+		4: "WORKLOAD_TYPE_MICROVM",
 	}
 	WorkloadType_value = map[string]int32{
 		"WORKLOAD_TYPE_UNSPECIFIED": 0,
 		"WORKLOAD_TYPE_CONTAINER":   1,
 		"WORKLOAD_TYPE_COMPOSE":     2,
 		"WORKLOAD_TYPE_VM":          3,
+		"WORKLOAD_TYPE_MICROVM":     4,
 	}
 )
 
@@ -1221,8 +1225,15 @@ type VMSpec struct {
 	Metadata        map[string]string      `protobuf:"bytes,7,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	CloudInitConfig *CloudInitConfig       `protobuf:"bytes,8,opt,name=cloud_init_config,json=cloudInitConfig,proto3" json:"cloud_init_config,omitempty"` // advanced cloud-init settings
 	ManagedVolumes  []*ManagedVolumeSpec   `protobuf:"bytes,9,rep,name=managed_volumes,json=managedVolumes,proto3" json:"managed_volumes,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Happy-path OS image: catalog name or absolute path to a read-only base
+	// image. Agent creates a writable qcow2 overlay; base is never mutated.
+	OsImage string `protobuf:"bytes,10,opt,name=os_image,json=osImage,proto3" json:"os_image,omitempty"`
+	// Root disk size in GB when synthesizing from os_image (default 10).
+	DiskGb int64 `protobuf:"varint,11,opt,name=disk_gb,json=diskGb,proto3" json:"disk_gb,omitempty"`
+	// Optional runtime selector: "libvirt" (default) or "firecracker".
+	Runtime       string `protobuf:"bytes,12,opt,name=runtime,proto3" json:"runtime,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *VMSpec) Reset() {
@@ -1318,12 +1329,36 @@ func (x *VMSpec) GetManagedVolumes() []*ManagedVolumeSpec {
 	return nil
 }
 
+func (x *VMSpec) GetOsImage() string {
+	if x != nil {
+		return x.OsImage
+	}
+	return ""
+}
+
+func (x *VMSpec) GetDiskGb() int64 {
+	if x != nil {
+		return x.DiskGb
+	}
+	return 0
+}
+
+func (x *VMSpec) GetRuntime() string {
+	if x != nil {
+		return x.Runtime
+	}
+	return ""
+}
+
 type CloudInitConfig struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserData      string                 `protobuf:"bytes,1,opt,name=user_data,json=userData,proto3" json:"user_data,omitempty"`                // cloud-init user-data script
 	MetaData      string                 `protobuf:"bytes,2,opt,name=meta_data,json=metaData,proto3" json:"meta_data,omitempty"`                // cloud-init meta-data (JSON)
 	NetworkConfig string                 `protobuf:"bytes,3,opt,name=network_config,json=networkConfig,proto3" json:"network_config,omitempty"` // cloud-init network config (YAML)
 	VendorData    string                 `protobuf:"bytes,4,opt,name=vendor_data,json=vendorData,proto3" json:"vendor_data,omitempty"`          // cloud-init vendor-data
+	Username      string                 `protobuf:"bytes,5,opt,name=username,proto3" json:"username,omitempty"`                                // default login user when generating user-data
+	SshPublicKey  string                 `protobuf:"bytes,6,opt,name=ssh_public_key,json=sshPublicKey,proto3" json:"ssh_public_key,omitempty"`  // inject authorized key instead of password
+	Password      string                 `protobuf:"bytes,7,opt,name=password,proto3" json:"password,omitempty"`                                // fixed password (otherwise random)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1382,6 +1417,27 @@ func (x *CloudInitConfig) GetNetworkConfig() string {
 func (x *CloudInitConfig) GetVendorData() string {
 	if x != nil {
 		return x.VendorData
+	}
+	return ""
+}
+
+func (x *CloudInitConfig) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *CloudInitConfig) GetSshPublicKey() string {
+	if x != nil {
+		return x.SshPublicKey
+	}
+	return ""
+}
+
+func (x *CloudInitConfig) GetPassword() string {
+	if x != nil {
+		return x.Password
 	}
 	return ""
 }
@@ -1720,12 +1776,14 @@ func (x *RestartPolicy) GetMaxRetryCount() int32 {
 
 type DiskConfig struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`     // path to disk image or ISO
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`     // path to disk image or ISO (leave empty with os_image set)
 	Device        string                 `protobuf:"bytes,2,opt,name=device,proto3" json:"device,omitempty"` // vda, vdb, etc.
 	Format        string                 `protobuf:"bytes,3,opt,name=format,proto3" json:"format,omitempty"` // qcow2, raw, iso
 	SizeGb        int64                  `protobuf:"varint,4,opt,name=size_gb,json=sizeGb,proto3" json:"size_gb,omitempty"`
-	Type          string                 `protobuf:"bytes,5,opt,name=type,proto3" json:"type,omitempty"`  // disk or cdrom (for ISO)
-	Boot          bool                   `protobuf:"varint,6,opt,name=boot,proto3" json:"boot,omitempty"` // true if this is the boot disk/ISO
+	Type          string                 `protobuf:"bytes,5,opt,name=type,proto3" json:"type,omitempty"`                                  // disk or cdrom (for ISO)
+	Boot          bool                   `protobuf:"varint,6,opt,name=boot,proto3" json:"boot,omitempty"`                                 // true if this is the boot disk/ISO
+	BackingFile   string                 `protobuf:"bytes,7,opt,name=backing_file,json=backingFile,proto3" json:"backing_file,omitempty"` // optional explicit backing image for overlay
+	Storage       string                 `protobuf:"bytes,8,opt,name=storage,proto3" json:"storage,omitempty"`                            // local|nfs|ceph-rbd hint
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1802,11 +1860,28 @@ func (x *DiskConfig) GetBoot() bool {
 	return false
 }
 
+func (x *DiskConfig) GetBackingFile() string {
+	if x != nil {
+		return x.BackingFile
+	}
+	return ""
+}
+
+func (x *DiskConfig) GetStorage() string {
+	if x != nil {
+		return x.Storage
+	}
+	return ""
+}
+
 type NetworkConfig struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Network       string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"` // network name or bridge
+	Network       string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"` // libvirt network name or bridge (default: "default")
 	MacAddress    string                 `protobuf:"bytes,2,opt,name=mac_address,json=macAddress,proto3" json:"mac_address,omitempty"`
-	IpAddress     string                 `protobuf:"bytes,3,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"` // optional static IP
+	IpAddress     string                 `protobuf:"bytes,3,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`         // optional static guest IP
+	HostDevName   string                 `protobuf:"bytes,4,opt,name=host_dev_name,json=hostDevName,proto3" json:"host_dev_name,omitempty"` // Firecracker host TAP device
+	Model         string                 `protobuf:"bytes,5,opt,name=model,proto3" json:"model,omitempty"`                                  // virtio (default)
+	Bridge        string                 `protobuf:"bytes,6,opt,name=bridge,proto3" json:"bridge,omitempty"`                                // optional explicit bridge
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1858,6 +1933,27 @@ func (x *NetworkConfig) GetMacAddress() string {
 func (x *NetworkConfig) GetIpAddress() string {
 	if x != nil {
 		return x.IpAddress
+	}
+	return ""
+}
+
+func (x *NetworkConfig) GetHostDevName() string {
+	if x != nil {
+		return x.HostDevName
+	}
+	return ""
+}
+
+func (x *NetworkConfig) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *NetworkConfig) GetBridge() string {
+	if x != nil {
+		return x.Bridge
 	}
 	return ""
 }
@@ -2187,7 +2283,7 @@ const file_agent_proto_rawDesc = "" +
 	"\x03env\x18\x03 \x03(\v2%.persys.agent.v1.ComposeSpec.EnvEntryR\x03env\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf8\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc6\x04\n" +
 	"\x06VMSpec\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05vcpus\x18\x02 \x01(\x05R\x05vcpus\x12\x1b\n" +
@@ -2198,16 +2294,23 @@ const file_agent_proto_rawDesc = "" +
 	"cloud_init\x18\x06 \x01(\tR\tcloudInit\x12A\n" +
 	"\bmetadata\x18\a \x03(\v2%.persys.agent.v1.VMSpec.MetadataEntryR\bmetadata\x12L\n" +
 	"\x11cloud_init_config\x18\b \x01(\v2 .persys.agent.v1.CloudInitConfigR\x0fcloudInitConfig\x12K\n" +
-	"\x0fmanaged_volumes\x18\t \x03(\v2\".persys.agent.v1.ManagedVolumeSpecR\x0emanagedVolumes\x1a;\n" +
+	"\x0fmanaged_volumes\x18\t \x03(\v2\".persys.agent.v1.ManagedVolumeSpecR\x0emanagedVolumes\x12\x19\n" +
+	"\bos_image\x18\n" +
+	" \x01(\tR\aosImage\x12\x17\n" +
+	"\adisk_gb\x18\v \x01(\x03R\x06diskGb\x12\x18\n" +
+	"\aruntime\x18\f \x01(\tR\aruntime\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x93\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf1\x01\n" +
 	"\x0fCloudInitConfig\x12\x1b\n" +
 	"\tuser_data\x18\x01 \x01(\tR\buserData\x12\x1b\n" +
 	"\tmeta_data\x18\x02 \x01(\tR\bmetaData\x12%\n" +
 	"\x0enetwork_config\x18\x03 \x01(\tR\rnetworkConfig\x12\x1f\n" +
 	"\vvendor_data\x18\x04 \x01(\tR\n" +
-	"vendorData\"\xf3\x01\n" +
+	"vendorData\x12\x1a\n" +
+	"\busername\x18\x05 \x01(\tR\busername\x12$\n" +
+	"\x0essh_public_key\x18\x06 \x01(\tR\fsshPublicKey\x12\x1a\n" +
+	"\bpassword\x18\a \x01(\tR\bpassword\"\xf3\x01\n" +
 	"\x11ManagedVolumeSpec\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
 	"\x06driver\x18\x02 \x01(\tR\x06driver\x12\x17\n" +
@@ -2234,7 +2337,7 @@ const file_agent_proto_rawDesc = "" +
 	"\x11memory_swap_bytes\x18\x03 \x01(\x03R\x0fmemorySwapBytes\"O\n" +
 	"\rRestartPolicy\x12\x16\n" +
 	"\x06policy\x18\x01 \x01(\tR\x06policy\x12&\n" +
-	"\x0fmax_retry_count\x18\x02 \x01(\x05R\rmaxRetryCount\"\x91\x01\n" +
+	"\x0fmax_retry_count\x18\x02 \x01(\x05R\rmaxRetryCount\"\xce\x01\n" +
 	"\n" +
 	"DiskConfig\x12\x12\n" +
 	"\x04path\x18\x01 \x01(\tR\x04path\x12\x16\n" +
@@ -2242,13 +2345,18 @@ const file_agent_proto_rawDesc = "" +
 	"\x06format\x18\x03 \x01(\tR\x06format\x12\x17\n" +
 	"\asize_gb\x18\x04 \x01(\x03R\x06sizeGb\x12\x12\n" +
 	"\x04type\x18\x05 \x01(\tR\x04type\x12\x12\n" +
-	"\x04boot\x18\x06 \x01(\bR\x04boot\"i\n" +
+	"\x04boot\x18\x06 \x01(\bR\x04boot\x12!\n" +
+	"\fbacking_file\x18\a \x01(\tR\vbackingFile\x12\x18\n" +
+	"\astorage\x18\b \x01(\tR\astorage\"\xbb\x01\n" +
 	"\rNetworkConfig\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x1f\n" +
 	"\vmac_address\x18\x02 \x01(\tR\n" +
 	"macAddress\x12\x1d\n" +
 	"\n" +
-	"ip_address\x18\x03 \x01(\tR\tipAddress\"\x97\x04\n" +
+	"ip_address\x18\x03 \x01(\tR\tipAddress\x12\"\n" +
+	"\rhost_dev_name\x18\x04 \x01(\tR\vhostDevName\x12\x14\n" +
+	"\x05model\x18\x05 \x01(\tR\x05model\x12\x16\n" +
+	"\x06bridge\x18\x06 \x01(\tR\x06bridge\"\x97\x04\n" +
 	"\x0eWorkloadStatus\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x121\n" +
 	"\x04type\x18\x02 \x01(\x0e2\x1d.persys.agent.v1.WorkloadTypeR\x04type\x12\x1f\n" +
@@ -2282,12 +2390,13 @@ const file_agent_proto_rawDesc = "" +
 	"netTxBytes\x12!\n" +
 	"\fcollected_at\x18\t \x01(\x03R\vcollectedAt\x12\x16\n" +
 	"\x06source\x18\n" +
-	" \x01(\tR\x06source*{\n" +
+	" \x01(\tR\x06source*\x96\x01\n" +
 	"\fWorkloadType\x12\x1d\n" +
 	"\x19WORKLOAD_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17WORKLOAD_TYPE_CONTAINER\x10\x01\x12\x19\n" +
 	"\x15WORKLOAD_TYPE_COMPOSE\x10\x02\x12\x14\n" +
-	"\x10WORKLOAD_TYPE_VM\x10\x03*c\n" +
+	"\x10WORKLOAD_TYPE_VM\x10\x03\x12\x19\n" +
+	"\x15WORKLOAD_TYPE_MICROVM\x10\x04*c\n" +
 	"\fDesiredState\x12\x1d\n" +
 	"\x19DESIRED_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15DESIRED_STATE_RUNNING\x10\x01\x12\x19\n" +
@@ -2305,7 +2414,7 @@ const file_agent_proto_rawDesc = "" +
 	"\x11GetWorkloadStatus\x12).persys.agent.v1.GetWorkloadStatusRequest\x1a*.persys.agent.v1.GetWorkloadStatusResponse\x12^\n" +
 	"\rListWorkloads\x12%.persys.agent.v1.ListWorkloadsRequest\x1a&.persys.agent.v1.ListWorkloadsResponse\x12X\n" +
 	"\vHealthCheck\x12#.persys.agent.v1.HealthCheckRequest\x1a$.persys.agent.v1.HealthCheckResponse\x12X\n" +
-	"\vListActions\x12#.persys.agent.v1.ListActionsRequest\x1a$.persys.agent.v1.ListActionsResponseBNZLgithub.com/persys-dev/persys-cloud/persys-scheduler/internal/agentpb;agentpbb\x06proto3"
+	"\vListActions\x12#.persys.agent.v1.ListActionsRequest\x1a$.persys.agent.v1.ListActionsResponseB3Z1github.com/persys-dev/compute-agent/pkg/api/v1;v1b\x06proto3"
 
 var (
 	file_agent_proto_rawDescOnce sync.Once

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	agentpb "github.com/persys-dev/persys-cloud/persys-scheduler/internal/agentpb"
@@ -14,6 +15,11 @@ import (
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/models"
 	"github.com/sirupsen/logrus"
 )
+
+// defaultReconcileConcurrency bounds how many workloads (and, during
+// snapshot prefetch, how many nodes) are processed concurrently in a single
+// reconciliation cycle. Overridable via SCHEDULER_RECONCILE_CONCURRENCY.
+const defaultReconcileConcurrency = 64
 
 const defaultMissingGracePeriod = 15 * time.Second
 const defaultNodeUnavailableGrace = 3 * time.Minute
@@ -29,16 +35,44 @@ const terminalFailureReasonMetadataKey = "terminal_failure_reason"
 var reconcilerLogger = logging.C("scheduler.reconciler")
 
 var nonRetryableFailureReasons = map[string]struct{}{
-	"INVALID_IMAGE":         {},
-	"INVALID_SPECIFICATION": {},
-	"INVALID_CONFIGURATION": {},
-	"PORT_BIND_CONFLICT":    {},
+	"INVALID_IMAGE":           {},
+	"INVALID_SPECIFICATION":   {},
+	"INVALID_CONFIGURATION":   {},
+	"PORT_BIND_CONFLICT":      {},
+	"DISK_PRESSURE":           {},
+	"DOMAIN_PAUSED_IO":        {},
+	"RESOURCE_QUOTA":          {},
+	"RESOURCE_QUOTA_EXCEEDED": {},
 }
 
 // Reconciler handles reconciliation between desired and actual state.
 type Reconciler struct {
 	scheduler *Scheduler
 	monitor   *Monitor
+
+	// cycleMu/cycleRunning prevent a reconciliation cycle from starting
+	// while the previous one is still in flight (possible once cycles run
+	// concurrently internally; without this guard, a slow cycle plus a
+	// healthy tick interval could stack overlapping full-cluster passes).
+	cycleMu      sync.Mutex
+	cycleRunning bool
+
+	// snapshot holds, for the duration of a single ReconcileAllWorkloads
+	// cycle, one batched workload-list response per node (see
+	// prefetchNodeSnapshots). getActualWorkloadState consults it before
+	// falling back to a live per-workload RPC, which turns the scheduler's
+	// fan-out to agents from O(workloads) into O(nodes) per cycle.
+	snapshotMu sync.RWMutex
+	snapshot   map[string]*nodeSnapshotEntry
+}
+
+// nodeSnapshotEntry records the outcome of one node's batched workload-list
+// call for the current reconciliation cycle. ok=false means the batch call
+// wasn't attempted or failed, so callers must fall back to a live per-
+// workload call rather than assuming the workload is missing.
+type nodeSnapshotEntry struct {
+	ok       bool
+	statuses map[string]*agentpb.WorkloadStatus
 }
 
 // ReconciliationResult represents the result of a reconciliation operation.
@@ -281,6 +315,39 @@ func (r *Reconciler) handleUnavailableAssignedNode(workload *models.Workload) (b
 	}
 
 	oldNode := workload.NodeID
+
+	// Hard pin: node-local workloads must not relocate on node flap.
+	// Override: reapply with metadata persys.scheduling.allow_move=true.
+	if isNodeLocalWorkload(*workload) {
+		if workload.Metadata == nil {
+			workload.Metadata = map[string]interface{}{}
+		}
+		workload.Metadata[metaPinnedReason] = "node-local storage; waiting for original node"
+		workload.Metadata["last_action"] = "PinnedAwaitNode"
+		workload.Status = "Pending"
+		workload.StatusInfo.LastUpdated = time.Now().UTC()
+		if err := r.scheduler.saveWorkload(*workload); err != nil {
+			return false, err
+		}
+		_ = r.scheduler.UpdateWorkloadLogs(workload.ID, fmt.Sprintf(
+			"node %s unavailable; node-local workload pinned (reapply with metadata %s=true to force move)",
+			oldNode, metaAllowMove,
+		))
+		r.scheduler.emitEvent("RescheduleSkipped", workload.ID, oldNode,
+			"node-local workload hard-pinned; not relocating",
+			map[string]interface{}{
+				"persistence_class": workloadPersistenceClass(*workload),
+				"allow_move":        false,
+			},
+		)
+		reconcilerLogger.WithFields(logrus.Fields{
+			"workload_id":       workload.ID,
+			"node_id":           oldNode,
+			"persistence_class": workloadPersistenceClass(*workload),
+		}).Info("skipped failover for node-local workload")
+		return true, nil
+	}
+
 	nextNode, reason, selErr := r.scheduler.selectNodeForWorkload(*workload)
 	if selErr != nil {
 		reconcilerLogger.WithError(selErr).WithFields(logrus.Fields{
@@ -326,8 +393,20 @@ func (r *Reconciler) handleUnavailableAssignedNode(workload *models.Workload) (b
 	return false, nil
 }
 
-// getActualWorkloadState queries the agent to get the actual state of a workload.
+// getActualWorkloadState returns the actual state of a workload as last
+// reported by its assigned node. When a batched per-node snapshot for the
+// current reconciliation cycle is available (see prefetchNodeSnapshots), it
+// is used instead of a live RPC. Outside of a full-cluster cycle (e.g. a
+// single-workload reconcile triggered by ApplyWorkload), no snapshot is set
+// and this falls back to the original live per-workload call.
 func (r *Reconciler) getActualWorkloadState(ctx context.Context, workload models.Workload) (string, error) {
+	if statusResp, found, nodeSnapshotted := r.snapshotLookup(workload.NodeID, workload.ID); nodeSnapshotted {
+		if !found {
+			return "Missing", nil
+		}
+		return r.applyStatusResponse(workload, statusResp), nil
+	}
+
 	node, err := r.scheduler.GetNodeByID(workload.NodeID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get node %s: %v", workload.NodeID, err)
@@ -343,15 +422,129 @@ func (r *Reconciler) getActualWorkloadState(ctx context.Context, workload models
 	if statusResp == nil {
 		return "Unknown", nil
 	}
+	return r.applyStatusResponse(workload, statusResp), nil
+}
+
+// applyStatusResponse persists any metadata/failure-reason side effects
+// carried on an agent status response and returns the mapped state string.
+// Shared by both the snapshot path and the live per-workload RPC path.
+func (r *Reconciler) applyStatusResponse(workload models.Workload, statusResp *agentpb.WorkloadStatus) string {
 	if len(statusResp.GetMetadata()) > 0 {
 		_ = r.scheduler.UpdateWorkloadMetadata(workload.ID, statusResp.GetMetadata())
 	}
-	if strings.EqualFold(mapActualStateToSchedulerStatus(statusResp.GetActualState()), "Failed") {
+	state := mapActualStateToSchedulerStatus(statusResp.GetActualState())
+	if strings.EqualFold(state, "Failed") {
 		if msg := strings.TrimSpace(statusResp.GetMessage()); msg != "" {
 			_ = r.scheduler.UpdateWorkloadMetadata(workload.ID, map[string]string{"last_runtime_error": msg})
 		}
 	}
-	return mapActualStateToSchedulerStatus(statusResp.GetActualState()), nil
+	return state
+}
+
+// snapshotLookup returns the batched status for (nodeID, workloadID) if the
+// current cycle's snapshot has an entry for that node. nodeSnapshotted is
+// false if the node wasn't part of this cycle's batch prefetch (or the
+// batch call to it failed), signalling the caller should fall back to a
+// live RPC rather than assume the workload is missing.
+func (r *Reconciler) snapshotLookup(nodeID, workloadID string) (status *agentpb.WorkloadStatus, found bool, nodeSnapshotted bool) {
+	if strings.TrimSpace(nodeID) == "" {
+		return nil, false, false
+	}
+	r.snapshotMu.RLock()
+	defer r.snapshotMu.RUnlock()
+	if r.snapshot == nil {
+		return nil, false, false
+	}
+	entry, ok := r.snapshot[nodeID]
+	if !ok || !entry.ok {
+		return nil, false, false
+	}
+	status, found = entry.statuses[workloadID]
+	return status, found, true
+}
+
+// reconcileConcurrency returns the configured cap on concurrent per-workload
+// reconciliation and per-node snapshot-prefetch work in a single cycle.
+func (r *Reconciler) reconcileConcurrency() int {
+	if r.scheduler.cfg != nil && r.scheduler.cfg.SchedulerReconcileConcurrency > 0 {
+		return r.scheduler.cfg.SchedulerReconcileConcurrency
+	}
+	return defaultReconcileConcurrency
+}
+
+// prefetchNodeSnapshots concurrently fetches one batched workload-list RPC
+// per distinct node referenced by the given workloads, instead of the
+// reconciler making one GetWorkloadStatus RPC per workload. This is what
+// turns the scheduler's fan-out to agents from O(workloads) into O(nodes)
+// per reconciliation cycle. Nodes that are already known NotReady are
+// skipped (their workloads go through the existing failover path instead of
+// a doomed status call), and any node whose batch call fails is simply left
+// out of the snapshot so per-workload reconciliation falls back to a live
+// call for it.
+func (r *Reconciler) prefetchNodeSnapshots(ctx context.Context, workloads []models.Workload) {
+	nodeIDs := make(map[string]struct{})
+	for _, w := range workloads {
+		id := strings.TrimSpace(w.NodeID)
+		if id == "" {
+			continue
+		}
+		nodeIDs[id] = struct{}{}
+	}
+	if len(nodeIDs) == 0 {
+		r.snapshotMu.Lock()
+		r.snapshot = map[string]*nodeSnapshotEntry{}
+		r.snapshotMu.Unlock()
+		return
+	}
+
+	snapshot := make(map[string]*nodeSnapshotEntry, len(nodeIDs))
+	var snapMu sync.Mutex
+	sem := make(chan struct{}, r.reconcileConcurrency())
+	var wg sync.WaitGroup
+
+	for nodeID := range nodeIDs {
+		nodeID := nodeID
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			node, err := r.scheduler.GetNodeByID(nodeID)
+			if err != nil {
+				return
+			}
+			if !strings.EqualFold(node.Status, "Ready") && !strings.EqualFold(node.Status, "Active") {
+				return
+			}
+			list, err := r.scheduler.listWorkloadsFromNode(ctx, node)
+			if err != nil {
+				return
+			}
+			byID := make(map[string]*agentpb.WorkloadStatus, len(list))
+			for _, st := range list {
+				byID[st.GetId()] = st
+			}
+			snapMu.Lock()
+			snapshot[nodeID] = &nodeSnapshotEntry{ok: true, statuses: byID}
+			snapMu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	r.snapshotMu.Lock()
+	r.snapshot = snapshot
+	r.snapshotMu.Unlock()
+}
+
+// clearSnapshot drops the current cycle's snapshot so that reconciliation
+// calls outside of a full ReconcileAllWorkloads cycle (e.g. the immediate
+// single-workload reconcile triggered by ApplyWorkload) correctly fall back
+// to live per-workload RPCs instead of an empty or stale snapshot.
+func (r *Reconciler) clearSnapshot() {
+	r.snapshotMu.Lock()
+	r.snapshot = nil
+	r.snapshotMu.Unlock()
 }
 
 // needsReconciliation determines if a workload needs reconciliation.
@@ -836,7 +1029,20 @@ func (r *Reconciler) updateWorkloadReconciliationStatus(workloadID string, resul
 	}
 }
 
-// ReconcileAllWorkloads reconciles all workloads in the system.
+// ReconcileAllWorkloads reconciles all workloads in the system. Node status
+// is prefetched once per node (not once per workload) and per-workload
+// reconciliation runs with bounded concurrency, so cycle time scales with
+// the slower of node count / concurrency limit rather than with total
+// workload count times per-workload RPC latency.
+//
+// NOTE: concurrent workloads that happen to share an assigned node can
+// still race on that node's etcd record (e.g. two workloads on the same
+// failing node both trying to mark it NotReady / trigger failover at once).
+// This was already possible with the sequential loop across ticks, but
+// concurrency makes it materially more likely; it's mitigated, not fixed,
+// by this change. Adding etcd CAS to node/workload writes (see the scaling
+// plan doc) removes the race outright and should land before pushing
+// concurrency limits much higher than the default.
 func (r *Reconciler) ReconcileAllWorkloads(ctx context.Context) ([]*ReconciliationResult, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -846,16 +1052,46 @@ func (r *Reconciler) ReconcileAllWorkloads(ctx context.Context) ([]*Reconciliati
 		return nil, fmt.Errorf("failed to get workloads: %v", err)
 	}
 
-	var results []*ReconciliationResult
+	active := make([]models.Workload, 0, len(workloads))
 	for _, workload := range workloads {
 		if workload.Status == "Completed" || workload.Status == "Deleted" {
 			continue
 		}
-		result, err := r.ReconcileWorkload(ctx, workload)
-		if err != nil {
-			reconcilerLogger.WithError(err).WithField("workload_id", workload.ID).Warn("failed to reconcile workload")
+		if !r.scheduler.ownsNode(workload.NodeID) {
 			continue
 		}
+		active = append(active, workload)
+	}
+	if len(active) == 0 {
+		return nil, nil
+	}
+
+	r.prefetchNodeSnapshots(ctx, active)
+	defer r.clearSnapshot()
+
+	resultsCh := make(chan *ReconciliationResult, len(active))
+	sem := make(chan struct{}, r.reconcileConcurrency())
+	var wg sync.WaitGroup
+	for _, workload := range active {
+		workload := workload
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			result, err := r.ReconcileWorkload(ctx, workload)
+			if err != nil {
+				reconcilerLogger.WithError(err).WithField("workload_id", workload.ID).Warn("failed to reconcile workload")
+				return
+			}
+			resultsCh <- result
+		}()
+	}
+	wg.Wait()
+	close(resultsCh)
+
+	results := make([]*ReconciliationResult, 0, len(active))
+	for result := range resultsCh {
 		results = append(results, result)
 	}
 	return results, nil
@@ -876,9 +1112,23 @@ func (r *Reconciler) StartReconciliationLoop(ctx context.Context, interval time.
 			if !r.scheduler.isWritable() {
 				continue
 			}
+			r.cycleMu.Lock()
+			if r.cycleRunning {
+				r.cycleMu.Unlock()
+				reconcilerLogger.Warn("skipping reconciliation tick: previous cycle still in progress")
+				continue
+			}
+			r.cycleRunning = true
+			r.cycleMu.Unlock()
+
 			cycleStart := time.Now()
 			results, err := r.ReconcileAllWorkloads(ctx)
 			metricspkg.ObserveReconciliationCycle(time.Since(cycleStart), err)
+
+			r.cycleMu.Lock()
+			r.cycleRunning = false
+			r.cycleMu.Unlock()
+
 			if err != nil {
 				reconcilerLogger.WithError(err).Error("reconciliation cycle failed")
 				continue

@@ -38,6 +38,7 @@ type workloadStatus struct {
 	Metadata     map[string]interface{}    `json:"metadata,omitempty"`
 	Retry        models.RetryState         `json:"retry"`
 	StatusInfo   models.WorkloadStatusInfo `json:"statusInfo"`
+	Usage        *models.WorkloadUsage     `json:"usage,omitempty"`
 }
 
 func workloadSpecFromWorkload(w models.Workload) workloadSpec {
@@ -79,5 +80,6 @@ func workloadStatusFromWorkload(w models.Workload) workloadStatus {
 		Metadata:     w.Metadata,
 		Retry:        w.Retry,
 		StatusInfo:   w.StatusInfo,
+		Usage:        w.Usage,
 	}
 }

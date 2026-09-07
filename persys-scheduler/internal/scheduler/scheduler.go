@@ -7,10 +7,12 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
 	cfgpkg "github.com/persys-dev/persys-cloud/persys-scheduler/internal/config"
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/logging"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/models"
 	"github.com/redis/go-redis/v9"
@@ -30,24 +32,32 @@ var schedulerLogger = logging.C("scheduler.core")
 
 // Scheduler holds the state and configuration for the cluster scheduler.
 type Scheduler struct {
-	cfg              *cfgpkg.Config
-	etcdClient       *clientv3.Client
-	redisClient      *redis.Client
-	domain           string
-	agentsDomain     string
-	schedulerShard   string
-	monitor          *Monitor
-	reconciler       *Reconciler
-	bgWG             sync.WaitGroup
-	modeMu           sync.RWMutex
-	mode             OperatingMode
-	modeReasonText   string
-	modeChangedAt    time.Time
-	frozen           *FrozenState
-	cacheMu          sync.RWMutex
-	cacheNodes       map[string]models.Node
-	cacheWorkloads   map[string]models.Workload
-	cacheAssignments map[string]models.AssignmentRecord
+	cfg                 *cfgpkg.Config
+	etcdClient          *clientv3.Client
+	redisClient         *redis.Client
+	domain              string
+	agentsDomain        string
+	schedulerShard      string
+	monitor             *Monitor
+	reconciler          *Reconciler
+	bgWG                sync.WaitGroup
+	modeMu              sync.RWMutex
+	mode                OperatingMode
+	modeReasonText      string
+	modeChangedAt       time.Time
+	frozen              *FrozenState
+	cacheMu             sync.RWMutex
+	cacheNodes          map[string]models.Node
+	cacheWorkloads      map[string]models.Workload
+	cacheAssignments    map[string]models.AssignmentRecord
+	agentConnMu         sync.Mutex
+	agentConns          map[string]*agentConnEntry
+	certMgr             *certmanager.Manager // optional; enables ForceRotate on agent TLS failures
+	nodeCacheReady      atomic.Bool
+	isLeader            atomic.Bool
+	instanceID          string
+	pendingMu           sync.Mutex
+	pendingReservations map[string]map[string]pendingReservation
 }
 
 // NewScheduler initializes the scheduler with an etcd client and configuration.
@@ -85,6 +95,8 @@ func NewScheduler(cfg *cfgpkg.Config) (*Scheduler, error) {
 		cacheNodes:       map[string]models.Node{},
 		cacheWorkloads:   map[string]models.Workload{},
 		cacheAssignments: map[string]models.AssignmentRecord{},
+		agentConns:       map[string]*agentConnEntry{},
+		instanceID:       newInstanceID(),
 	}
 
 	// Initialize monitor and reconciler
@@ -95,8 +107,18 @@ func NewScheduler(cfg *cfgpkg.Config) (*Scheduler, error) {
 	return scheduler, nil
 }
 
+
+// SetCertManager attaches the process-wide certmanager so outbound agent
+// dials can ForceRotate + retry on TLS handshake failures. Safe to call
+// once after NewScheduler; nil is allowed (disables cert-aware retry).
+func (s *Scheduler) SetCertManager(m *certmanager.Manager) {
+	s.certMgr = m
+}
+
 // Close shuts down the scheduler gracefully.
 func (s *Scheduler) Close() error {
+	s.closeAgentConns()
+	s.DeregisterSchedulerSelfFromCoreDNS()
 	if s.etcdClient != nil {
 		_ = s.etcdClient.Close()
 	}
@@ -117,24 +139,71 @@ func (s *Scheduler) RegisterNode(node models.Node) error {
 		return fmt.Errorf("totalCPU and totalMemory must be positive")
 	}
 
+	// Agent-advertised labels from this registration request.
+	agentLabels := node.Labels
+	if agentLabels == nil {
+		agentLabels = map[string]string{}
+	}
+
+	// Load existing etcd record so operator-managed fields survive reconnect.
+	// Without this merge, RegisterNode does a full put and drops SetNodeLabel keys
+	// (UI / persysctl → SetNodeLabel → etcd), which is what agents see vanish after
+	// reconnect / re-register.
+	var existing *models.Node
+	if prev, err := s.GetNodeByID(node.NodeID); err == nil {
+		existing = &prev
+	}
+
 	node.LastHeartbeat = time.Now()
 	node.DomainName = node.NodeID + "." + s.domain
+
+	// Preserve operator drain/taint state across re-registration.
+	if existing != nil {
+		if strings.EqualFold(existing.Status, "Draining") || strings.EqualFold(existing.Status, "Drained") {
+			node.Status = existing.Status
+			node.StatusReason = existing.StatusReason
+			node.StatusUpdatedBy = existing.StatusUpdatedBy
+			node.StatusUpdatedAt = existing.StatusUpdatedAt
+		}
+		if len(existing.Taints) > 0 {
+			node.Taints = existing.Taints
+		}
+	}
 	if node.Status == "" {
 		node.Status = "Ready"
 	}
-	node.StatusReason = "registered"
-	node.StatusUpdatedBy = "register"
-	node.StatusUpdatedAt = time.Now().UTC()
+	if existing == nil || (!strings.EqualFold(node.Status, "Draining") && !strings.EqualFold(node.Status, "Drained")) {
+		if node.StatusReason == "" {
+			node.StatusReason = "registered"
+		}
+		if node.StatusUpdatedBy == "" {
+			node.StatusUpdatedBy = "register"
+		}
+		node.StatusUpdatedAt = time.Now().UTC()
+	}
 	if node.AvailableCPU == 0 {
 		node.AvailableCPU = node.TotalCPU
 	}
 	if node.AvailableMemory == 0 {
 		node.AvailableMemory = node.TotalMemory
 	}
-	if node.Labels == nil {
-		node.Labels = make(map[string]string)
+
+	// Label merge:
+	//   1) start with existing etcd labels (includes operator SetNodeLabel keys)
+	//   2) overlay agent-reported labels (agent is source of truth for keys it sends)
+	//   3) always stamp scheduler_shard
+	// Keys only present on the operator side are preserved when the agent omits them.
+	merged := make(map[string]string)
+	if existing != nil && existing.Labels != nil {
+		for k, v := range existing.Labels {
+			merged[k] = v
+		}
 	}
-	node.Labels["scheduler_shard"] = s.schedulerShard
+	for k, v := range agentLabels {
+		merged[k] = v
+	}
+	merged["scheduler_shard"] = s.schedulerShard
+	node.Labels = merged
 
 	schedulerLogger.WithFields(logrus.Fields{
 		"node_id":           node.NodeID,
@@ -147,6 +216,8 @@ func (s *Scheduler) RegisterNode(node models.Node) error {
 		"total_memory_mb":   node.TotalMemory,
 		"available_cpu":     node.AvailableCPU,
 		"available_memory":  node.AvailableMemory,
+		"label_count":       len(node.Labels),
+		"re_register":       existing != nil,
 	}).Info("registering node")
 
 	nodeJSON, err := json.Marshal(node)
@@ -165,6 +236,11 @@ func (s *Scheduler) RegisterNode(node models.Node) error {
 		schedulerLogger.WithField("node_id", node.NodeID).Info("updated CoreDNS record for node")
 	}
 	s.cacheNode(node)
+	s.emitEvent("NodeJoined", "", node.NodeID, "node registered", map[string]interface{}{
+		"status":          node.Status,
+		"agent_endpoint":  node.AgentEndpoint,
+		"scheduler_shard": node.Labels["scheduler_shard"],
+	})
 
 	schedulerLogger.WithField("node_id", node.NodeID).Info("registered node")
 
@@ -184,19 +260,6 @@ func matchesLabels(workloadLabels, nodeLabels map[string]string) bool {
 	return true
 }
 
-func nodeUtilizationScore(node models.Node) float64 {
-	cpuTotal := node.TotalCPU
-	memTotal := float64(node.TotalMemory)
-	if cpuTotal <= 0 || memTotal <= 0 {
-		return 1e9
-	}
-	cpuUsed := cpuTotal - node.AvailableCPU
-	memUsed := memTotal - float64(node.AvailableMemory)
-	cpuRatio := cpuUsed / cpuTotal
-	memRatio := memUsed / memTotal
-	return (cpuRatio + memRatio) / 2.0
-}
-
 func canonicalWorkloadType(t string) string {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "docker-container", "container":
@@ -205,6 +268,8 @@ func canonicalWorkloadType(t string) string {
 		return "compose"
 	case "vm":
 		return "vm"
+	case "microvm", "micro-vm", "firecracker":
+		return "microvm"
 	default:
 		return strings.ToLower(strings.TrimSpace(t))
 	}
@@ -305,21 +370,25 @@ func isNodeStatusSubKey(key string) bool {
 	return strings.HasSuffix(key, "/status")
 }
 
-func (s *Scheduler) selectNodeForWorkload(workload models.Workload) (models.Node, string, error) {
-	if !s.isWritable() {
-		return models.Node{}, "", errControlPlaneFrozen
+// candidateNodeSnapshot returns the node set placement decisions are made
+// against. When the watch-backed node cache (node_watch.go) is populated
+// and healthy, it's served from there — an in-memory map read instead of
+// an etcd round-trip plus a fresh unmarshal of every node on every single
+// placement decision. If the cache isn't ready yet (scheduler just
+// started, or the watch stream is down and hasn't resynced), this falls
+// back transparently to the original live etcd prefix scan, so placement
+// never silently runs against stale or empty data.
+func (s *Scheduler) candidateNodeSnapshot() ([]models.Node, error) {
+	if s.nodeCacheReady.Load() {
+		if nodes := s.getCachedNodes(); len(nodes) > 0 {
+			return nodes, nil
+		}
 	}
 	resp, err := s.RetryableEtcdGet(nodesPrefix, clientv3.WithPrefix())
 	if err != nil {
-		return models.Node{}, "", fmt.Errorf("failed to get nodes for scheduling: %v", err)
+		return nil, fmt.Errorf("failed to get nodes for scheduling: %v", err)
 	}
-	if len(resp.Kvs) == 0 {
-		return models.Node{}, "", fmt.Errorf("no nodes available")
-	}
-
-	candidates := make([]models.Node, 0)
-	rejections := make([]string, 0)
-	neededStorageDrivers := requiredStorageDrivers(workload)
+	nodes := make([]models.Node, 0, len(resp.Kvs))
 	for _, kv := range resp.Kvs {
 		if isNodeStatusSubKey(string(kv.Key)) {
 			continue
@@ -329,6 +398,27 @@ func (s *Scheduler) selectNodeForWorkload(workload models.Workload) (models.Node
 			schedulerLogger.WithError(err).WithField("key", string(kv.Key)).Warn("failed to unmarshal node data")
 			continue
 		}
+		nodes = append(nodes, node)
+	}
+	return nodes, nil
+}
+
+func (s *Scheduler) selectNodeForWorkload(workload models.Workload) (models.Node, string, error) {
+	if !s.isWritable() {
+		return models.Node{}, "", errControlPlaneFrozen
+	}
+	nodes, err := s.candidateNodeSnapshot()
+	if err != nil {
+		return models.Node{}, "", err
+	}
+	if len(nodes) == 0 {
+		return models.Node{}, "", fmt.Errorf("no nodes available")
+	}
+
+	candidates := make([]models.Node, 0)
+	rejections := make([]string, 0)
+	neededStorageDrivers := requiredStorageDrivers(workload)
+	for _, node := range nodes {
 		if !strings.EqualFold(node.Status, "active") && !strings.EqualFold(node.Status, "ready") {
 			reason := strings.TrimSpace(node.StatusReason)
 			if reason == "" {
@@ -378,11 +468,28 @@ func (s *Scheduler) selectNodeForWorkload(workload models.Workload) (models.Node
 		return models.Node{}, "", fmt.Errorf("no suitable node available")
 	}
 
+	counts, maxCount, err := s.workloadCountsByNode()
+	if err != nil {
+		// Non-fatal: fall back to treating spread as uniform (score
+		// degrades gracefully to the CPU/memory terms only) rather than
+		// failing the whole placement decision over a monitoring-adjacent
+		// read.
+		schedulerLogger.WithError(err).Warn("failed to compute workload counts for placement spread scoring; continuing without it")
+		counts = map[string]int{}
+		maxCount = 0
+	}
+
 	sort.Slice(candidates, func(i, j int) bool {
-		return nodeUtilizationScore(candidates[i]) < nodeUtilizationScore(candidates[j])
+		pendingCPUI, pendingMemI := s.pendingReservationFor(candidates[i].NodeID)
+		pendingCPUJ, pendingMemJ := s.pendingReservationFor(candidates[j].NodeID)
+		scoreI := nodePlacementScore(candidates[i], workload, pendingCPUI, pendingMemI, counts[candidates[i].NodeID], maxCount)
+		scoreJ := nodePlacementScore(candidates[j], workload, pendingCPUJ, pendingMemJ, counts[candidates[j].NodeID], maxCount)
+		return scoreI > scoreJ // descending: highest score (most preferred) first
 	})
 
-	reason := fmt.Sprintf("selected by lowest utilization score %.4f", nodeUtilizationScore(candidates[0]))
+	pendingCPU, pendingMem := s.pendingReservationFor(candidates[0].NodeID)
+	bestScore := nodePlacementScore(candidates[0], workload, pendingCPU, pendingMem, counts[candidates[0].NodeID], maxCount)
+	reason := fmt.Sprintf("selected by placement score %.4f (cpu/mem headroom + spread, node has %d workloads)", bestScore, counts[candidates[0].NodeID])
 	return candidates[0], reason, nil
 }
 
@@ -407,6 +514,16 @@ func (s *Scheduler) RelocateWorkloadsFromNode(nodeID, reason string) (int, error
 	relocated := 0
 	for i := range workloads {
 		workload := workloads[i]
+		if isNodeLocalWorkload(workload) {
+			schedulerLogger.WithFields(logrus.Fields{
+				"workload_id": workload.ID,
+				"node_id":     nodeID,
+			}).Info("skip relocate: node-local workload hard-pinned")
+			s.emitEvent("RescheduleSkipped", workload.ID, nodeID, "node-local; not moving local data", map[string]interface{}{
+				"persistence_class": workloadPersistenceClass(workload),
+			})
+			continue
+		}
 		nextNode, selectionReason, selErr := s.selectNodeForWorkload(workload)
 		if selErr != nil {
 			_ = s.UpdateWorkloadRetryOnFailure(workload.ID, fmt.Sprintf("%s; no relocation target: %v", reason, selErr))
@@ -454,6 +571,7 @@ func (s *Scheduler) assignWorkload(workload *models.Workload, node models.Node, 
 	if err := s.writeAssignment(workload.ID, node.NodeID, reason); err != nil {
 		return err
 	}
+	s.reservePlacement(node.NodeID, workload.ID, workload.Resources.CPUUsage, workload.Resources.MemoryUsage)
 	s.emitEvent("WorkloadScheduled", workload.ID, node.NodeID, reason, nil)
 	return nil
 }
@@ -614,6 +732,10 @@ func (s *Scheduler) DeleteNode(nodeID string) error {
 		schedulerLogger.WithError(err).WithField("node_id", nodeID).Warn("failed to remove CoreDNS entry")
 	}
 
+	s.emitEvent("NodeLeft", "", nodeID, "node removed from cluster", map[string]interface{}{
+		"status": "Removed",
+	})
+
 	schedulerLogger.WithField("node_id", nodeID).Info("deleted node")
 	return nil
 }
@@ -665,6 +787,7 @@ func (s *Scheduler) GetWorkloads() ([]models.Workload, error) {
 			workload.Metadata = st.Metadata
 			workload.Retry = st.Retry
 			workload.StatusInfo = st.StatusInfo
+			workload.Usage = st.Usage
 		}
 		workloads = append(workloads, workload)
 	}
@@ -735,6 +858,7 @@ func (s *Scheduler) GetWorkloadByID(workloadID string) (models.Workload, error) 
 		workload.Metadata = st.Metadata
 		workload.Retry = st.Retry
 		workload.StatusInfo = st.StatusInfo
+		workload.Usage = st.Usage
 	}
 	s.cacheWorkload(workload)
 
@@ -808,28 +932,22 @@ func (s *Scheduler) DeleteWorkload(workloadID string) error {
 
 // UpdateWorkloadStatus updates the status of a workload.
 func (s *Scheduler) UpdateWorkloadStatus(workloadID, status string) error {
-	if err := s.requireWritable(); err != nil {
-		return err
-	}
-	workload, err := s.GetWorkloadByID(workloadID)
+	_, err := s.updateWorkloadStatusCAS(workloadID, func(workload *models.Workload) bool {
+		if strings.EqualFold(workload.Status, status) && strings.EqualFold(workload.StatusInfo.ActualState, status) {
+			return false
+		}
+		workload.Status = status
+		workload.StatusInfo.ActualState = status
+		workload.StatusInfo.LastUpdated = time.Now().UTC()
+		if workload.Metadata == nil {
+			workload.Metadata = map[string]interface{}{}
+		}
+		if strings.EqualFold(status, "failed") {
+			workload.Metadata["last_action"] = "Failed"
+		}
+		return true
+	})
 	if err != nil {
-		return err
-	}
-
-	if strings.EqualFold(workload.Status, status) && strings.EqualFold(workload.StatusInfo.ActualState, status) {
-		return nil
-	}
-
-	workload.Status = status
-	workload.StatusInfo.ActualState = status
-	workload.StatusInfo.LastUpdated = time.Now().UTC()
-	if workload.Metadata == nil {
-		workload.Metadata = map[string]interface{}{}
-	}
-	if strings.EqualFold(status, "failed") {
-		workload.Metadata["last_action"] = "Failed"
-	}
-	if err := s.saveWorkload(workload); err != nil {
 		return fmt.Errorf("failed to update workload %s status: %v", workloadID, err)
 	}
 
@@ -842,29 +960,22 @@ func (s *Scheduler) UpdateWorkloadStatus(workloadID, status string) error {
 
 // UpdateWorkloadLogs updates the logs of a workload.
 func (s *Scheduler) UpdateWorkloadLogs(workloadID, logs string) error {
-	if err := s.requireWritable(); err != nil {
-		return err
-	}
-	workload, err := s.GetWorkloadByID(workloadID)
-	if err != nil {
-		return err
-	}
-
-	// Append logs with timestamp
-	timestamp := time.Now().Format("2006-01-02 15:04:05")
-	logEntry := fmt.Sprintf("[%s] %s\n", timestamp, logs)
-
 	if strings.TrimSpace(logs) == "" {
 		return nil
 	}
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	logEntry := fmt.Sprintf("[%s] %s\n", timestamp, logs)
 
-	if workload.Logs == "" {
-		workload.Logs = logEntry
-	} else {
-		workload.Logs += logEntry
-	}
-	workload.StatusInfo.LastUpdated = time.Now().UTC()
-	if err := s.saveWorkload(workload); err != nil {
+	_, err := s.updateWorkloadStatusCAS(workloadID, func(workload *models.Workload) bool {
+		if workload.Logs == "" {
+			workload.Logs = logEntry
+		} else {
+			workload.Logs += logEntry
+		}
+		workload.StatusInfo.LastUpdated = time.Now().UTC()
+		return true
+	})
+	if err != nil {
 		return fmt.Errorf("failed to update workload %s logs: %v", workloadID, err)
 	}
 
@@ -874,44 +985,40 @@ func (s *Scheduler) UpdateWorkloadLogs(workloadID, logs string) error {
 
 // UpdateWorkloadMetadata merges runtime metadata into the workload record.
 func (s *Scheduler) UpdateWorkloadMetadata(workloadID string, metadata map[string]string) error {
-	if err := s.requireWritable(); err != nil {
-		return err
-	}
 	if len(metadata) == 0 {
 		return nil
 	}
-	workload, err := s.GetWorkloadByID(workloadID)
-	if err != nil {
-		return err
-	}
-	if workload.Metadata == nil {
-		workload.Metadata = map[string]interface{}{}
-	}
-	changed := false
-	for k, v := range metadata {
-		key := strings.TrimSpace(k)
-		if key == "" {
-			continue
+	_, err := s.updateWorkloadStatusCAS(workloadID, func(workload *models.Workload) bool {
+		if workload.Metadata == nil {
+			workload.Metadata = map[string]interface{}{}
 		}
-		cleanVal := strings.TrimSpace(v)
-		if existing, ok := workload.Metadata[key]; !ok || fmt.Sprintf("%v", existing) != cleanVal {
-			changed = true
-		}
-		workload.Metadata[key] = cleanVal
-		if key == "container.stderr" || key == "container.runtime_error" {
-			if cleanVal != "" {
-				workload.Metadata["last_runtime_error"] = cleanVal
-				if strings.TrimSpace(workload.StatusInfo.FailureReason) == "" || isInfrastructureFailureReason(workload.StatusInfo.FailureReason) {
-					workload.StatusInfo.FailureReason = cleanVal
+		changed := false
+		for k, v := range metadata {
+			key := strings.TrimSpace(k)
+			if key == "" {
+				continue
+			}
+			cleanVal := strings.TrimSpace(v)
+			if existing, ok := workload.Metadata[key]; !ok || fmt.Sprintf("%v", existing) != cleanVal {
+				changed = true
+			}
+			workload.Metadata[key] = cleanVal
+			if key == "container.stderr" || key == "container.runtime_error" {
+				if cleanVal != "" {
+					workload.Metadata["last_runtime_error"] = cleanVal
+					if strings.TrimSpace(workload.StatusInfo.FailureReason) == "" || isInfrastructureFailureReason(workload.StatusInfo.FailureReason) {
+						workload.StatusInfo.FailureReason = cleanVal
+					}
 				}
 			}
 		}
-	}
-	if !changed {
-		return nil
-	}
-	workload.StatusInfo.LastUpdated = time.Now().UTC()
-	if err := s.saveWorkload(workload); err != nil {
+		if !changed {
+			return false
+		}
+		workload.StatusInfo.LastUpdated = time.Now().UTC()
+		return true
+	})
+	if err != nil {
 		return fmt.Errorf("failed to update workload %s metadata: %v", workloadID, err)
 	}
 	return nil
@@ -922,57 +1029,53 @@ func (s *Scheduler) UpdateWorkloadMetadata(workloadID string, metadata map[strin
 // envelope) and is used only for the meter usage-stream event; it is not
 // persisted on the workload record.
 func (s *Scheduler) UpdateWorkloadRuntimeDetails(workloadID, nodeID string, reason *models.WorkloadReason, usage *models.WorkloadUsage) error {
-	if err := s.requireWritable(); err != nil {
-		return err
-	}
-	workload, err := s.GetWorkloadByID(workloadID)
+	workload, err := s.updateWorkloadStatusCAS(workloadID, func(workload *models.Workload) bool {
+		if workload.Metadata == nil {
+			workload.Metadata = map[string]interface{}{}
+		}
+
+		if reason != nil {
+			copied := *reason
+			workload.StatusInfo.Reason = &copied
+			if strings.TrimSpace(copied.Message) != "" {
+				workload.StatusInfo.FailureReason = copied.Message
+			}
+			if strings.TrimSpace(copied.Code) != "" {
+				workload.Metadata["reason_code"] = copied.Code
+			}
+			if strings.TrimSpace(copied.Message) != "" {
+				workload.Metadata["reason_message"] = copied.Message
+			}
+			if !copied.LastTransition.IsZero() {
+				workload.Metadata["reason_last_transition"] = copied.LastTransition.UTC().Format(time.RFC3339)
+			}
+			if !copied.NextRetryAt.IsZero() {
+				workload.Metadata["reason_next_retry_at"] = copied.NextRetryAt.UTC().Format(time.RFC3339)
+			}
+			workload.Metadata["reason_retryable"] = fmt.Sprintf("%t", copied.Retryable)
+		}
+
+		if usage != nil {
+			copied := *usage
+			workload.Usage = &copied
+			workload.Metadata["usage_cpu_percent"] = fmt.Sprintf("%.4f", copied.CPUPercent)
+			workload.Metadata["usage_memory_bytes"] = fmt.Sprintf("%d", copied.MemoryBytes)
+			workload.Metadata["usage_disk_read_bytes"] = fmt.Sprintf("%d", copied.DiskReadBytes)
+			workload.Metadata["usage_disk_write_bytes"] = fmt.Sprintf("%d", copied.DiskWriteBytes)
+			workload.Metadata["usage_net_rx_bytes"] = fmt.Sprintf("%d", copied.NetRXBytes)
+			workload.Metadata["usage_net_tx_bytes"] = fmt.Sprintf("%d", copied.NetTXBytes)
+			if !copied.CollectedAt.IsZero() {
+				workload.Metadata["usage_collected_at"] = copied.CollectedAt.UTC().Format(time.RFC3339)
+			}
+			if strings.TrimSpace(copied.Source) != "" {
+				workload.Metadata["usage_source"] = copied.Source
+			}
+		}
+
+		workload.StatusInfo.LastUpdated = time.Now().UTC()
+		return true
+	})
 	if err != nil {
-		return err
-	}
-	if workload.Metadata == nil {
-		workload.Metadata = map[string]interface{}{}
-	}
-
-	if reason != nil {
-		copied := *reason
-		workload.StatusInfo.Reason = &copied
-		if strings.TrimSpace(copied.Message) != "" {
-			workload.StatusInfo.FailureReason = copied.Message
-		}
-		if strings.TrimSpace(copied.Code) != "" {
-			workload.Metadata["reason_code"] = copied.Code
-		}
-		if strings.TrimSpace(copied.Message) != "" {
-			workload.Metadata["reason_message"] = copied.Message
-		}
-		if !copied.LastTransition.IsZero() {
-			workload.Metadata["reason_last_transition"] = copied.LastTransition.UTC().Format(time.RFC3339)
-		}
-		if !copied.NextRetryAt.IsZero() {
-			workload.Metadata["reason_next_retry_at"] = copied.NextRetryAt.UTC().Format(time.RFC3339)
-		}
-		workload.Metadata["reason_retryable"] = fmt.Sprintf("%t", copied.Retryable)
-	}
-
-	if usage != nil {
-		copied := *usage
-		workload.Usage = &copied
-		workload.Metadata["usage_cpu_percent"] = fmt.Sprintf("%.4f", copied.CPUPercent)
-		workload.Metadata["usage_memory_bytes"] = fmt.Sprintf("%d", copied.MemoryBytes)
-		workload.Metadata["usage_disk_read_bytes"] = fmt.Sprintf("%d", copied.DiskReadBytes)
-		workload.Metadata["usage_disk_write_bytes"] = fmt.Sprintf("%d", copied.DiskWriteBytes)
-		workload.Metadata["usage_net_rx_bytes"] = fmt.Sprintf("%d", copied.NetRXBytes)
-		workload.Metadata["usage_net_tx_bytes"] = fmt.Sprintf("%d", copied.NetTXBytes)
-		if !copied.CollectedAt.IsZero() {
-			workload.Metadata["usage_collected_at"] = copied.CollectedAt.UTC().Format(time.RFC3339)
-		}
-		if strings.TrimSpace(copied.Source) != "" {
-			workload.Metadata["usage_source"] = copied.Source
-		}
-	}
-
-	workload.StatusInfo.LastUpdated = time.Now().UTC()
-	if err := s.saveWorkload(workload); err != nil {
 		return fmt.Errorf("failed to update workload %s runtime details: %v", workloadID, err)
 	}
 
@@ -1005,6 +1108,20 @@ func (s *Scheduler) GetWorkloadsByNode(nodeID string) ([]models.Workload, error)
 }
 
 // MonitorNodes periodically checks node health and updates status.
+// backgroundLoopConcurrency returns the concurrency cap used by
+// MonitorNodes, MonitorWorkloads, and detectDriftOnce. Shares the
+// SCHEDULER_RECONCILE_CONCURRENCY setting with the reconciler
+// (Reconciler.reconcileConcurrency) rather than introducing a separate
+// knob — these loops make the same shape of per-item network call the
+// reconciler does, just less frequently, so the same concurrency budget
+// applies.
+func (s *Scheduler) backgroundLoopConcurrency() int {
+	if s.cfg != nil && s.cfg.SchedulerReconcileConcurrency > 0 {
+		return s.cfg.SchedulerReconcileConcurrency
+	}
+	return defaultReconcileConcurrency
+}
+
 func (s *Scheduler) MonitorNodes(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
@@ -1022,60 +1139,105 @@ func (s *Scheduler) MonitorNodes(ctx context.Context) {
 				schedulerLogger.WithError(err).Error("node monitoring cycle failed")
 				continue
 			}
+			owned := make([]models.Node, 0, len(nodes))
 			for _, node := range nodes {
+				if s.ownsNode(node.NodeID) {
+					owned = append(owned, node)
+				}
+			}
+			runBounded(owned, s.backgroundLoopConcurrency(), func(node models.Node) {
 				if time.Since(node.LastHeartbeat) > 3*time.Minute {
 					reason := fmt.Sprintf("heartbeat expired: last heartbeat %s", node.LastHeartbeat.UTC().Format(time.RFC3339))
 					if err := s.markNodeNotReady(node.NodeID, reason, "monitor"); err != nil {
 						schedulerLogger.WithError(err).WithField("node_id", node.NodeID).Warn("failed to update node status")
 					}
 				}
-			}
+			})
 		}
 	}
 }
 
-// StartMonitoring starts both node monitoring and workload monitoring
+// StartMonitoring starts the per-replica supervisory loop that tracks this
+// instance's own etcd connectivity (used by requireWritable/isWritable
+// checks throughout, including in gRPC handlers that must run on every
+// replica regardless of leadership). Cluster-wide singleton work — node
+// watch, node/workload monitoring, drift detection, reconciliation — is
+// started separately via StartLeaderElectedBackgroundLoops, gated on
+// leader election so it runs on exactly one replica at a time.
 func (s *Scheduler) StartMonitoring(ctx context.Context) {
 	s.bgWG.Add(1)
 	go func() {
 		defer s.bgWG.Done()
 		s.startModeSupervisor(ctx)
 	}()
+}
 
-	// Start node monitoring
+// StartLeaderElectedBackgroundLoops campaigns for scheduler leadership (see
+// leader.go) and, for as long as this instance holds it, runs every
+// cluster-wide singleton background loop: the watch-backed node cache,
+// node monitoring, workload monitoring, drift detection, and
+// reconciliation. Only one scheduler replica runs these at a time; if the
+// current leader dies or its etcd session lapses, another replica takes
+// over automatically. Safe to call on every replica — non-leaders simply
+// block campaigning until they win an election (e.g. after the previous
+// leader stops).
+func (s *Scheduler) StartLeaderElectedBackgroundLoops(ctx context.Context) {
 	s.bgWG.Add(1)
 	go func() {
 		defer s.bgWG.Done()
-		s.MonitorNodes(ctx)
-	}()
-
-	// Start workload monitoring
-	if s.monitor != nil {
-		s.bgWG.Add(1)
-		go func() {
-			defer s.bgWG.Done()
-			s.monitor.MonitorWorkloads(ctx, 60*time.Second)
-		}()
-	}
-
-	// Start drift detection loop (agent state vs scheduler state)
-	s.bgWG.Add(1)
-	go func() {
-		defer s.bgWG.Done()
-		s.StartDriftDetection(ctx, s.driftDetectInterval())
+		s.RunWithLeaderElection(ctx, s.runLeaderOnlyBackgroundLoops)
 	}()
 }
 
-// StartReconciliation starts the reconciliation loop
-func (s *Scheduler) StartReconciliation(ctx context.Context) {
-	if s.reconciler != nil {
-		interval := s.cfg.SchedulerReconcileInterval
-		s.bgWG.Add(1)
+// runLeaderOnlyBackgroundLoops runs every singleton background loop and
+// blocks until leaderCtx is cancelled — i.e. until this instance loses
+// leadership (session expiry, or normal shutdown). Called by
+// RunWithLeaderElection; not meant to be called directly.
+func (s *Scheduler) runLeaderOnlyBackgroundLoops(leaderCtx context.Context) {
+	var wg sync.WaitGroup
+
+	// Watch-backed node cache used by placement (candidateNodeSnapshot /
+	// selectNodeForWorkload) to avoid a full etcd scan per scheduling
+	// decision.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.StartNodeWatch(leaderCtx)
+	}()
+
+	// Node monitoring
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.MonitorNodes(leaderCtx)
+	}()
+
+	// Workload monitoring
+	if s.monitor != nil {
+		wg.Add(1)
 		go func() {
-			defer s.bgWG.Done()
-			s.reconciler.StartReconciliationLoop(ctx, interval)
+			defer wg.Done()
+			s.monitor.MonitorWorkloads(leaderCtx, 60*time.Second)
 		}()
 	}
+
+	// Drift detection (agent state vs scheduler state)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		s.StartDriftDetection(leaderCtx, s.driftDetectInterval())
+	}()
+
+	// Reconciliation
+	if s.reconciler != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			s.reconciler.StartReconciliationLoop(leaderCtx, s.cfg.SchedulerReconcileInterval)
+		}()
+	}
+
+	wg.Wait()
 }
 
 // WaitForBackground blocks until scheduler background workers stop or timeout elapses.

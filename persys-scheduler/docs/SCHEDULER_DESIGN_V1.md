@@ -77,18 +77,26 @@ API server responsibilities:
 - Persist desired state into etcd
 - Trigger scheduling/reconciliation workflows
 - Expose read APIs for status and inventory
+- Cluster-wide event streaming (gRPC server-streaming)
 
-API server must not issue runtime execution directly. Runtime actions are emitted via scheduler workers.
+API server must not issue runtime execution directly. Runtime actions are emitted via scheduler workers. The API surface runs unconditionally on every scheduler replica — write paths are protected by etcd compare-and-swap, making it safe to route agent traffic to any replica.
 
-Minimum API surface:
+gRPC API surface:
 
-- `POST /workloads`
-- `PUT /workloads/{id}`
-- `DELETE /workloads/{id}`
-- `GET /workloads/{id}`
-- `GET /workloads`
-- `GET /nodes`
-- `POST /workloads/{id}/retry`
+**Workload Management:**
+- `ApplyWorkload` / `DeleteWorkload` / `GetWorkload` / `ListWorkloads`
+- `RetryWorkload`
+
+**Node Management:**
+- `RegisterNode` / `Heartbeat` / `GetClusterSummary`
+
+**Events (cluster-wide, Redis-backed):**
+- `ListEvents(type, workload_id, node_id, limit)` - Historical event replay
+- `WatchEvents(type, workload_id, node_id)` - Server-streaming live event feed
+
+**Storage:**
+- `CreateDisk` / `ListDisks` / `GetDisk` / `DeleteDisk` (managed volume inventory)
+- `CreateBucket` / `ListBuckets` / `GetBucket` / `DeleteBucket` / `GetBucketAccess` / `ListBucketObjects` (Ceph RGW proxy)
 
 ### 4.2 State Store (etcd)
 
@@ -136,77 +144,106 @@ Workload record (canonical shape):
 }
 ```
 
-### 4.3 Node Manager
+### 4.3 Node Manager and Node Watch
 
-Responsibilities:
+**Node Manager** is responsible for:
+- Node registration (RegisterNode)
+- Heartbeat processing (Heartbeat)
+- Node status transitions (Ready/NotReady/Draining)
+- Node taints and labels (operator control)
+- Capacity accounting (used/available CPU, memory)
 
-- Node registration
-- Heartbeat processing
-- Capacity accounting
-- Node readiness transitions
-- Eviction trigger when node is unhealthy
+**Node Watch** is a leader-elected singleton (like reconciliation) that maintains a live in-memory cache of all nodes:
+- Performs full resync from etcd (read all `/nodes/*`)
+- Establishes live etcd watch stream on `/nodes/*` prefix
+- Applies incoming watch events to in-memory map
+- Falls back to resync on watch stream errors
+- Serves as source of truth for placement decisions (via `candidateNodeSnapshot`)
 
-Node record (canonical shape):
+**Why Node Watch matters:**
+- Placement algorithm needs to scan all nodes to pick candidates
+- Without a live cache, every placement decision = O(nodes) etcd scan
+- With live cache, placement = O(1) in-memory read of pre-populated map
+- Cache is rebuilt on leader failover (new leader starts node watch immediately)
 
-```json
-{
-  "id": "node-abc",
-  "status": "Ready | NotReady | Draining",
-  "resources": {
-    "cpu_total": 16,
-    "cpu_allocated": 8,
-    "memory_total": 32768,
-    "memory_allocated": 16000,
-    "disk_total": 500,
-    "disk_allocated": 200
-  },
-  "last_heartbeat": "2026-02-17T00:00:00Z",
-  "labels": {
-    "rack": "rack-1",
-    "zone": "zone-a"
-  }
-}
-```
-
-Health policy:
-
-- Missing heartbeat for 3 intervals -> `NotReady`
-- `NotReady` beyond grace -> workload eviction/reschedule
+**Fallback:**
+- If node cache is not yet ready (startup, resync in progress), placement falls back to live etcd scan
+- Graceful degradation: scheduling works even during leadership transitions
 
 ### 4.4 Placement Engine
 
-Inputs:
+The placement engine makes deterministic workload-to-node assignments based on resource availability, labels, and workload-type capabilities.
 
-- Workload resource requests
-- Node available capacity
-- Node labels and readiness
+**Inputs:**
+- Workload resource requests (CPU, memory, disk)
+- Workload type (container, compose, vm, etc.)
+- Workload label constraints
+- Node available capacity (from heartbeats, adjusted for in-flight reservations)
+- Node status (Ready/NotReady/Draining)
+- Node labels and supported workload types
 
-Algorithm (V1):
+**Algorithm:**
 
-1. Filter nodes by:
-   - `Ready`
-   - CPU capacity
-   - Memory capacity
-   - Disk capacity
-   - Label constraints
-2. Sort by ascending utilization
-3. Choose first node
-4. Persist assignment and decision metadata
+1. **Filter**: Eliminate ineligible nodes:
+   - Status is not `Ready` (skip draining, not-ready nodes)
+   - Insufficient CPU/memory/disk capacity
+   - Labels don't match workload requirements
+   - Node doesn't support workload type (container, vm, etc.)
+   - Storage driver requirements not met
+
+2. **Score**: For each candidate, compute weighted score:
+   - CPU headroom factor (weight 0.4): (available_cpu - in_flight_cpu) / total_cpu
+   - Memory headroom factor (weight 0.4): (available_memory - in_flight_memory) / total_memory
+   - Spread factor (weight 0.2): how loaded relative to busiest candidate (workload_count / busiest_count)
+   - Deterministic tie-breaker: hash(workload_id + node_id) for stable ordering when tied
+
+3. **Assign**: Pick the highest-scoring node, record assignment in etcd, reserve resources in-flight
+
+4. **Reserve**: Immediately record in-memory reservation for just-assigned workload (CPU, memory, expires 90s)
+   - Prevents concurrent placement decisions from all reading stale "available" numbers
+   - Advisory (soft limit); self-expires via TTL rather than explicit confirmation
+
+**In-Flight Reservations:**
+
+Node `AvailableCPU` and `AvailableMemory` only update via that node's heartbeat, which lags behind placement decisions. When multiple placement decisions (reconciliation, monitoring, multiple replicas in active-active mode) happen concurrently, they can all read the same stale "available" numbers and pick the same "least loaded" node, causing oversubscription before any heartbeat catches up.
+
+In-flight reservations track resources committed to just-assigned workloads and subtract them from a node's effective capacity during scoring. They self-expire after 90 seconds (multiple heartbeat intervals), trading small scoring precision loss for not needing to hook into every status-confirmation path.
 
 ### 4.5 Reconciliation Engine
 
-Loop interval: default 5 seconds (configurable).
+The reconciliation engine continuously converges workload desired state to actual state as reported by agents.
 
-For each workload:
+**Execution Model:**
 
-1. Load desired state from etcd
-2. Query agent actual state (`GetWorkloadStatus`)
+- Leader-elected single instance in failover mode, or shard-partitioned replicas in active-active mode (see section 8)
+- Runs every `SCHEDULER_RECONCILE_INTERVAL` (default 5s)
+- Bounded concurrency: processes at most `SCHEDULER_RECONCILE_CONCURRENCY` workloads concurrently (default 64)
+- Cycle-overlap guard: prevents a slow cycle from stacking with the next tick
+
+**Optimization: O(nodes) instead of O(workloads) agent communication:**
+
+Traditional approach: one `GetWorkloadStatus` RPC per workload, per cycle = O(workloads) fan-out.
+
+New approach:
+1. Prefetch snapshots: call `GetWorkloads` once per node (batched list) = O(nodes) fan-out
+2. Cache result for the cycle duration
+3. Within the cycle, `getActualWorkloadState` consults the snapshot before falling back to a live per-workload RPC
+4. Dramatically reduces agent load when workload count >> node count
+
+**Loop interval:** default 5 seconds (configurable via `SCHEDULER_RECONCILE_INTERVAL`).
+
+**For each workload (with bounded concurrency):**
+
+1. Load desired state from etcd (spec + retry metadata)
+2. Query agent actual state:
+   - First check node snapshot from prefetch (if available)
+   - Fall back to live `GetWorkloadStatus` RPC if not in snapshot
 3. Compare desired vs actual
-4. Choose action
-5. Execute action (`ApplyWorkload`/`DeleteWorkload`)
-6. Persist result and timestamps
+4. Choose action (see decision matrix below)
+5. Execute action (etcd CAS write + agent RPC)
+6. Persist result (status, timestamps, metrics)
 
-Decision matrix:
+**Decision matrix:**
 
 | Desired | Actual  | Action   |
 |---------|---------|----------|
@@ -217,11 +254,21 @@ Decision matrix:
 | Deleted | Exists  | Delete   |
 | Running | Running | NoAction |
 
-Rules:
+**Concurrency Control:**
 
-- Do not execute before grace period expires for transitional states.
-- Persist reconciliation metadata for every action.
-- No tight retry loops inside one cycle.
+All etcd writes use compare-and-swap (`RetryableEtcdCASPut`):
+- Heartbeat updates
+- Node drain/ready/taint/label transitions
+- Workload status updates (status, logs, metadata, runtime details)
+- On conflict, reload from etcd and retry (not silent overwrite)
+
+**Rules:**
+
+- Do not execute before grace period expires for transitional states (`SCHEDULER_MISSING_GRACE_PERIOD`, default 15s)
+- Persist reconciliation metadata for every action
+- No tight retry loops inside one cycle
+- Metrics: track per-workload attempt count, backoff timer, failure reason
+- Failed workloads with terminal failure reasons skip retry and transition to `Failed` state
 
 ### 4.6 Retry Engine
 
@@ -243,19 +290,64 @@ On failure:
 
 ### 4.7 Event System
 
-Event types:
+Events are cluster-wide, immutable, append-only records of state transitions and significant control-plane occurrences. They are **stored in a Redis Stream, not etcd**, to avoid etcd fan-out issues at scale.
 
-- `WorkloadScheduled`
-- `WorkloadFailed`
-- `NodeLost`
-- `RetryTriggered`
-- `Rescheduled`
+**Storage:**
+- Single shared Redis Stream across all scheduler replicas
+- TTL-based retention (configurable via `REDIS_EVENT_TTL`, default 24h)
+- Size-based trimming (approximate, configurable via `REDIS_EVENT_MAX_ENTRIES`, default 1000 entries)
 
-Rules:
+**Why Redis instead of etcd:**
+- Events are high-churn data with well-defined retention windows
+- etcd is optimized for mutable state; event-only workloads stress etcd unnecessarily
+- Redis Streams are purpose-built for event logging with automatic TTL cleanup
+- Graceful degradation: if Redis is down, events are dropped (logged) but scheduler continues; if etcd is down, scheduler enters degraded mode
 
-- Events are immutable
-- Events are append-only
-- Include workload id, node id, reason, timestamp
+**Event Types:**
+
+Topology:
+- `NodeJoined`: agent registered / re-registered
+- `NodeLost`: heartbeat timeout, marked NotReady
+- `NodeLeft`: deregistered (graceful)
+
+Workload Lifecycle:
+- `WorkloadScheduled`: placed on a node
+- `WorkloadFailed`: reached terminal failure (max retries exceeded)
+- `DriftDetected`: agent state diverged from desired
+- `RetryTriggered`: retry backoff timer expired, retrying
+- `Rescheduled`: workload moved to different node (same retry attempt)
+- `Relocated`: workload moved due to node drain/failure
+
+Operator Control:
+- `NodeDraining`: operator requested drain
+- `NodeReady`: operator cleared drain
+- `NodeTainted`: operator applied taint
+- `NodeUntainted`: operator removed taint
+- `NodeLabelSet`: operator set label
+- `NodeLabelDeleted`: operator deleted label
+
+Control-Plane:
+- `SchedulerModeChanged`: transitioned between normal/degraded/recovery
+- `LeaderElected`: this instance won leader election
+- `LeaderLost`: this instance lost leader election
+
+**Event API:**
+
+- `ListEvents(type, workload_id, node_id, limit)` - Query historical events (oldest-first)
+- `WatchEvents(type, workload_id, node_id)` - Server-streaming, replays recent history then follows live events
+
+**Consumption:**
+- Dashboard via SSE (HTTP gateway endpoint)
+- Alerting systems (watch for WorkloadFailed, NodeLost)
+- Audit trails
+- Observability: correlate events with metrics/traces
+
+**Rules:**
+
+- Events are immutable after creation
+- Events are append-only (no deletion or replay)
+- Every event includes: id (UUID), type, workload_id (optional), node_id (optional), reason, timestamp, details (string map)
+- Redis stream ID ensures exactly-once delivery across replay-to-live boundary (no gap, no duplicate)
 
 ### 4.8 Automation Hooks
 
@@ -315,17 +407,96 @@ Node crash:
 
 ## 7. Concurrency Model
 
-- Worker pool for reconciliation actions
-- Context cancellation for all loops and RPCs
-- Optimistic etcd writes where feasible
-- Avoid global locks across reconciliation workers
+The scheduler is designed for safe concurrent operation across multiple replicas.
 
-## 8. High Availability (Future)
+**Within Single Instance:**
+- Background loops (reconciliation, monitoring, drift detection, node watch) use goroutines with context cancellation
+- Bounded concurrency for workload/node processing (default 64) prevents resource exhaustion
+- Cycle-overlap guard ensures sequential cycles (no interleaving)
+- In-memory state (caches, reservations) protected by sync.RWMutex
+- etcd is single source of truth; cache is rebuilt on restart
 
-- Multiple stateless scheduler replicas
-- Shared etcd state
-- Leader election via etcd lease
-- Only leader executes reconciliation and retries
+**Across Multiple Replicas:**
+- All etcd writes use compare-and-swap (`RetryableEtcdCASPut`)
+  - On conflict, reload fresh state and retry, rather than silent overwrite
+  - Safe for concurrent writer elimination (only one successfully commits each CAS)
+- gRPC API runs on every replica (stateless, safe)
+- Background singleton loops (reconciliation, drift, monitoring, node watch) are gated by leader election
+  - In failover mode: exactly one replica active cluster-wide
+  - In active-active mode: replicas are partitioned by shard; each shard has its own leader
+
+**Agent Communication (Connection Pooling):**
+- gRPC connections to agents are pooled (map[nodeID]*grpc.ClientConn)
+- Connections are reused across RPCs with keepalive checks
+- TLS handshake happens once per unique node (cached until connection failure)
+- On TLS errors, cert manager can force rotation + retry automatically
+- Eliminates O(RPCs) TLS handshakes that were previously paid on every apply/delete/status call
+
+**Monitoring & Observability:**
+- All mutations log comprehensively (node, workload, event)
+- Metrics track: attempts, failures, retry counts, latencies
+- Traces link placement → reconciliation → agent RPC
+
+## 8. High Availability and Leader Election
+
+Multiple scheduler replicas can run against the same etcd cluster, with automatic failover. Leadership determines which replica drives cluster-wide singleton background loops.
+
+### 8.1 Leader Election
+
+- Uses etcd-lease-based election (`go.etcd.io/etcd/client/v3/concurrency`)
+- Session TTL: 15 seconds (balance between fast failover and transient GC/network resilience)
+- Winner is determined by etcd atomically
+- Lost leader automatically campaigns again after 2s backoff
+
+### 8.2 Failover Mode (Default)
+
+Configuration: `SCHEDULER_HA_MODE=failover` (default)
+
+Behavior:
+- All replicas contend for the single `leaderElectionKey` in etcd
+- Exactly one replica is ever elected leader cluster-wide
+- Leader drives:
+  - Reconciliation loops (ReconcileAllWorkloads)
+  - Node/workload monitoring (MonitorNodes, MonitorWorkloads)
+  - Drift detection (StartDriftDetection)
+  - Node watch (StartNodeWatch) - live cache updates
+- Standbys (non-leaders) are hot spares:
+  - Still run `StartMonitoring()` for per-replica health checks
+  - Can handle gRPC API calls (reads, writes with CAS)
+  - Will take over if leader dies/loses session
+
+**Example deployment:** 3 replicas, 1 active, 2 standbys. Leader dies → standby wins election within 15s TTL.
+
+### 8.3 Active-Active Mode (Optional Sharding)
+
+Configuration: `SCHEDULER_HA_MODE=active-active`, `SCHEDULER_SHARD_COUNT=N`, `SCHEDULER_SHARD_INDEX=0..N-1`
+
+Behavior:
+- Nodes are partitioned by `crc32(nodeID) % SCHEDULER_SHARD_COUNT` hash
+- Each replica is assigned a shard index and owns nodes that hash to that index
+- Replicas with different shard indices never contend with each other (independent elections per shard)
+- Replicas sharing same shard index do elect one leader (for HA within shard)
+- Each shard processes its nodes' reconciliation/monitoring/drift independently
+- Multiple shards make progress concurrently (unlike failover where only one is active)
+
+**Example deployment:** 5 replicas, 3 shards, 2 replicas per shard index:
+- Shard 0: replicas A, B → A elected leader, B is standby for shard 0
+- Shard 1: replicas C, D → C elected leader, D is standby for shard 1
+- Shard 2: replica E → E is leader of shard 2
+- Nodes are distributed: nodes 0,3,6,... → shard 0; nodes 1,4,7,... → shard 1; nodes 2,5,8,... → shard 2
+- Three shards process workloads concurrently; higher throughput than failover
+
+**Tradeoff:** Active-active trades slightly higher latency (per-shard overhead) for higher total throughput. Best for large fleets with many nodes.
+
+**Known limitation:** If a node fails and its workloads are reassigned to a node owned by a different shard, there's a brief window (expected to self-heal within one reconcile interval) where neither shard is actively driving that workload. This is a scheduling-latency gap, not a correctness bug. See `sharding.go` for details.
+
+### 8.4 API Availability in Both Modes
+
+The gRPC API (`RegisterNode`, `Heartbeat`, `ApplyWorkload`, etc.) runs unconditionally on every replica in both modes:
+- Write paths are protected by etcd compare-and-swap
+- Safe for external load balancer to route to any replica
+- No leader-gating on API calls
+- Scaling: N replicas can handle N× the API throughput (if load-balanced properly)
 
 ## 9. Security
 

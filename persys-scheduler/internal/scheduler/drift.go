@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	agentpb "github.com/persys-dev/persys-cloud/persys-scheduler/internal/agentpb"
@@ -14,6 +15,48 @@ import (
 )
 
 var driftLogger = logging.C("scheduler.drift")
+
+// recentlyEmittedDrift suppresses repeated DriftDetected events for the same
+// (node, workload, type, action) within a short window. Without this, every
+// drift cycle re-emits for the same residual orphan while the agent is still
+// catching up on an async delete.
+var (
+	driftEventMu    sync.Mutex
+	driftEventStamp = map[string]time.Time{}
+)
+
+const driftEventDedupeWindow = 2 * time.Minute
+
+func driftEventKey(nodeID, workloadID, driftType, action string) string {
+	return strings.ToLower(strings.TrimSpace(nodeID)) + "|" +
+		strings.TrimSpace(workloadID) + "|" +
+		strings.ToLower(strings.TrimSpace(driftType)) + "|" +
+		strings.ToLower(strings.TrimSpace(action))
+}
+
+func shouldEmitDriftEvent(nodeID, workloadID, driftType, action string) bool {
+	key := driftEventKey(nodeID, workloadID, driftType, action)
+	now := time.Now()
+	driftEventMu.Lock()
+	defer driftEventMu.Unlock()
+	if last, ok := driftEventStamp[key]; ok && now.Sub(last) < driftEventDedupeWindow {
+		return false
+	}
+	driftEventStamp[key] = now
+	if len(driftEventStamp) > 4096 {
+		for k, t := range driftEventStamp {
+			if now.Sub(t) > driftEventDedupeWindow {
+				delete(driftEventStamp, k)
+			}
+		}
+	}
+	return true
+}
+
+func isDesiredDeleted(sw models.Workload) bool {
+	d := strings.ToLower(strings.TrimSpace(sw.DesiredState))
+	return d == "deleted" || d == "deleting"
+}
 
 func (s *Scheduler) driftDetectInterval() time.Duration {
 	if s.cfg != nil && s.cfg.SchedulerDriftDetectInterval > 0 {
@@ -86,14 +129,29 @@ func (s *Scheduler) detectDriftOnce(ctx context.Context) {
 		selected[endpoint] = node
 	}
 
+	candidateNodes := make([]models.Node, 0, len(selected))
 	for _, node := range selected {
+		if !s.ownsNode(node.NodeID) {
+			continue
+		}
+		candidateNodes = append(candidateNodes, node)
+	}
+
+	// byID (expectedAll) is read AND written from compareNodeDrift/
+	// remediateOrphanOnAgent (the latter memoizes a freshly-looked-up
+	// workload into it) — now that nodes are probed concurrently below,
+	// that shared map needs a mutex; it didn't when this loop was
+	// sequential.
+	var byIDMu sync.Mutex
+
+	runBounded(candidateNodes, s.backgroundLoopConcurrency(), func(node models.Node) {
 		if ok, reason := driftProbeEligible(node); !ok {
 			driftLogger.WithFields(logrus.Fields{
 				"node_id":  node.NodeID,
 				"endpoint": s.grpcAddressForNode(node),
 				"reason":   reason,
 			}).Debug("drift detection: skipping node")
-			continue
+			return
 		}
 		agentList, err := s.listWorkloadsFromNode(ctx, node)
 		if err != nil {
@@ -101,10 +159,10 @@ func (s *Scheduler) detectDriftOnce(ctx context.Context) {
 				"node_id":  node.NodeID,
 				"endpoint": s.grpcAddressForNode(node),
 			}).Warn("drift detection: failed to list workloads from agent")
-			continue
+			return
 		}
-		s.compareNodeDrift(node, byNode[node.NodeID], byID, agentList)
-	}
+		s.compareNodeDrift(node, byNode[node.NodeID], byID, &byIDMu, agentList)
+	})
 }
 
 func driftProbeEligible(node models.Node) (bool, string) {
@@ -121,7 +179,7 @@ func driftProbeEligible(node models.Node) (bool, string) {
 	return true, ""
 }
 
-func (s *Scheduler) compareNodeDrift(node models.Node, expected map[string]models.Workload, expectedAll map[string]models.Workload, actual []*agentpb.WorkloadStatus) {
+func (s *Scheduler) compareNodeDrift(node models.Node, expected map[string]models.Workload, expectedAll map[string]models.Workload, byIDMu *sync.Mutex, actual []*agentpb.WorkloadStatus) {
 	if expected == nil {
 		expected = map[string]models.Workload{}
 	}
@@ -146,7 +204,7 @@ func (s *Scheduler) compareNodeDrift(node models.Node, expected map[string]model
 		sw, ok := expected[id]
 		if !ok {
 			orphan++
-			action, actionErr := s.remediateOrphanOnAgent(node, id, aw, expectedAll)
+			action, actionErr := s.remediateOrphanOnAgent(node, id, aw, expectedAll, byIDMu)
 			resolved := actionErr == nil
 			s.markDrift(models.DriftRecord{
 				NodeID:      node.NodeID,
@@ -174,6 +232,35 @@ func (s *Scheduler) compareNodeDrift(node models.Node, expected map[string]model
 			continue
 		}
 
+		// Workloads marked Deleted/Deleting must not be "aligned" to the agent's
+		// still-running state — that fights the delete path. Force residual
+		// cleanup on the agent instead.
+		if isDesiredDeleted(sw) {
+			orphan++
+			actionErr := s.deleteOrphanFromNode(node, id)
+			s.markDrift(models.DriftRecord{
+				NodeID:          node.NodeID,
+				WorkloadID:      id,
+				DriftType:       "orphan_on_agent",
+				DetectedAt:      time.Now().UTC(),
+				SchedulerStatus: sw.Status,
+				AgentStatus:     mapActualStateToSchedulerStatus(aw.GetActualState()),
+				Action:          "delete_deleted_residual_on_agent",
+				Resolved:        actionErr == nil,
+				LastError:       errString(actionErr),
+			})
+			driftLogger.WithFields(logrus.Fields{
+				"node_id":     node.NodeID,
+				"workload_id": id,
+				"desired":     sw.DesiredState,
+				"agent_state": mapActualStateToSchedulerStatus(aw.GetActualState()),
+				"drift_type":  "orphan_on_agent",
+				"action":      "delete_deleted_residual_on_agent",
+				"resolved":    actionErr == nil,
+			}).Warn("drift detected: residual of deleted workload still on agent")
+			continue
+		}
+
 		expectedStatus := strings.ToLower(strings.TrimSpace(sw.Status))
 		actualStatus := strings.ToLower(strings.TrimSpace(mapActualStateToSchedulerStatus(aw.GetActualState())))
 		if expectedStatus != "" && actualStatus != "" && expectedStatus != actualStatus {
@@ -197,6 +284,7 @@ func (s *Scheduler) compareNodeDrift(node models.Node, expected map[string]model
 				"agent_state":     mapActualStateToSchedulerStatus(aw.GetActualState()),
 				"drift_type":      "state_mismatch",
 			}).Warn("drift detected")
+			continue
 		}
 
 		if strings.TrimSpace(sw.RevisionID) != "" && strings.TrimSpace(aw.GetRevisionId()) != "" &&
@@ -225,7 +313,10 @@ func (s *Scheduler) compareNodeDrift(node models.Node, expected map[string]model
 	}
 
 	for id, sw := range expected {
-		if canonical, ok := expectedAll[id]; ok {
+		byIDMu.Lock()
+		canonical, ok := expectedAll[id]
+		byIDMu.Unlock()
+		if ok {
 			owner := strings.TrimSpace(canonical.NodeID)
 			if owner != "" && !strings.EqualFold(owner, node.NodeID) {
 				// Workload was re-bound during this cycle; avoid conflicting remediation.
@@ -317,6 +408,19 @@ func (s *Scheduler) markDrift(record models.DriftRecord) {
 	if s.isWritable() {
 		s.writeDriftRecord(record)
 	}
+	// Always log, but rate-limit the user-visible DriftDetected event so a
+	// residual orphan (e.g. agent async delete still in flight) does not spam
+	// the events stream every drift interval.
+	if !shouldEmitDriftEvent(record.NodeID, record.WorkloadID, record.DriftType, record.Action) {
+		driftLogger.WithFields(logrus.Fields{
+			"node_id":     record.NodeID,
+			"workload_id": record.WorkloadID,
+			"drift_type":  record.DriftType,
+			"action":      record.Action,
+			"resolved":    record.Resolved,
+		}).Debug("drift event suppressed (dedupe window)")
+		return
+	}
 	s.emitEvent("DriftDetected", record.WorkloadID, record.NodeID, record.DriftType, map[string]interface{}{
 		"scheduler_status": record.SchedulerStatus,
 		"agent_status":     record.AgentStatus,
@@ -333,19 +437,23 @@ func errString(err error) string {
 	return err.Error()
 }
 
-func (s *Scheduler) remediateOrphanOnAgent(node models.Node, workloadID string, aw *agentpb.WorkloadStatus, expectedAll map[string]models.Workload) (string, error) {
+func (s *Scheduler) remediateOrphanOnAgent(node models.Node, workloadID string, aw *agentpb.WorkloadStatus, expectedAll map[string]models.Workload, byIDMu *sync.Mutex) (string, error) {
 	if !s.isWritable() {
 		return "control_plane_frozen", errControlPlaneFrozen
 	}
 
+	byIDMu.Lock()
 	sw, known := expectedAll[workloadID]
+	byIDMu.Unlock()
 	if !known {
 		latest, err := s.GetWorkloadByID(workloadID)
 		if err == nil {
 			sw = latest
 			known = true
 			if expectedAll != nil {
+				byIDMu.Lock()
 				expectedAll[workloadID] = latest
+				byIDMu.Unlock()
 			}
 		} else if !isWorkloadMissingError(err) {
 			return "operator_investigation", fmt.Errorf("failed to re-check unknown workload %s before delete: %w", workloadID, err)
@@ -404,11 +512,35 @@ func (s *Scheduler) remediateOrphanOnAgent(node models.Node, workloadID string, 
 }
 
 func (s *Scheduler) deleteOrphanFromNode(node models.Node, workloadID string) error {
-	_, err := s.deleteWorkloadFromNode(context.Background(), node, workloadID)
+	ctx := context.Background()
+	_, err := s.deleteWorkloadFromNode(ctx, node, workloadID)
 	if err != nil && !isWorkloadStatusNotFound(err) {
 		return err
 	}
-	return nil
+
+	// Agent DeleteWorkload may return success for an *async* queue submit
+	// before the runtime instance is gone. Probe status so we do not mark
+	// the residual as resolved while ListWorkloads still reports it.
+	deadline := time.Now().Add(8 * time.Second)
+	for {
+		_, stErr := s.getWorkloadStatusFromNode(ctx, node, workloadID)
+		if stErr != nil && isWorkloadStatusNotFound(stErr) {
+			s.clearDriftRecord(node.NodeID, workloadID, "orphan_on_agent")
+			return nil
+		}
+		if stErr != nil && isNodeUnreachableError(stErr) {
+			// Node dropped mid-delete; treat as best-effort success so we
+			// do not spin forever offline.
+			return nil
+		}
+		if time.Now().After(deadline) {
+			if stErr == nil {
+				return fmt.Errorf("orphan %s still present on agent %s after delete (async delete pending or failed)", workloadID, node.NodeID)
+			}
+			return fmt.Errorf("orphan %s delete verification failed on agent %s: %v", workloadID, node.NodeID, stErr)
+		}
+		time.Sleep(400 * time.Millisecond)
+	}
 }
 
 func (s *Scheduler) adoptOrphanedWorkload(node models.Node, workload models.Workload, aw *agentpb.WorkloadStatus, reason string, expectedAll map[string]models.Workload) error {

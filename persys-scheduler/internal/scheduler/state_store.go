@@ -23,7 +23,6 @@ const (
 	reconciliationPrefix   = "/reconciliation/"
 	retriesPrefix          = "/retries/"
 	driftsPrefix           = "/drifts/"
-	eventsPrefix           = "/events/"
 	managedStorageStateKey = "managed_storage_state"
 )
 
@@ -35,7 +34,6 @@ func attachmentPrefix() string                   { return attachmentsPrefix }
 func assignmentKey(workloadID string) string     { return assignmentsPrefix + workloadID }
 func reconciliationKey(workloadID string) string { return reconciliationPrefix + workloadID }
 func retryKey(workloadID string) string          { return retriesPrefix + workloadID }
-func eventKey(eventID string) string             { return eventsPrefix + eventID }
 func volumeAttachmentKey(nodeID, workloadID, volumeID string) string {
 	return attachmentsPrefix + sanitizeKeySegment(nodeID) + "/" + sanitizeKeySegment(workloadID) + "/" + sanitizeKeySegment(volumeID)
 }
@@ -130,17 +128,130 @@ func (s *Scheduler) saveWorkload(workload models.Workload) error {
 	}
 	metricspkg.IncStateStoreWrite("status")
 	s.cacheWorkload(workload)
-	retryPayload, err := json.Marshal(workload.Retry)
-	if err == nil {
-		_ = s.RetryableEtcdPut(retryKey(workload.ID), string(retryPayload))
-		metricspkg.IncStateStoreWrite("retry")
-	}
+	// NOTE: retry state is embedded in the status projection above
+	// (workloadStatus.Retry) and read back from there — the separate
+	// /retries/{id} key that used to be written here was never read by
+	// anything in this codebase, so the write was pure overhead and has
+	// been removed.
 	if shouldSyncManagedStorage(workload) {
 		if err := s.syncWorkloadManagedStorage(workload); err != nil {
 			return fmt.Errorf("sync managed storage state for workload %s: %w", workload.ID, err)
 		}
 	}
 	return nil
+}
+
+// maxWorkloadStatusCASRetries bounds how many times updateWorkloadStatusCAS
+// will re-read and re-apply a mutation after losing a compare-and-swap race
+// before giving up. Mirrors maxCASConflictRetries for nodes; contention on
+// a single workload's status key is normally limited to that workload's own
+// agent (via heartbeat) and the reconciler, so this should rarely be
+// exhausted even under load.
+const maxWorkloadStatusCASRetries = 5
+
+// getWorkloadWithStatusRevision reads a workload the same way GetWorkloadByID
+// does (merging the spec and status projections into a full models.Workload),
+// but also returns the etcd ModRevision of the status key so callers can
+// compare-and-swap against it. modRevision is 0 if the status key doesn't
+// exist yet (brand new workload) or the record was found via the legacy
+// full-object compatibility path, in which case a CAS put behaves like
+// "only succeed if the status key still doesn't exist."
+func (s *Scheduler) getWorkloadWithStatusRevision(workloadID string) (models.Workload, int64, error) {
+	specResp, err := s.RetryableEtcdGet(workloadSpecKey(workloadID))
+	if err != nil {
+		return models.Workload{}, 0, fmt.Errorf("failed to get workload %s: %v", workloadID, err)
+	}
+
+	if specResp == nil || len(specResp.Kvs) == 0 {
+		// Legacy compatibility shim, same as GetWorkloadByID.
+		resp, legacyErr := s.RetryableEtcdGet("/workloads/" + workloadID)
+		if legacyErr != nil || resp == nil || len(resp.Kvs) == 0 {
+			return models.Workload{}, 0, fmt.Errorf("workload %s not found", workloadID)
+		}
+		var legacy models.Workload
+		if err := json.Unmarshal(resp.Kvs[0].Value, &legacy); err != nil {
+			return models.Workload{}, 0, fmt.Errorf("failed to unmarshal legacy workload %s: %v", workloadID, err)
+		}
+		return legacy, 0, nil
+	}
+
+	var spec workloadSpec
+	if err := json.Unmarshal(specResp.Kvs[0].Value, &spec); err != nil {
+		return models.Workload{}, 0, fmt.Errorf("failed to unmarshal workload spec %s: %v", workloadID, err)
+	}
+
+	statusResp, _ := s.RetryableEtcdGet(workloadStatusKey(workloadID))
+	var st workloadStatus
+	var modRevision int64
+	if statusResp != nil && len(statusResp.Kvs) > 0 {
+		_ = json.Unmarshal(statusResp.Kvs[0].Value, &st)
+		modRevision = statusResp.Kvs[0].ModRevision
+	}
+
+	workload := models.Workload{
+		ID: spec.ID, Name: spec.Name, Type: spec.Type, RevisionID: spec.RevisionID, Image: spec.Image, Command: spec.Command,
+		CommandList: spec.CommandList, Compose: spec.Compose, ComposeYAML: spec.ComposeYAML, ProjectName: spec.ProjectName,
+		GitRepo: spec.GitRepo, GitBranch: spec.GitBranch, GitToken: spec.GitToken, EnvVars: spec.EnvVars, Resources: spec.Resources,
+		DesiredState: spec.DesiredState, Labels: spec.Labels, LocalPath: spec.LocalPath, Ports: spec.Ports, Volumes: spec.Volumes,
+		Network: spec.Network, RestartPolicy: spec.RestartPolicy, VM: spec.VM,
+	}
+	if st.ID != "" {
+		workload.AssignedNode = st.AssignedNode
+		workload.NodeID = st.NodeID
+		workload.Status = st.Status
+		workload.Logs = st.Logs
+		workload.Metadata = st.Metadata
+		workload.Retry = st.Retry
+		workload.StatusInfo = st.StatusInfo
+		workload.Usage = st.Usage
+	}
+	return workload, modRevision, nil
+}
+
+// updateWorkloadStatusCAS reads a workload, lets mutate modify the in-memory
+// copy, and persists only the status projection (/workloads-status/{id})
+// via an etcd compare-and-swap on that key's ModRevision — re-reading and
+// re-applying the mutation (up to maxWorkloadStatusCASRetries times) if
+// another writer updated the status key in between, instead of silently
+// overwriting whatever that writer just changed. This is the workload-side
+// counterpart to updateNodeCAS: the concurrent writers here are typically a
+// workload's own agent (via heartbeat) and the reconciler, both of which
+// can touch the same workload's status around the same time.
+//
+// mutate returns false to signal "nothing to change" after inspecting the
+// freshest read (mirroring the no-op-skip checks the four callers already
+// had) — in that case this returns without writing.
+func (s *Scheduler) updateWorkloadStatusCAS(workloadID string, mutate func(*models.Workload) bool) (models.Workload, error) {
+	if err := s.requireWritable(); err != nil {
+		return models.Workload{}, err
+	}
+	statusKey := workloadStatusKey(workloadID)
+	var lastConflictErr error
+	for attempt := 0; attempt < maxWorkloadStatusCASRetries; attempt++ {
+		workload, modRevision, err := s.getWorkloadWithStatusRevision(workloadID)
+		if err != nil {
+			return models.Workload{}, err
+		}
+		if !mutate(&workload) {
+			return workload, nil
+		}
+		payload, err := json.Marshal(workloadStatusFromWorkload(workload))
+		if err != nil {
+			return models.Workload{}, fmt.Errorf("marshal workload status %s: %w", workloadID, err)
+		}
+		ok, err := s.RetryableEtcdCASPut(statusKey, string(payload), modRevision)
+		if err != nil {
+			return models.Workload{}, err
+		}
+		if !ok {
+			lastConflictErr = fmt.Errorf("workload %s status changed concurrently (attempt %d)", workloadID, attempt+1)
+			continue
+		}
+		metricspkg.IncStateStoreWrite("status")
+		s.cacheWorkload(workload)
+		return workload, nil
+	}
+	return models.Workload{}, fmt.Errorf("workload %s: too many concurrent status update conflicts: %w", workloadID, lastConflictErr)
 }
 
 func (s *Scheduler) writeAssignment(workloadID, nodeID, reason string) error {
@@ -167,7 +278,28 @@ func (s *Scheduler) writeReconciliationRecord(workloadID, action string, success
 	metricspkg.IncStateStoreWrite("reconciliation")
 }
 
+// emitEvent records a cluster-wide scheduler event (node lost, workload
+// scheduled, drift detected, etc) to the shared Redis Stream
+// (schedulerEventsStreamKey, redis_store.go).
+//
+// This intentionally does NOT write to etcd. Events are high-churn,
+// ephemeral, observability-oriented data — exactly the kind of data etcd
+// is a poor fit for at scale: every event write would be an etcd PUT (and,
+// with a watch-based consumer, a watch-fanout notification) landing on the
+// same datastore that holds authoritative cluster state, competing for
+// write throughput with heartbeats and CAS-retried reconciliation writes
+// at precisely the moments (incidents, node flapping, mass retries) when
+// event volume — and etcd load from everything else — is highest. Redis
+// Streams give bounded, O(1)-amortized retention (MAXLEN ~) for free,
+// versus the scan-and-delete sweep an etcd-backed version would need.
+//
+// If Redis is unavailable, the event is dropped (logged, not retried,
+// no etcd fallback) — acceptable for best-effort observability data that
+// nothing else in the scheduler depends on for correctness.
 func (s *Scheduler) emitEvent(eventType, workloadID, nodeID, reason string, details map[string]interface{}) {
+	if eventType == "" || !isKnownSchedulerEventType(eventType) {
+		redisLogger.WithField("event_type", eventType).Warn("unknown scheduler event type emitted")
+	}
 	event := models.SchedulerEvent{
 		ID:         uuid.NewString(),
 		Type:       eventType,
@@ -181,11 +313,11 @@ func (s *Scheduler) emitEvent(eventType, workloadID, nodeID, reason string, deta
 	if err != nil {
 		return
 	}
-	if s.writeEventTelemetry(payload) {
-		metricspkg.IncStateStoreWrite("event")
+	if _, err := s.writeEventToStream(payload); err != nil {
+		redisLogger.WithError(err).WithField("event_type", eventType).Warn("failed to emit cluster event to redis; event dropped")
+		metricspkg.IncStateStoreWrite("event_dropped")
 		return
 	}
-	_ = s.RetryableEtcdPut(eventKey(event.ID), string(payload))
 	metricspkg.IncStateStoreWrite("event")
 }
 
@@ -201,23 +333,14 @@ func (s *Scheduler) clearDriftRecord(nodeID, workloadID, driftType string) {
 	_ = s.RetryableEtcdDelete(driftKey(nodeID, workloadID, driftType))
 }
 
+// ListSchedulerEvents returns the most recent cluster-wide events, newest
+// first, from the shared Redis Stream (see emitEvent/writeEventToStream).
+// limit <= 0 returns up to the configured max-entries retention bound.
+// Returns an empty slice (never an error) if Redis is unavailable — see
+// readEventsFromStream's doc comment for why this degrades gracefully
+// instead of failing the caller.
 func (s *Scheduler) ListSchedulerEvents(limit int64) ([]models.SchedulerEvent, error) {
-	opts := []clientv3.OpOption{clientv3.WithPrefix()}
-	if limit > 0 {
-		opts = append(opts, clientv3.WithLimit(limit))
-	}
-	resp, err := s.RetryableEtcdGet(eventsPrefix, opts...)
-	if err != nil {
-		return nil, err
-	}
-	events := make([]models.SchedulerEvent, 0, len(resp.Kvs))
-	for _, kv := range resp.Kvs {
-		var event models.SchedulerEvent
-		if err := json.Unmarshal(kv.Value, &event); err != nil {
-			continue
-		}
-		events = append(events, event)
-	}
+	events, _ := s.readEventsFromStream(limit)
 	return events, nil
 }
 

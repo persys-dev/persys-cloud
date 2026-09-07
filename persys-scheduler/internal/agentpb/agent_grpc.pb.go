@@ -4,7 +4,7 @@
 // - protoc             v3.21.12
 // source: agent.proto
 
-package agentpb
+package v1
 
 import (
 	context "context"

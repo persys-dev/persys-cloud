@@ -38,14 +38,32 @@ func reverseDomain(domain string) string {
 	return strings.Join(parts, "/")
 }
 
-// RegisterSchedulerInCoreDNS registers the scheduler in CoreDNS for service discovery.
+// RegisterSchedulerInCoreDNS registers this scheduler replica in CoreDNS for
+// service discovery by persys-gateway.
+//
+// Each replica writes to its own instance-keyed child (mirroring the same
+// pattern UpdateCoreDNS already uses for agent nodes above), rather than a
+// single shared key. Previously every replica wrote to exactly one fixed
+// key (/skydns/.../persys-scheduler), so with more than one scheduler
+// running, whichever replica registered last silently clobbered the
+// others — the gateway would only ever resolve one instance, and not
+// necessarily a healthy one, no matter how many replicas were actually
+// running. CoreDNS's etcd backend treats sibling keys under a shared
+// prefix as multiple records for that name, so persys-gateway resolving
+// persys-scheduler.<domain> now gets one answer per registered (i.e.
+// running) replica.
 func (s *Scheduler) RegisterSchedulerInCoreDNS(ipAddress string, port int) error {
 	if ipAddress == "" || port == 0 {
 		return fmt.Errorf("invalid scheduler data: IPAddress and Port are required")
 	}
 
+	instanceKey := s.instanceID
+	if strings.TrimSpace(instanceKey) == "" {
+		instanceKey = ipAddress
+	}
+
 	// Register SRV record for _persys-scheduler.<domain>
-	srvKey := fmt.Sprintf("/skydns/%s/_persys-scheduler", reverseDomain(s.domain))
+	srvKey := fmt.Sprintf("/skydns/%s/_persys-scheduler/%s", reverseDomain(s.domain), instanceKey)
 	srvRecord := struct {
 		Host string `json:"host"`
 		Port int    `json:"port"`
@@ -64,7 +82,7 @@ func (s *Scheduler) RegisterSchedulerInCoreDNS(ipAddress string, port int) error
 	}
 
 	// Also register A record for direct IP lookup
-	aKey := fmt.Sprintf("/skydns/%s/persys-scheduler", reverseDomain(s.domain))
+	aKey := fmt.Sprintf("/skydns/%s/persys-scheduler/%s", reverseDomain(s.domain), instanceKey)
 	aRecord := struct {
 		Host string `json:"host"`
 		TTL  int    `json:"ttl"`
@@ -81,6 +99,28 @@ func (s *Scheduler) RegisterSchedulerInCoreDNS(ipAddress string, port int) error
 	}
 
 	return nil
+}
+
+// DeregisterSchedulerSelfFromCoreDNS removes this replica's own CoreDNS
+// records. Called on clean shutdown so a stopped replica doesn't linger as
+// a dead A/SRV record for persys-gateway to route to until the 300s TTL
+// happens to expire on its own. Best-effort: errors are logged, not
+// returned, since a failed deregistration during shutdown shouldn't block
+// the rest of the shutdown sequence, and a stale record self-heals via TTL
+// either way.
+func (s *Scheduler) DeregisterSchedulerSelfFromCoreDNS() {
+	instanceKey := s.instanceID
+	if strings.TrimSpace(instanceKey) == "" {
+		return
+	}
+	aKey := fmt.Sprintf("/skydns/%s/persys-scheduler/%s", reverseDomain(s.domain), instanceKey)
+	srvKey := fmt.Sprintf("/skydns/%s/_persys-scheduler/%s", reverseDomain(s.domain), instanceKey)
+	if err := s.RetryableEtcdDelete(aKey); err != nil {
+		schedulerLogger.WithError(err).Debug("failed to deregister scheduler A record on shutdown")
+	}
+	if err := s.RetryableEtcdDelete(srvKey); err != nil {
+		schedulerLogger.WithError(err).Debug("failed to deregister scheduler SRV record on shutdown")
+	}
 }
 
 // RegisterSchedulerSelfInCoreDNS registers this scheduler instance into CoreDNS.

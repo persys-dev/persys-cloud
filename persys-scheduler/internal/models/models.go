@@ -167,31 +167,41 @@ type DriftRecord struct {
 }
 
 // VMSpec defines VM-specific fields for scheduler API and persistence.
+// Happy path: OsImage + DiskGB + VCPUs + MemoryMB. Agent creates a writable
+// overlay from OsImage and generates cloud-init credentials.
 type VMSpec struct {
 	Name            string              `json:"name,omitempty"`
 	VCPUs           int32               `json:"vcpus,omitempty"`
 	MemoryMB        int64               `json:"memoryMb,omitempty"`
+	OsImage         string              `json:"osImage,omitempty"`
+	DiskGB          int64               `json:"diskGb,omitempty"`
 	Disks           []VMDiskConfig      `json:"disks,omitempty"`
 	Networks        []VMNetworkConfig   `json:"networks,omitempty"`
 	CloudInit       string              `json:"cloudInit,omitempty"`
 	Metadata        map[string]string   `json:"metadata,omitempty"`
 	CloudInitConfig *CloudInitConfig    `json:"cloudInitConfig,omitempty"`
 	ManagedVolumes  []ManagedVolumeSpec `json:"managedVolumes,omitempty"`
+	Runtime         string              `json:"runtime,omitempty"` // libvirt|firecracker
 }
 
 type VMDiskConfig struct {
-	Path   string `json:"path,omitempty"`
-	Device string `json:"device,omitempty"`
-	Format string `json:"format,omitempty"`
-	SizeGB int64  `json:"sizeGb,omitempty"`
-	Type   string `json:"type,omitempty"`
-	Boot   bool   `json:"boot,omitempty"`
+	Path        string `json:"path,omitempty"`
+	Device      string `json:"device,omitempty"`
+	Format      string `json:"format,omitempty"`
+	SizeGB      int64  `json:"sizeGb,omitempty"`
+	Type        string `json:"type,omitempty"`
+	Boot        bool   `json:"boot,omitempty"`
+	BackingFile string `json:"backingFile,omitempty"`
+	Storage     string `json:"storage,omitempty"` // local|nfs|ceph-rbd
 }
 
 type VMNetworkConfig struct {
-	Network   string `json:"network,omitempty"`
-	MAC       string `json:"macAddress,omitempty"`
-	IPAddress string `json:"ipAddress,omitempty"`
+	Network     string `json:"network,omitempty"`
+	MAC         string `json:"macAddress,omitempty"`
+	IPAddress   string `json:"ipAddress,omitempty"`
+	HostDevName string `json:"hostDevName,omitempty"` // Firecracker TAP
+	Model       string `json:"model,omitempty"`
+	Bridge      string `json:"bridge,omitempty"`
 }
 
 type CloudInitConfig struct {
@@ -199,6 +209,9 @@ type CloudInitConfig struct {
 	MetaData      string `json:"metaData,omitempty"`
 	NetworkConfig string `json:"networkConfig,omitempty"`
 	VendorData    string `json:"vendorData,omitempty"`
+	Username      string `json:"username,omitempty"`
+	SSHPublicKey  string `json:"sshPublicKey,omitempty"`
+	Password      string `json:"password,omitempty"`
 }
 
 type ManagedVolumeSpec struct {
@@ -233,7 +246,8 @@ type WorkloadReason struct {
 	Retryable      bool      `json:"retryable,omitempty"`
 }
 
-// ManagedVolumeRecord is the control-plane source of truth for a managed volume.
+// ManagedVolumeRecord is the control-plane source of truth for a managed volume
+// (workload-attached or standalone disk inventory).
 type ManagedVolumeRecord struct {
 	ID            string    `json:"id"`
 	Name          string    `json:"name"`
@@ -242,12 +256,17 @@ type ManagedVolumeRecord struct {
 	AccessMode    string    `json:"accessMode,omitempty"`
 	FSType        string    `json:"fsType,omitempty"`
 	RetainPolicy  string    `json:"retainPolicy,omitempty"`
-	Phase         string    `json:"phase,omitempty"` // Provisioning|Provisioned|Attached|Released|Retained|Deleting|Deleted|Error
+	Phase         string    `json:"phase,omitempty"` // Pending|Available|Provisioning|Provisioned|Attached|Released|Retained|Deleting|Deleted|Error
 	LastError     string    `json:"lastError,omitempty"`
 	WorkloadRefs  []string  `json:"workloadRefs,omitempty"`
 	AttachedNodes []string  `json:"attachedNodes,omitempty"`
-	CreatedAt     time.Time `json:"createdAt,omitempty"`
-	UpdatedAt     time.Time `json:"updatedAt,omitempty"`
+	// Standalone disk inventory fields (CreateDisk API).
+	NodeID     string `json:"nodeId,omitempty"`     // local pin; set from workload placement node
+	Device     string `json:"device,omitempty"`     // e.g. rbd:pool/name once known
+	Standalone bool   `json:"standalone,omitempty"` // created via CreateDisk, not only via workload
+	MountPath  string `json:"mountPath,omitempty"`  // default container mount when bound
+	CreatedAt  time.Time `json:"createdAt,omitempty"`
+	UpdatedAt  time.Time `json:"updatedAt,omitempty"`
 }
 
 // VolumeAttachmentRecord is the control-plane source of truth for node/workload attachment.

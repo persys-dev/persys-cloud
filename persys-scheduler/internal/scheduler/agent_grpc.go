@@ -14,13 +14,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	agentpb "github.com/persys-dev/persys-cloud/persys-scheduler/internal/agentpb"
 	metricspkg "github.com/persys-dev/persys-cloud/persys-scheduler/internal/metrics"
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/models"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 )
 
@@ -94,43 +97,147 @@ func (s *Scheduler) loadClientTLSConfig() (*tls.Config, error) {
 		return nil, fmt.Errorf("invalid CA PEM in %s", caPath)
 	}
 
-	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: caPool}
+	// RootCAs from disk now; GetClientCertificate re-reads the keypair on every
+	// handshake so certmanager rotations / ForceRotate are visible without
+	// recreating the grpc.ClientConn's static tls.Config snapshot... except
+	// pooled conns still need invalidate+redial after rotate (see dial/RPC paths).
+	tlsCfg := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+		RootCAs:    caPool,
+	}
 	if certPath != "" && keyPath != "" {
-		cert, err := tls.LoadX509KeyPair(certPath, keyPath)
-		if err != nil {
+		// Validate material exists up front.
+		if _, err := tls.LoadX509KeyPair(certPath, keyPath); err != nil {
 			return nil, fmt.Errorf("load client key pair: %w", err)
 		}
-		tlsCfg.Certificates = []tls.Certificate{cert}
+		tlsCfg.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			cert, err := tls.LoadX509KeyPair(certPath, keyPath)
+			if err != nil {
+				return nil, err
+			}
+			return &cert, nil
+		}
 	}
 	return tlsCfg, nil
 }
 
-func (s *Scheduler) newAgentClient(node models.Node) (agentpb.AgentServiceClient, *grpc.ClientConn, error) {
+// agentConnEntry is a pooled connection to a single agent, keyed by node ID.
+// Keeping connections alive across calls avoids paying a fresh TCP+TLS
+// handshake on every single RPC, which is the dominant cost at fleet sizes
+// in the thousands of nodes.
+type agentConnEntry struct {
+	conn *grpc.ClientConn
+	addr string
+}
+
+// getAgentClient returns a client bound to a pooled, long-lived connection
+// for the given node, dialing (or re-dialing, if the node's endpoint changed
+// or the previous connection is no longer usable) as needed.
+func (s *Scheduler) getAgentClient(node models.Node) (agentpb.AgentServiceClient, error) {
 	addr := s.grpcAddressForNode(node)
 	if strings.TrimSpace(addr) == "" {
-		return nil, nil, fmt.Errorf("node %s has invalid grpc address", node.NodeID)
+		return nil, fmt.Errorf("node %s has invalid grpc address", node.NodeID)
 	}
 
-	var dialOpts []grpc.DialOption
-	if s.schedulerAgentTLSEnabled() {
-		tlsCfg, err := s.loadClientTLSConfig()
-		if err != nil {
-			return nil, nil, err
+	s.agentConnMu.Lock()
+	if entry, ok := s.agentConns[node.NodeID]; ok && entry.addr == addr {
+		if entry.conn.GetState() != connectivity.Shutdown {
+			s.agentConnMu.Unlock()
+			return agentpb.NewAgentServiceClient(entry.conn), nil
 		}
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
-	} else {
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
-	dialOpts = append(dialOpts, grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
-	dialOpts = append(dialOpts, grpc.WithBlock())
+	s.agentConnMu.Unlock()
 
+	// Dial outside the lock so a slow/unreachable node can't stall callers
+	// that need a connection to a different node.
+	conn, err := s.dialAgentConn(addr)
+	if err != nil {
+		return nil, fmt.Errorf("dial agent %s (%s): %w", node.NodeID, addr, err)
+	}
+
+	s.agentConnMu.Lock()
+	defer s.agentConnMu.Unlock()
+	if existing, ok := s.agentConns[node.NodeID]; ok {
+		if existing.addr == addr && existing.conn.GetState() != connectivity.Shutdown {
+			// Another goroutine already established a usable connection
+			// while we were dialing; keep it and drop ours.
+			_ = conn.Close()
+			return agentpb.NewAgentServiceClient(existing.conn), nil
+		}
+		_ = existing.conn.Close()
+	}
+	if s.agentConns == nil {
+		s.agentConns = make(map[string]*agentConnEntry)
+	}
+	s.agentConns[node.NodeID] = &agentConnEntry{conn: conn, addr: addr}
+	return agentpb.NewAgentServiceClient(conn), nil
+}
+
+func (s *Scheduler) dialAgentConn(addr string) (*grpc.ClientConn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), s.rpcTimeout())
 	defer cancel()
-	conn, err := grpc.DialContext(ctx, addr, dialOpts...)
-	if err != nil {
-		return nil, nil, fmt.Errorf("dial agent %s (%s): %w", node.NodeID, addr, err)
+
+	doDial := func(ctx context.Context) (*grpc.ClientConn, error) {
+		var dialOpts []grpc.DialOption
+		if s.schedulerAgentTLSEnabled() {
+			tlsCfg, err := s.loadClientTLSConfig()
+			if err != nil {
+				return nil, err
+			}
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
+		} else {
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		}
+		dialOpts = append(dialOpts, grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
+		// Keepalive pings detect a dead agent connection (e.g. after a network
+		// partition or agent restart) so a broken pooled connection doesn't sit
+		// around silently failing every RPC until something explicitly redials.
+		dialOpts = append(dialOpts, grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                30 * time.Second,
+			Timeout:             10 * time.Second,
+			PermitWithoutStream: true,
+		}))
+		dialOpts = append(dialOpts, grpc.WithBlock())
+		return grpc.DialContext(ctx, addr, dialOpts...)
 	}
-	return agentpb.NewAgentServiceClient(conn), conn, nil
+
+	// When certmanager is wired, retry dial on cert-related TLS errors with ForceRotate.
+	if s.certMgr != nil && s.schedulerAgentTLSEnabled() {
+		var conn *grpc.ClientConn
+		err := certmanager.WithCertRetry(ctx, s.certMgr, 3, func(ctx context.Context) error {
+			c, err := doDial(ctx)
+			if err != nil {
+				return err
+			}
+			conn = c
+			return nil
+		})
+		return conn, err
+	}
+	return doDial(ctx)
+}
+
+// closeAgentConns closes every pooled agent connection. Called on scheduler
+// shutdown.
+func (s *Scheduler) closeAgentConns() {
+	s.agentConnMu.Lock()
+	defer s.agentConnMu.Unlock()
+	for id, entry := range s.agentConns {
+		_ = entry.conn.Close()
+		delete(s.agentConns, id)
+	}
+}
+
+// invalidateAgentConn drops a pooled connection so the next call re-dials.
+// Used when an RPC fails in a way that suggests the connection itself is
+// bad (as opposed to an application-level error from a healthy connection).
+func (s *Scheduler) invalidateAgentConn(nodeID string) {
+	s.agentConnMu.Lock()
+	defer s.agentConnMu.Unlock()
+	if entry, ok := s.agentConns[nodeID]; ok {
+		_ = entry.conn.Close()
+		delete(s.agentConns, nodeID)
+	}
 }
 
 func (s *Scheduler) schedulerAgentTLSEnabled() bool {
@@ -305,18 +412,49 @@ func (s *Scheduler) buildApplyWorkloadRequest(workload models.Workload) (*agentp
 			Env:         workload.EnvVars,
 		}}
 
-	case "vm":
+	case "vm", "microvm":
+		// Agent proto enum has no MICROVM value; share WORKLOAD_TYPE_VM + spec.vm.
+		// Stamp firecracker so the agent selects MicroVMRuntime instead of KVM.
 		req.Type = agentpb.WorkloadType_WORKLOAD_TYPE_VM
 		if workload.VM == nil {
-			return nil, fmt.Errorf("vm spec is required for vm workloads")
+			return nil, fmt.Errorf("vm spec is required for %s workloads", workload.Type)
+		}
+		isMicroVM := strings.EqualFold(strings.TrimSpace(workload.Type), "microvm")
+		meta := map[string]string{}
+		for k, v := range workload.VM.Metadata {
+			meta[k] = v
+		}
+		if img := strings.TrimSpace(workload.VM.OsImage); img != "" {
+			meta["os_image"] = img
+			meta["persys.vm.os_image"] = img
+		}
+		if workload.VM.DiskGB > 0 {
+			meta["disk_gb"] = fmt.Sprintf("%d", workload.VM.DiskGB)
+			meta["persys.vm.disk_gb"] = fmt.Sprintf("%d", workload.VM.DiskGB)
+		}
+		if rt := strings.TrimSpace(workload.VM.Runtime); rt != "" {
+			meta["persys.vm.runtime"] = rt
+			meta["runtime"] = rt
+		}
+		if isMicroVM {
+			meta["persys.vm.runtime"] = "firecracker"
+			meta["runtime"] = "firecracker"
+			meta["persys.workload.type"] = "microvm"
+		}
+		runtimeName := strings.TrimSpace(workload.VM.Runtime)
+		if isMicroVM {
+			runtimeName = "firecracker"
 		}
 		vmSpec := &agentpb.VMSpec{
 			Name:           workload.VM.Name,
 			Vcpus:          workload.VM.VCPUs,
 			MemoryMb:       workload.VM.MemoryMB,
 			CloudInit:      workload.VM.CloudInit,
-			Metadata:       workload.VM.Metadata,
+			Metadata:       meta,
 			ManagedVolumes: toAgentManagedVolumes(workload.VM.ManagedVolumes),
+			OsImage:        strings.TrimSpace(workload.VM.OsImage),
+			DiskGb:         workload.VM.DiskGB,
+			Runtime:        runtimeName,
 		}
 		if workload.VM.CloudInitConfig != nil {
 			vmSpec.CloudInitConfig = &agentpb.CloudInitConfig{
@@ -325,25 +463,58 @@ func (s *Scheduler) buildApplyWorkloadRequest(workload models.Workload) (*agentp
 				NetworkConfig: workload.VM.CloudInitConfig.NetworkConfig,
 				VendorData:    workload.VM.CloudInitConfig.VendorData,
 			}
+			// Pass login overrides through metadata until proto gains fields.
+			if u := strings.TrimSpace(workload.VM.CloudInitConfig.Username); u != "" {
+				meta["persys.vm.username"] = u
+			}
+			if k := strings.TrimSpace(workload.VM.CloudInitConfig.SSHPublicKey); k != "" {
+				meta["persys.vm.ssh_public_key"] = k
+			}
+			if p := strings.TrimSpace(workload.VM.CloudInitConfig.Password); p != "" {
+				meta["persys.vm.password"] = p
+			}
+			vmSpec.Metadata = meta
 		}
-		for _, disk := range workload.VM.Disks {
-			disk = normalizeVMDiskForAgent(workload.ID, disk)
-			vmSpec.Disks = append(vmSpec.Disks, &agentpb.DiskConfig{
-				Path:   disk.Path,
-				Device: disk.Device,
-				Format: disk.Format,
-				SizeGb: disk.SizeGB,
-				Type:   disk.Type,
-				Boot:   disk.Boot,
-			})
+		// When OsImage is set and disks are empty, do NOT synthesize a blank
+		// path here — the agent creates the overlay from os_image.
+		if len(workload.VM.Disks) == 0 && strings.TrimSpace(workload.VM.OsImage) != "" {
+			// leave Disks empty intentionally
+		} else {
+			for _, disk := range workload.VM.Disks {
+				disk = normalizeVMDiskForAgent(workload.ID, disk)
+				// If this is a boot disk and OsImage is set, do not force a path
+				// that collides with the base image; agent will overlay.
+				vmSpec.Disks = append(vmSpec.Disks, &agentpb.DiskConfig{
+					Path:   disk.Path,
+					Device: disk.Device,
+					Format: disk.Format,
+					SizeGb: disk.SizeGB,
+					Type:   disk.Type,
+					Boot:   disk.Boot,
+				})
+			}
 		}
 		for _, network := range workload.VM.Networks {
+			netName := network.Network
+			if netName == "" && network.Bridge != "" {
+				netName = network.Bridge
+			}
+			if netName == "" && network.HostDevName != "" {
+				netName = network.HostDevName
+			}
 			vmSpec.Networks = append(vmSpec.Networks, &agentpb.NetworkConfig{
-				Network:    network.Network,
-				MacAddress: network.MAC,
-				IpAddress:  network.IPAddress,
+				Network:     netName,
+				MacAddress:  network.MAC,
+				IpAddress:   network.IPAddress,
+				HostDevName: network.HostDevName,
+				Model:       network.Model,
+				Bridge:      network.Bridge,
 			})
+			if network.HostDevName != "" {
+				meta[fmt.Sprintf("persys.vm.host_dev.%s", netName)] = network.HostDevName
+			}
 		}
+		vmSpec.Metadata = meta
 		req.Spec.Spec = &agentpb.WorkloadSpec_Vm{Vm: vmSpec}
 
 	default:
@@ -397,17 +568,36 @@ func toAgentManagedVolumes(in []models.ManagedVolumeSpec) []*agentpb.ManagedVolu
 	return out
 }
 
+
+// callAgentRPC runs fn against a pooled agent client. On cert-related TLS
+// failures it invalidates the pooled connection, ForceRotates (if certMgr is
+// set), and retries once with a fresh dial.
+func (s *Scheduler) callAgentRPC(ctx context.Context, node models.Node, fn func(agentpb.AgentServiceClient) error) error {
+	client, err := s.getAgentClient(node)
+	if err != nil {
+		return err
+	}
+	err = fn(client)
+	if err == nil || !certmanager.IsCertRelatedTLSError(err) {
+		return err
+	}
+
+	s.invalidateAgentConn(node.NodeID)
+	if s.certMgr != nil {
+		_ = s.certMgr.ForceRotate(ctx)
+	}
+	client, err = s.getAgentClient(node)
+	if err != nil {
+		return err
+	}
+	return fn(client)
+}
+
 func (s *Scheduler) applyWorkloadOnNode(ctx context.Context, node models.Node, workload models.Workload) (resp *agentpb.ApplyWorkloadResponse, err error) {
 	start := time.Now()
 	defer func() {
 		metricspkg.ObserveAgentRPC("ApplyWorkload", err, time.Since(start))
 	}()
-
-	client, conn, err := s.newAgentClient(node)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
 
 	req, err := s.buildApplyWorkloadRequest(workload)
 	if err != nil {
@@ -419,11 +609,13 @@ func (s *Scheduler) applyWorkloadOnNode(ctx context.Context, node models.Node, w
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.rpcTimeout())
 	defer cancel()
-	resp, err = client.ApplyWorkload(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	return resp, nil
+
+	err = s.callAgentRPC(ctx, node, func(client agentpb.AgentServiceClient) error {
+		var rpcErr error
+		resp, rpcErr = client.ApplyWorkload(ctx, req)
+		return rpcErr
+	})
+	return resp, err
 }
 
 func (s *Scheduler) getWorkloadStatusFromNode(ctx context.Context, node models.Node, workloadID string) (resp *agentpb.WorkloadStatus, err error) {
@@ -432,23 +624,21 @@ func (s *Scheduler) getWorkloadStatusFromNode(ctx context.Context, node models.N
 		metricspkg.ObserveAgentRPC("GetWorkloadStatus", err, time.Since(start))
 	}()
 
-	client, conn, err := s.newAgentClient(node)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.rpcTimeout())
 	defer cancel()
-	statusResp, err := client.GetWorkloadStatus(ctx, &agentpb.GetWorkloadStatusRequest{Id: workloadID})
-	if err != nil {
-		return nil, err
-	}
-	resp = statusResp.GetStatus()
-	return resp, nil
+
+	err = s.callAgentRPC(ctx, node, func(client agentpb.AgentServiceClient) error {
+		statusResp, rpcErr := client.GetWorkloadStatus(ctx, &agentpb.GetWorkloadStatusRequest{Id: workloadID})
+		if rpcErr != nil {
+			return rpcErr
+		}
+		resp = statusResp.GetStatus()
+		return nil
+	})
+	return resp, err
 }
 
 func (s *Scheduler) listWorkloadsFromNode(ctx context.Context, node models.Node) (workloads []*agentpb.WorkloadStatus, err error) {
@@ -457,22 +647,21 @@ func (s *Scheduler) listWorkloadsFromNode(ctx context.Context, node models.Node)
 		metricspkg.ObserveAgentRPC("ListWorkloads", err, time.Since(start))
 	}()
 
-	client, conn, err := s.newAgentClient(node)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.rpcTimeout())
 	defer cancel()
-	resp, err := client.ListWorkloads(ctx, &agentpb.ListWorkloadsRequest{Type: agentpb.WorkloadType_WORKLOAD_TYPE_UNSPECIFIED})
-	if err != nil {
-		return nil, err
-	}
-	return resp.GetWorkloads(), nil
+
+	err = s.callAgentRPC(ctx, node, func(client agentpb.AgentServiceClient) error {
+		resp, rpcErr := client.ListWorkloads(ctx, &agentpb.ListWorkloadsRequest{Type: agentpb.WorkloadType_WORKLOAD_TYPE_UNSPECIFIED})
+		if rpcErr != nil {
+			return rpcErr
+		}
+		workloads = resp.GetWorkloads()
+		return nil
+	})
+	return workloads, err
 }
 
 func (s *Scheduler) getWorkloadActionsFromNode(ctx context.Context, node models.Node, workloadID string, limit int32) (actions []*agentpb.AgentAction, err error) {
@@ -481,23 +670,21 @@ func (s *Scheduler) getWorkloadActionsFromNode(ctx context.Context, node models.
 		metricspkg.ObserveAgentRPC("ListActions", err, time.Since(start))
 	}()
 
-	client, conn, err := s.newAgentClient(node)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.rpcTimeout())
 	defer cancel()
-	resp, err := client.ListActions(ctx, &agentpb.ListActionsRequest{WorkloadId: workloadID, NewestFirst: true, Limit: limit})
-	if err != nil {
-		return nil, err
-	}
-	actions = resp.GetActions()
-	return actions, nil
+
+	err = s.callAgentRPC(ctx, node, func(client agentpb.AgentServiceClient) error {
+		resp, rpcErr := client.ListActions(ctx, &agentpb.ListActionsRequest{WorkloadId: workloadID, NewestFirst: true, Limit: limit})
+		if rpcErr != nil {
+			return rpcErr
+		}
+		actions = resp.GetActions()
+		return nil
+	})
+	return actions, err
 }
 
 func (s *Scheduler) deleteWorkloadFromNode(ctx context.Context, node models.Node, workloadID string) (resp *agentpb.DeleteWorkloadResponse, err error) {
@@ -506,18 +693,17 @@ func (s *Scheduler) deleteWorkloadFromNode(ctx context.Context, node models.Node
 		metricspkg.ObserveAgentRPC("DeleteWorkload", err, time.Since(start))
 	}()
 
-	client, conn, err := s.newAgentClient(node)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.rpcTimeout())
 	defer cancel()
-	resp, err = client.DeleteWorkload(ctx, &agentpb.DeleteWorkloadRequest{Id: workloadID})
+
+	err = s.callAgentRPC(ctx, node, func(client agentpb.AgentServiceClient) error {
+		var rpcErr error
+		resp, rpcErr = client.DeleteWorkload(ctx, &agentpb.DeleteWorkloadRequest{Id: workloadID})
+		return rpcErr
+	})
 	return resp, err
 }
 

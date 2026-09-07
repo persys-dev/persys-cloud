@@ -28,6 +28,8 @@ const (
 	WorkloadType_WORKLOAD_TYPE_CONTAINER   WorkloadType = 1
 	WorkloadType_WORKLOAD_TYPE_COMPOSE     WorkloadType = 2
 	WorkloadType_WORKLOAD_TYPE_VM          WorkloadType = 3
+	// Firecracker microVM. Shares WorkloadSpec.vm oneof with KVM VMs.
+	WorkloadType_WORKLOAD_TYPE_MICROVM WorkloadType = 4
 )
 
 // Enum value maps for WorkloadType.
@@ -37,12 +39,14 @@ var (
 		1: "WORKLOAD_TYPE_CONTAINER",
 		2: "WORKLOAD_TYPE_COMPOSE",
 		3: "WORKLOAD_TYPE_VM",
+		4: "WORKLOAD_TYPE_MICROVM",
 	}
 	WorkloadType_value = map[string]int32{
 		"WORKLOAD_TYPE_UNSPECIFIED": 0,
 		"WORKLOAD_TYPE_CONTAINER":   1,
 		"WORKLOAD_TYPE_COMPOSE":     2,
 		"WORKLOAD_TYPE_VM":          3,
+		"WORKLOAD_TYPE_MICROVM":     4,
 	}
 )
 
@@ -2386,12 +2390,13 @@ const file_agent_proto_rawDesc = "" +
 	"netTxBytes\x12!\n" +
 	"\fcollected_at\x18\t \x01(\x03R\vcollectedAt\x12\x16\n" +
 	"\x06source\x18\n" +
-	" \x01(\tR\x06source*{\n" +
+	" \x01(\tR\x06source*\x96\x01\n" +
 	"\fWorkloadType\x12\x1d\n" +
 	"\x19WORKLOAD_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17WORKLOAD_TYPE_CONTAINER\x10\x01\x12\x19\n" +
 	"\x15WORKLOAD_TYPE_COMPOSE\x10\x02\x12\x14\n" +
-	"\x10WORKLOAD_TYPE_VM\x10\x03*c\n" +
+	"\x10WORKLOAD_TYPE_VM\x10\x03\x12\x19\n" +
+	"\x15WORKLOAD_TYPE_MICROVM\x10\x04*c\n" +
 	"\fDesiredState\x12\x1d\n" +
 	"\x19DESIRED_STATE_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15DESIRED_STATE_RUNNING\x10\x01\x12\x19\n" +

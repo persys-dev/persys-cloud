@@ -27,10 +27,15 @@ type Config struct {
 	SchedulerAdvertisePort int
 
 	// Redis
-	RedisAddr            string
-	RedisPassword        string
-	RedisDB              int
-	RedisReconcileTTL    time.Duration
+	RedisAddr         string
+	RedisPassword     string
+	RedisDB           int
+	RedisReconcileTTL time.Duration
+	// RedisEventTTL / RedisEventMaxEntries bound the shared cluster-events
+	// Redis Stream (see emitEvent/redis_store.go) — events are stored only
+	// in Redis, not etcd, so these are the sole retention knobs: TTL
+	// refreshed on every write, and MAXLEN ~ trimming applied at write
+	// time (no separate sweep needed).
 	RedisEventTTL        time.Duration
 	RedisEventMaxEntries int64
 
@@ -73,6 +78,20 @@ type Config struct {
 
 	// Reconciliation / drift
 	SchedulerReconcileInterval    time.Duration
+	SchedulerReconcileConcurrency int
+
+	// HA mode: "failover" (default) runs one active scheduler instance
+	// across all replicas, with automatic takeover on crash/expiry (see
+	// leader.go). "active-active" partitions nodes across
+	// SchedulerShardCount shards by a stable hash of node ID, and this
+	// instance only drives reconciliation/monitoring for nodes in its own
+	// SchedulerShardIndex — letting multiple replicas process different
+	// shards concurrently, at the cost of the caveats documented in
+	// sharding.go. Run more than one replica per shard index for HA
+	// within a shard in active-active mode.
+	SchedulerHAMode               string
+	SchedulerShardCount           int
+	SchedulerShardIndex           int
 	SchedulerDriftDetectInterval  time.Duration
 	SchedulerNodeUnavailableGrace time.Duration
 	SchedulerReapplyGuard         time.Duration
@@ -121,7 +140,7 @@ func Load(insecureFlag bool) (*Config, error) {
 		TLSKeyPath:  envOr("PERSYS_TLS_KEY", "/etc/persys/certs/persys_scheduler/persys_scheduler-key.key"),
 
 		VaultEnabled:       envBoolOr("PERSYS_VAULT_ENABLED", true),
-		VaultManagerAddr: 	envOr("PERSYS_VAULT_MANAGER_ADDR","vault-manager:50069"),
+		VaultManagerAddr:   envOr("PERSYS_VAULT_MANAGER_ADDR", "vault-manager:50069"),
 		VaultAddr:          envOr("PERSYS_VAULT_ADDR", "http://localhost:8200"),
 		VaultAuthMethod:    strings.ToLower(envOr("PERSYS_VAULT_AUTH_METHOD", "token")),
 		VaultToken:         strings.TrimSpace(os.Getenv("PERSYS_VAULT_TOKEN")),
@@ -142,6 +161,10 @@ func Load(insecureFlag bool) (*Config, error) {
 		SchedulerAgentRPCTimeout:         envDurationOrFlexibleSeconds("SCHEDULER_AGENT_RPC_TIMEOUT", 10*time.Second),
 
 		SchedulerReconcileInterval:    envDurationOrFlexibleSeconds("SCHEDULER_RECONCILE_INTERVAL", 5*time.Second),
+		SchedulerReconcileConcurrency: envIntOr("SCHEDULER_RECONCILE_CONCURRENCY", 64),
+		SchedulerHAMode:               strings.ToLower(envOr("SCHEDULER_HA_MODE", "failover")),
+		SchedulerShardCount:           envIntOr("SCHEDULER_SHARD_COUNT", 1),
+		SchedulerShardIndex:           envIntOr("SCHEDULER_SHARD_INDEX", 0),
 		SchedulerDriftDetectInterval:  envDurationOrFlexibleSeconds("SCHEDULER_DRIFT_DETECT_INTERVAL", 300*time.Second),
 		SchedulerNodeUnavailableGrace: envDurationOrFlexibleSeconds("SCHEDULER_NODE_UNAVAILABLE_GRACE", 3*time.Minute),
 		SchedulerReapplyGuard:         envDurationOrFlexibleSeconds("SCHEDULER_REAPPLY_GUARD", 45*time.Second),
