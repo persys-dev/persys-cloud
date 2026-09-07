@@ -43,6 +43,12 @@ const (
 	AgentControl_ListDisks_FullMethodName                  = "/persys.control.v1.AgentControl/ListDisks"
 	AgentControl_GetDisk_FullMethodName                    = "/persys.control.v1.AgentControl/GetDisk"
 	AgentControl_DeleteDisk_FullMethodName                 = "/persys.control.v1.AgentControl/DeleteDisk"
+	AgentControl_CreateBucket_FullMethodName               = "/persys.control.v1.AgentControl/CreateBucket"
+	AgentControl_ListBuckets_FullMethodName                = "/persys.control.v1.AgentControl/ListBuckets"
+	AgentControl_GetBucket_FullMethodName                  = "/persys.control.v1.AgentControl/GetBucket"
+	AgentControl_DeleteBucket_FullMethodName               = "/persys.control.v1.AgentControl/DeleteBucket"
+	AgentControl_GetBucketAccess_FullMethodName            = "/persys.control.v1.AgentControl/GetBucketAccess"
+	AgentControl_ListBucketObjects_FullMethodName          = "/persys.control.v1.AgentControl/ListBucketObjects"
 )
 
 // AgentControlClient is the client API for AgentControl service.
@@ -91,6 +97,13 @@ type AgentControlClient interface {
 	ListDisks(ctx context.Context, in *ListDisksRequest, opts ...grpc.CallOption) (*ListDisksResponse, error)
 	GetDisk(ctx context.Context, in *GetDiskRequest, opts ...grpc.CallOption) (*GetDiskResponse, error)
 	DeleteDisk(ctx context.Context, in *DeleteDiskRequest, opts ...grpc.CallOption) (*DeleteDiskResponse, error)
+	// Object storage (Ceph RGW / S3-compatible buckets)
+	CreateBucket(ctx context.Context, in *CreateBucketRequest, opts ...grpc.CallOption) (*CreateBucketResponse, error)
+	ListBuckets(ctx context.Context, in *ListBucketsRequest, opts ...grpc.CallOption) (*ListBucketsResponse, error)
+	GetBucket(ctx context.Context, in *GetBucketRequest, opts ...grpc.CallOption) (*GetBucketResponse, error)
+	DeleteBucket(ctx context.Context, in *DeleteBucketRequest, opts ...grpc.CallOption) (*DeleteBucketResponse, error)
+	GetBucketAccess(ctx context.Context, in *GetBucketAccessRequest, opts ...grpc.CallOption) (*GetBucketAccessResponse, error)
+	ListBucketObjects(ctx context.Context, in *ListBucketObjectsRequest, opts ...grpc.CallOption) (*ListBucketObjectsResponse, error)
 }
 
 type agentControlClient struct {
@@ -353,6 +366,66 @@ func (c *agentControlClient) DeleteDisk(ctx context.Context, in *DeleteDiskReque
 	return out, nil
 }
 
+func (c *agentControlClient) CreateBucket(ctx context.Context, in *CreateBucketRequest, opts ...grpc.CallOption) (*CreateBucketResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateBucketResponse)
+	err := c.cc.Invoke(ctx, AgentControl_CreateBucket_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) ListBuckets(ctx context.Context, in *ListBucketsRequest, opts ...grpc.CallOption) (*ListBucketsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBucketsResponse)
+	err := c.cc.Invoke(ctx, AgentControl_ListBuckets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) GetBucket(ctx context.Context, in *GetBucketRequest, opts ...grpc.CallOption) (*GetBucketResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBucketResponse)
+	err := c.cc.Invoke(ctx, AgentControl_GetBucket_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) DeleteBucket(ctx context.Context, in *DeleteBucketRequest, opts ...grpc.CallOption) (*DeleteBucketResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteBucketResponse)
+	err := c.cc.Invoke(ctx, AgentControl_DeleteBucket_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) GetBucketAccess(ctx context.Context, in *GetBucketAccessRequest, opts ...grpc.CallOption) (*GetBucketAccessResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetBucketAccessResponse)
+	err := c.cc.Invoke(ctx, AgentControl_GetBucketAccess_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentControlClient) ListBucketObjects(ctx context.Context, in *ListBucketObjectsRequest, opts ...grpc.CallOption) (*ListBucketObjectsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBucketObjectsResponse)
+	err := c.cc.Invoke(ctx, AgentControl_ListBucketObjects_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentControlServer is the server API for AgentControl service.
 // All implementations must embed UnimplementedAgentControlServer
 // for forward compatibility.
@@ -399,6 +472,13 @@ type AgentControlServer interface {
 	ListDisks(context.Context, *ListDisksRequest) (*ListDisksResponse, error)
 	GetDisk(context.Context, *GetDiskRequest) (*GetDiskResponse, error)
 	DeleteDisk(context.Context, *DeleteDiskRequest) (*DeleteDiskResponse, error)
+	// Object storage (Ceph RGW / S3-compatible buckets)
+	CreateBucket(context.Context, *CreateBucketRequest) (*CreateBucketResponse, error)
+	ListBuckets(context.Context, *ListBucketsRequest) (*ListBucketsResponse, error)
+	GetBucket(context.Context, *GetBucketRequest) (*GetBucketResponse, error)
+	DeleteBucket(context.Context, *DeleteBucketRequest) (*DeleteBucketResponse, error)
+	GetBucketAccess(context.Context, *GetBucketAccessRequest) (*GetBucketAccessResponse, error)
+	ListBucketObjects(context.Context, *ListBucketObjectsRequest) (*ListBucketObjectsResponse, error)
 	mustEmbedUnimplementedAgentControlServer()
 }
 
@@ -480,6 +560,24 @@ func (UnimplementedAgentControlServer) GetDisk(context.Context, *GetDiskRequest)
 }
 func (UnimplementedAgentControlServer) DeleteDisk(context.Context, *DeleteDiskRequest) (*DeleteDiskResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteDisk not implemented")
+}
+func (UnimplementedAgentControlServer) CreateBucket(context.Context, *CreateBucketRequest) (*CreateBucketResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateBucket not implemented")
+}
+func (UnimplementedAgentControlServer) ListBuckets(context.Context, *ListBucketsRequest) (*ListBucketsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListBuckets not implemented")
+}
+func (UnimplementedAgentControlServer) GetBucket(context.Context, *GetBucketRequest) (*GetBucketResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBucket not implemented")
+}
+func (UnimplementedAgentControlServer) DeleteBucket(context.Context, *DeleteBucketRequest) (*DeleteBucketResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteBucket not implemented")
+}
+func (UnimplementedAgentControlServer) GetBucketAccess(context.Context, *GetBucketAccessRequest) (*GetBucketAccessResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBucketAccess not implemented")
+}
+func (UnimplementedAgentControlServer) ListBucketObjects(context.Context, *ListBucketObjectsRequest) (*ListBucketObjectsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListBucketObjects not implemented")
 }
 func (UnimplementedAgentControlServer) mustEmbedUnimplementedAgentControlServer() {}
 func (UnimplementedAgentControlServer) testEmbeddedByValue()                      {}
@@ -916,6 +1014,114 @@ func _AgentControl_DeleteDisk_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentControl_CreateBucket_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateBucketRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).CreateBucket(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_CreateBucket_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).CreateBucket(ctx, req.(*CreateBucketRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_ListBuckets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBucketsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).ListBuckets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_ListBuckets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).ListBuckets(ctx, req.(*ListBucketsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_GetBucket_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBucketRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).GetBucket(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_GetBucket_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).GetBucket(ctx, req.(*GetBucketRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_DeleteBucket_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteBucketRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).DeleteBucket(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_DeleteBucket_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).DeleteBucket(ctx, req.(*DeleteBucketRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_GetBucketAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetBucketAccessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).GetBucketAccess(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_GetBucketAccess_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).GetBucketAccess(ctx, req.(*GetBucketAccessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentControl_ListBucketObjects_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBucketObjectsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentControlServer).ListBucketObjects(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentControl_ListBucketObjects_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentControlServer).ListBucketObjects(ctx, req.(*ListBucketObjectsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentControl_ServiceDesc is the grpc.ServiceDesc for AgentControl service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1010,6 +1216,30 @@ var AgentControl_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteDisk",
 			Handler:    _AgentControl_DeleteDisk_Handler,
+		},
+		{
+			MethodName: "CreateBucket",
+			Handler:    _AgentControl_CreateBucket_Handler,
+		},
+		{
+			MethodName: "ListBuckets",
+			Handler:    _AgentControl_ListBuckets_Handler,
+		},
+		{
+			MethodName: "GetBucket",
+			Handler:    _AgentControl_GetBucket_Handler,
+		},
+		{
+			MethodName: "DeleteBucket",
+			Handler:    _AgentControl_DeleteBucket_Handler,
+		},
+		{
+			MethodName: "GetBucketAccess",
+			Handler:    _AgentControl_GetBucketAccess_Handler,
+		},
+		{
+			MethodName: "ListBucketObjects",
+			Handler:    _AgentControl_ListBucketObjects_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
