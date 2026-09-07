@@ -1,5 +1,67 @@
 # Changelog
 
+## 2026-07-28 (Unreleased)
+
+Source: 1000+ node scaling initiative (`persys-scheduler-1000-node-scaling-plan.md`)
+
+### Summary
+
+This release targets running persys-scheduler at 1,000-5,000+ node fleets and behind multiple replicas. It cuts agent-facing fan-out from O(workloads) to O(nodes), adds etcd compare-and-swap to every concurrent write path, adds a watch-backed node cache for placement, adds leader election with an optional active-active sharding mode, replaces single-factor node scoring with a weighted placement algorithm that accounts for in-flight (not-yet-heartbeated) resource commitments, and fixes CoreDNS self-registration so persys-gateway can discover more than one running replica at a time.
+
+### Major Features
+
+1. **Agent connection pooling**
+   - Replaced per-RPC dial-then-close with a pooled `map[nodeID]*grpc.ClientConn`, keepalive-checked and reused across calls
+   - Removes a full TLS handshake from every single agent RPC — previously paid on every apply/delete/status/list call, to every node, every cycle
+
+2. **Reconciliation fan-out: O(workloads) → O(nodes)**
+   - The reconciler now fetches each node's full workload list once per cycle (via the batch RPC drift-detection already used) instead of one status RPC per workload
+   - Bounded-concurrency workload processing (`SCHEDULER_RECONCILE_CONCURRENCY`, default 64), plus a cycle-overlap guard so a slow cycle can't stack with the next tick
+   - `MonitorNodes`, `MonitorWorkloads`, and `detectDriftOnce` got the same bounded-concurrency treatment
+
+3. **etcd compare-and-swap on all concurrent write paths**
+   - New `RetryableEtcdCASPut`; every node-mutating function (heartbeat, drain/ready/taint/label/capability updates, NotReady transitions) and every workload-status-mutating function (`UpdateWorkloadStatus`, `UpdateWorkloadLogs`, `UpdateWorkloadMetadata`, `UpdateWorkloadRuntimeDetails`) now retries against a fresh read on conflict instead of silently overwriting a concurrent writer
+   - Removed a dead `/retries/{id}` write nothing ever read; fixed a bug where usage telemetry (`Usage`) was silently dropped from the etcd status projection on every read
+
+4. **Watch-backed live node cache for placement**
+   - New `node_watch.go`: full resync then a live etcd `Watch` keep the in-memory node cache current
+   - `selectNodeForWorkload` reads from it, falling back to a live scan only if the cache isn't populated yet (startup, or mid-resync)
+
+5. **Leader election with failover / active-active HA modes** (new env: `SCHEDULER_HA_MODE`, `SCHEDULER_SHARD_COUNT`, `SCHEDULER_SHARD_INDEX`)
+   - New `leader.go`: etcd-lease-based election (`go.etcd.io/etcd/client/v3/concurrency`) so multiple scheduler replicas can run against the same etcd cluster with automatic failover
+   - `SCHEDULER_HA_MODE=failover` (default): exactly one replica active cluster-wide; the others are hot standbys that take over automatically if it dies
+   - `SCHEDULER_HA_MODE=active-active`: nodes are partitioned across `SCHEDULER_SHARD_COUNT` shards by a stable hash of node ID; each replica only drives reconciliation/monitoring/drift-detection for the nodes in its `SCHEDULER_SHARD_INDEX`, so multiple shards run concurrently — run more than one replica per shard index for HA within a shard
+   - The gRPC API (`RegisterNode`, `Heartbeat`, `ApplyWorkload`, ...) runs unconditionally on every replica in both modes, since those paths are CAS-protected; only the singleton convergence loops are gated
+
+6. **Weighted placement algorithm with in-flight resource reservation**
+   - Replaced single-factor "lowest CPU+memory average" sorting with a weighted score: CPU headroom, memory headroom, and a spread term (workload count relative to the busiest candidate), plus a small deterministic tie-breaker so exact ties don't always resolve to the same node
+   - New in-flight reservation tracking (`placement.go`): resources committed to a just-assigned workload are counted against its node immediately, before that node's next heartbeat reflects the change — closes a real oversubscription window that gets materially more likely now that reconciliation, monitoring, and (in active-active mode) multiple scheduler replicas can all be placing/converging workloads concurrently
+
+7. **CoreDNS multi-replica fix**
+   - Scheduler self-registration (used by persys-gateway to discover the scheduler) previously wrote to one fixed etcd key; every replica overwrote the others on startup, so the gateway could only ever resolve one replica regardless of how many were running
+   - Now keyed per-instance (mirroring the pattern already used for agent node registration), so CoreDNS returns one record per running replica; added deregistration on clean shutdown so a stopped replica doesn't linger as a dead record until its TTL expires
+   - Note: this DNS mechanism is for **gateway → scheduler** discovery only; agents do not use CoreDNS to reach the scheduler
+
+### Deployment note
+
+Running multiple scheduler replicas under plain `docker compose up` (not Swarm) requires removing the scheduler's own host port publishing and putting a TCP-passthrough load balancer (e.g. HAProxy) in front instead — otherwise replicas past the first fail to bind the same host port. See `docker-compose.scheduler-ha.snippet.yml` and `haproxy.cfg`. Not needed under `docker stack deploy` (Swarm), where the ingress routing mesh already handles this.
+
+### Breaking Changes
+
+None. `SCHEDULER_HA_MODE` defaults to `failover`, which preserves prior single-active-instance behavior exactly. All other new env vars have defaults matching prior behavior (`SCHEDULER_RECONCILE_CONCURRENCY=64`, `SCHEDULER_SHARD_COUNT=1`, `SCHEDULER_SHARD_INDEX=0`).
+
+### Known Limitations
+
+- Active-active mode has no explicit shard hand-off protocol: if a node fails and its workloads are reassigned to a node owned by a different shard, there's a brief window (expected to self-heal within one reconcile interval) where neither shard is actively driving that workload. See `sharding.go` for details.
+- Redis remains a single instance with no Sentinel/cluster failover.
+- Not load-tested at target scale in this round; reasoning is from code inspection, not measurement.
+
+### Changed Files
+
+See `persys-scheduler-scaling-fixes.patch` for the full diff. New files: `internal/scheduler/leader.go`, `internal/scheduler/sharding.go`, `internal/scheduler/node_watch.go`, `internal/scheduler/placement.go`.
+
+---
+
 ## 2026-05-29 (Unreleased)
 
 Source: `git diff -- persys-scheduler`
