@@ -240,6 +240,11 @@ func (s *Service) ApplyWorkload(ctx context.Context, in *controlv1.ApplyWorkload
 	}
 	annotateRPC(ctx, attribute.String("scheduler.workload_type", strings.TrimSpace(workload.Type)))
 
+	// Expand standalone disk inventory refs (metadata persys.disk.ids) into managed_volumes.
+	if err := s.sched.AttachDiskIDsToWorkload(&workload); err != nil {
+		return &controlv1.ApplyWorkloadResponse{Success: false, FailureReason: controlv1.FailureReason_INVALID_SPEC, ErrorMessage: err.Error()}, nil
+	}
+
 	var persisted models.Workload
 	if _, err := s.sched.GetWorkloadByID(workload.ID); err == nil {
 		updated, err := s.sched.UpdateWorkloadSpec(workload.ID, workload)
@@ -629,6 +634,118 @@ func (s *Service) GetClusterSummary(ctx context.Context, _ *controlv1.GetCluster
 	return resp, nil
 }
 
+// ListEvents returns recent cluster-wide scheduler events, most-recent
+// storage order (etcd prefix scan order — callers that need strict
+// chronological ordering should sort client-side on the returned
+// timestamps, since etcd's own key order is by event ID, not time).
+func (s *Service) ListEvents(ctx context.Context, in *controlv1.ListEventsRequest) (*controlv1.ListEventsResponse, error) {
+	limit := int64(0)
+	if in != nil {
+		limit = in.GetLimit()
+		annotateRPC(ctx,
+			attribute.String("scheduler.event_type", strings.TrimSpace(in.GetType())),
+			attribute.String("scheduler.workload_id", strings.TrimSpace(in.GetWorkloadId())),
+			attribute.String("scheduler.node_id", strings.TrimSpace(in.GetNodeId())),
+		)
+	}
+
+	events, err := s.sched.ListSchedulerEvents(limit)
+	if err != nil {
+		rpcErr := status.Error(codes.Internal, err.Error())
+		recordRPCError(ctx, rpcErr)
+		return nil, rpcErr
+	}
+
+	out := make([]*controlv1.SchedulerEventView, 0, len(events))
+	for _, event := range events {
+		if !eventMatchesFilter(event, in) {
+			continue
+		}
+		out = append(out, schedulerEventToView(event))
+	}
+	return &controlv1.ListEventsResponse{Events: out}, nil
+}
+
+// WatchEvents streams cluster-wide scheduler events to the caller as they
+// happen (see Scheduler.WatchEvents), replaying recent history first.
+// Blocks until the client disconnects or the stream's context is
+// cancelled (e.g. server shutdown).
+func (s *Service) WatchEvents(in *controlv1.WatchEventsRequest, stream controlv1.AgentControl_WatchEventsServer) error {
+	if in != nil {
+		annotateRPC(stream.Context(),
+			attribute.String("scheduler.event_type", strings.TrimSpace(in.GetType())),
+			attribute.String("scheduler.workload_id", strings.TrimSpace(in.GetWorkloadId())),
+			attribute.String("scheduler.node_id", strings.TrimSpace(in.GetNodeId())),
+		)
+	}
+
+	err := s.sched.WatchEvents(stream.Context(), defaultWatchEventsReplayLimit, func(event models.SchedulerEvent) error {
+		if !eventMatchesFilter(event, in) {
+			return nil
+		}
+		return stream.Send(schedulerEventToView(event))
+	})
+	if err != nil && stream.Context().Err() == nil {
+		rpcErr := status.Error(codes.Internal, err.Error())
+		recordRPCError(stream.Context(), rpcErr)
+		return rpcErr
+	}
+	return nil
+}
+
+// defaultWatchEventsReplayLimit bounds how much history WatchEvents
+// replays to a newly-connected client before switching to live events.
+const defaultWatchEventsReplayLimit = 100
+
+// eventFilter is satisfied by both ListEventsRequest and WatchEventsRequest
+// (both carry the same three optional filter fields), letting
+// eventMatchesFilter serve both RPC handlers.
+type eventFilter interface {
+	GetType() string
+	GetWorkloadId() string
+	GetNodeId() string
+}
+
+func eventMatchesFilter(event models.SchedulerEvent, filter eventFilter) bool {
+	if filter == nil {
+		return true
+	}
+	if t := strings.TrimSpace(filter.GetType()); t != "" && !strings.EqualFold(event.Type, t) {
+		return false
+	}
+	if w := strings.TrimSpace(filter.GetWorkloadId()); w != "" && event.WorkloadID != w {
+		return false
+	}
+	if n := strings.TrimSpace(filter.GetNodeId()); n != "" && event.NodeID != n {
+		return false
+	}
+	return true
+}
+
+// schedulerEventToView converts the internal event model to its proto
+// view. Details values are stringified (fmt.Sprintf("%v", ...)) rather
+// than mapped to google.protobuf.Struct — event details are
+// informational/display-oriented, not structured data a client needs to
+// round-trip losslessly, so the simpler map<string,string> shape was
+// chosen deliberately (see the field comment in control.proto).
+func schedulerEventToView(event models.SchedulerEvent) *controlv1.SchedulerEventView {
+	view := &controlv1.SchedulerEventView{
+		Id:         event.ID,
+		Type:       event.Type,
+		WorkloadId: event.WorkloadID,
+		NodeId:     event.NodeID,
+		Reason:     event.Reason,
+		Timestamp:  timestamppb.New(event.Timestamp),
+	}
+	if len(event.Details) > 0 {
+		view.Details = make(map[string]string, len(event.Details))
+		for k, v := range event.Details {
+			view.Details[k] = fmt.Sprintf("%v", v)
+		}
+	}
+	return view
+}
+
 func (s *Service) ControlStream(stream controlv1.AgentControl_ControlStreamServer) error {
 	err := status.Error(codes.Unimplemented, "ControlStream is not implemented yet")
 	recordRPCError(stream.Context(), err)
@@ -663,7 +780,7 @@ func taintsToProto(taints []models.NodeTaint) []*controlv1.NodeTaint {
 }
 
 func workloadToView(workload models.Workload) *controlv1.WorkloadView {
-	return &controlv1.WorkloadView{
+	view := &controlv1.WorkloadView{
 		WorkloadId:       workload.ID,
 		Type:             workload.Type,
 		DesiredState:     workload.DesiredState,
@@ -678,6 +795,10 @@ func workloadToView(workload models.Workload) *controlv1.WorkloadView {
 		Reason:           reasonToProto(workload.StatusInfo.Reason, workload.StatusInfo.LastUpdated),
 		Usage:            usageToProto(workload.Usage, workload.ID, workload.Type),
 	}
+	// Structured access fields land after `make proto` regenerates
+	// WorkloadView (PrimaryIp, LoginUser, LoginPassword, LoginMethod).
+	// Until then Status carries the same data for persysctl + dashboard.
+	return view
 }
 
 func workloadStatusForView(workload models.Workload) string {
@@ -685,16 +806,48 @@ func workloadStatusForView(workload models.Workload) string {
 	if status == "" {
 		status = "Unknown"
 	}
-	if !strings.EqualFold(strings.TrimSpace(workload.Type), "vm") {
+	// Surface guest access on VM / microVM (and any type that reported access meta).
+	parts := guestAccessStatusParts(workload)
+	if len(parts) == 0 {
 		return status
 	}
-	if ip, ok := workload.Metadata["vm.primary_ip"]; ok {
-		ipStr := strings.TrimSpace(fmt.Sprintf("%v", ip))
-		if ipStr != "" {
-			return fmt.Sprintf("%s (ip=%s)", status, ipStr)
-		}
+	return fmt.Sprintf("%s (%s)", status, strings.Join(parts, " "))
+}
+
+// guestAccessStatusParts builds the parenthetical access summary used by
+// persysctl / dashboard (same channel as vm.primary_ip today).
+func guestAccessStatusParts(workload models.Workload) []string {
+	if workload.Metadata == nil {
+		return nil
 	}
-	return status
+	var parts []string
+	if ip, ok := metadataString(workload.Metadata, "vm.primary_ip"); ok {
+		parts = append(parts, "ip="+ip)
+	}
+	if user, ok := metadataString(workload.Metadata, "vm.login_user"); ok {
+		parts = append(parts, "user="+user)
+	}
+	method, _ := metadataString(workload.Metadata, "vm.login_method")
+	if pass, ok := metadataString(workload.Metadata, "vm.login_password"); ok {
+		parts = append(parts, "password="+pass)
+	} else if method == "ssh_key" {
+		parts = append(parts, "login=ssh_key")
+	}
+	return parts
+}
+
+// workloadAccessFields returns structured access info for WorkloadView once
+// control.proto fields primary_ip / login_* are generated (make proto).
+// Until then, callers rely on guestAccessStatusParts embedded in Status.
+func workloadAccessFields(workload models.Workload) (ip, user, password, method string) {
+	if workload.Metadata == nil {
+		return "", "", "", ""
+	}
+	ip, _ = metadataString(workload.Metadata, "vm.primary_ip")
+	user, _ = metadataString(workload.Metadata, "vm.login_user")
+	password, _ = metadataString(workload.Metadata, "vm.login_password")
+	method, _ = metadataString(workload.Metadata, "vm.login_method")
+	return ip, user, password, method
 }
 
 func workloadFailureReasonForView(workload models.Workload) string {
@@ -995,7 +1148,8 @@ func controlApplyToModel(in *controlv1.ApplyWorkloadRequest) (models.Workload, e
 		} else {
 			w.ComposeYAML = cp.GetInlineYaml()
 		}
-	case "vm":
+	case "vm", "microvm":
+	// microvm uses the same WorkloadSpec.vm oneof as KVM VMs; keep Type=microvm for placement.
 		if embeddedVM, ok := parseEmbeddedVMSpec(w.Metadata); ok {
 			w.VM = embeddedVM
 			delete(w.Metadata, "persys.vm_spec_b64")
@@ -1006,9 +1160,15 @@ func controlApplyToModel(in *controlv1.ApplyWorkloadRequest) (models.Workload, e
 			return models.Workload{}, fmt.Errorf("vm spec required")
 		}
 		w.VM = &models.VMSpec{
-			VCPUs:     vm.GetVcpus(),
-			MemoryMB:  vm.GetMemoryMb(),
+			VCPUs:    vm.GetVcpus(),
+			MemoryMB: vm.GetMemoryMb(),
+			OsImage:  strings.TrimSpace(vm.GetOsImage()),
 			CloudInit: "",
+		}
+		// Prefer explicit disk size from first disk entry; else leave 0 and
+		// let the agent default DiskGB when synthesizing from os_image.
+		if disks := vm.GetDisks(); len(disks) > 0 && disks[0].GetSizeGb() > 0 {
+			w.VM.DiskGB = disks[0].GetSizeGb()
 		}
 		if ci := vm.GetCloudInit(); ci != nil {
 			w.VM.CloudInitConfig = &models.CloudInitConfig{
@@ -1029,10 +1189,30 @@ func controlApplyToModel(in *controlv1.ApplyWorkloadRequest) (models.Workload, e
 				SizeGB: d.GetSizeGb(),
 				Device: device,
 				Format: "qcow2",
+				Boot:   device == "vda",
+				Storage: "local",
 			})
 		}
+		// When only os_image was provided (common dashboard path), leave Disks
+		// empty so the agent synthesizes a root overlay from OsImage.
+		if w.VM.OsImage != "" && len(w.VM.Disks) == 1 && w.VM.Disks[0].Path == "" && w.VM.Disks[0].SizeGB > 0 {
+			// Keep single size hint via DiskGB; agent owns path placement.
+			w.VM.DiskGB = w.VM.Disks[0].SizeGB
+			w.VM.Disks = nil
+		}
 		for _, n := range vm.GetNetworks() {
-			w.VM.Networks = append(w.VM.Networks, models.VMNetworkConfig{Network: n.GetBridge(), IPAddress: n.GetStaticIp()})
+			netName := strings.TrimSpace(n.GetBridge())
+			if netName == "" {
+				netName = "default"
+			}
+			w.VM.Networks = append(w.VM.Networks, models.VMNetworkConfig{
+				Network:   netName,
+				Bridge:    strings.TrimSpace(n.GetBridge()),
+				IPAddress: n.GetStaticIp(),
+			})
+		}
+		if len(w.VM.Networks) == 0 {
+			w.VM.Networks = []models.VMNetworkConfig{{Network: "default"}}
 		}
 	default:
 		return models.Workload{}, fmt.Errorf("unsupported workload type %q", in.GetSpec().GetType())
@@ -1059,18 +1239,25 @@ func parseEmbeddedVMSpec(metadata map[string]interface{}) (*models.VMSpec, bool)
 		Name     string `json:"name"`
 		VCPUs    int32  `json:"vcpus"`
 		MemoryMB int64  `json:"memory_mb"`
+		OsImage  string `json:"os_image"`
+		DiskGB   int64  `json:"disk_gb"`
 		Disks    []struct {
-			Path   string `json:"path"`
-			Device string `json:"device"`
-			Format string `json:"format"`
-			SizeGB int64  `json:"size_gb"`
-			Type   string `json:"type"`
-			Boot   bool   `json:"boot"`
+			Path        string `json:"path"`
+			Device      string `json:"device"`
+			Format      string `json:"format"`
+			SizeGB      int64  `json:"size_gb"`
+			Type        string `json:"type"`
+			Boot        bool   `json:"boot"`
+			BackingFile string `json:"backing_file"`
+			Storage     string `json:"storage"`
 		} `json:"disks"`
 		Networks []struct {
-			Network   string `json:"network"`
-			MAC       string `json:"mac_address"`
-			IPAddress string `json:"ip_address"`
+			Network     string `json:"network"`
+			MAC         string `json:"mac_address"`
+			IPAddress   string `json:"ip_address"`
+			HostDevName string `json:"host_dev_name"`
+			Model       string `json:"model"`
+			Bridge      string `json:"bridge"`
 		} `json:"networks"`
 		CloudInit       string            `json:"cloud_init"`
 		Metadata        map[string]string `json:"metadata"`
@@ -1079,6 +1266,9 @@ func parseEmbeddedVMSpec(metadata map[string]interface{}) (*models.VMSpec, bool)
 			MetaData      string `json:"meta_data"`
 			NetworkConfig string `json:"network_config"`
 			VendorData    string `json:"vendor_data"`
+			Username      string `json:"username"`
+			SSHPublicKey  string `json:"ssh_public_key"`
+			Password      string `json:"password"`
 		} `json:"cloud_init_config"`
 		ManagedVolumes []struct {
 			Name         string `json:"name"`
@@ -1099,6 +1289,8 @@ func parseEmbeddedVMSpec(metadata map[string]interface{}) (*models.VMSpec, bool)
 		Name:      spec.Name,
 		VCPUs:     spec.VCPUs,
 		MemoryMB:  spec.MemoryMB,
+		OsImage:   strings.TrimSpace(spec.OsImage),
+		DiskGB:    spec.DiskGB,
 		CloudInit: spec.CloudInit,
 		Metadata:  spec.Metadata,
 	}
@@ -1108,23 +1300,31 @@ func parseEmbeddedVMSpec(metadata map[string]interface{}) (*models.VMSpec, bool)
 			MetaData:      spec.CloudInitConfig.MetaData,
 			NetworkConfig: spec.CloudInitConfig.NetworkConfig,
 			VendorData:    spec.CloudInitConfig.VendorData,
+			Username:      spec.CloudInitConfig.Username,
+			SSHPublicKey:  spec.CloudInitConfig.SSHPublicKey,
+			Password:      spec.CloudInitConfig.Password,
 		}
 	}
 	for _, d := range spec.Disks {
 		out.Disks = append(out.Disks, models.VMDiskConfig{
-			Path:   d.Path,
-			Device: d.Device,
-			Format: d.Format,
-			SizeGB: d.SizeGB,
-			Type:   d.Type,
-			Boot:   d.Boot,
+			Path:        d.Path,
+			Device:      d.Device,
+			Format:      d.Format,
+			SizeGB:      d.SizeGB,
+			Type:        d.Type,
+			Boot:        d.Boot,
+			BackingFile: d.BackingFile,
+			Storage:     d.Storage,
 		})
 	}
 	for _, n := range spec.Networks {
 		out.Networks = append(out.Networks, models.VMNetworkConfig{
-			Network:   n.Network,
-			MAC:       n.MAC,
-			IPAddress: n.IPAddress,
+			Network:     n.Network,
+			MAC:         n.MAC,
+			IPAddress:   n.IPAddress,
+			HostDevName: n.HostDevName,
+			Model:       n.Model,
+			Bridge:      n.Bridge,
 		})
 	}
 	for _, mv := range spec.ManagedVolumes {
@@ -1226,4 +1426,237 @@ func normalizeSupportedStorageDrivers(drivers []string) []string {
 		out = append(out, canon)
 	}
 	return out
+}
+
+// --- Standalone disks (mTLS gRPC AgentControl) ---
+
+func (s *Service) CreateDisk(ctx context.Context, in *controlv1.CreateDiskRequest) (*controlv1.CreateDiskResponse, error) {
+	if in == nil {
+		return nil, status.Error(codes.InvalidArgument, "request is required")
+	}
+	if !s.sched.IsWritable() {
+		return nil, status.Error(codes.Unavailable, "scheduler degraded/recovery mode; control plane frozen")
+	}
+	view, err := s.sched.CreateDisk(scheduler.CreateDiskRequest{
+		Name:         in.GetName(),
+		Driver:       in.GetDriver(),
+		SizeGB:       in.GetSizeGb(),
+		FSType:       in.GetFsType(),
+		AccessMode:   in.GetAccessMode(),
+		RetainPolicy: in.GetRetainPolicy(),
+		NodeID:       in.GetNodeId(),
+		MountPath:    in.GetMountPath(),
+	})
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	return &controlv1.CreateDiskResponse{Disk: diskViewToProto(view)}, nil
+}
+
+func (s *Service) ListDisks(ctx context.Context, in *controlv1.ListDisksRequest) (*controlv1.ListDisksResponse, error) {
+	list, err := s.sched.ListDisks()
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	out := make([]*controlv1.DiskView, 0, len(list))
+	for i := range list {
+		out = append(out, diskViewToProto(&list[i]))
+	}
+	return &controlv1.ListDisksResponse{Disks: out}, nil
+}
+
+func (s *Service) GetDisk(ctx context.Context, in *controlv1.GetDiskRequest) (*controlv1.GetDiskResponse, error) {
+	if in == nil || strings.TrimSpace(in.GetDiskId()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "disk_id is required")
+	}
+	view, err := s.sched.GetDisk(in.GetDiskId())
+	if err != nil {
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+	return &controlv1.GetDiskResponse{Disk: diskViewToProto(view)}, nil
+}
+
+func (s *Service) DeleteDisk(ctx context.Context, in *controlv1.DeleteDiskRequest) (*controlv1.DeleteDiskResponse, error) {
+	if in == nil || strings.TrimSpace(in.GetDiskId()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "disk_id is required")
+	}
+	if !s.sched.IsWritable() {
+		return &controlv1.DeleteDiskResponse{Success: false, ErrorMessage: "scheduler degraded/recovery mode; control plane frozen"}, nil
+	}
+	if err := s.sched.DeleteDisk(in.GetDiskId(), in.GetForce()); err != nil {
+		return &controlv1.DeleteDiskResponse{Success: false, ErrorMessage: err.Error()}, nil
+	}
+	return &controlv1.DeleteDiskResponse{Success: true}, nil
+}
+
+func diskViewToProto(v *scheduler.DiskView) *controlv1.DiskView {
+	if v == nil {
+		return nil
+	}
+	out := &controlv1.DiskView{
+		Id:            v.ID,
+		Name:          v.Name,
+		Driver:        v.Driver,
+		SizeGb:        v.SizeGB,
+		FsType:        v.FSType,
+		AccessMode:    v.AccessMode,
+		RetainPolicy:  v.RetainPolicy,
+		Phase:         v.Phase,
+		LastError:     v.LastError,
+		NodeId:        v.NodeID,
+		Device:        v.Device,
+		Standalone:    v.Standalone,
+		MountPath:     v.MountPath,
+		WorkloadRefs:  v.WorkloadRefs,
+		AttachedNodes: v.AttachedNodes,
+	}
+	if !v.CreatedAt.IsZero() {
+		out.CreatedAt = timestamppb.New(v.CreatedAt)
+	}
+	if !v.UpdatedAt.IsZero() {
+		out.UpdatedAt = timestamppb.New(v.UpdatedAt)
+	}
+	return out
+}
+
+
+// --- Object storage (Ceph RGW / S3) ---
+
+func (s *Service) CreateBucket(ctx context.Context, in *controlv1.CreateBucketRequest) (*controlv1.CreateBucketResponse, error) {
+	if in == nil {
+		return nil, status.Error(codes.InvalidArgument, "request is required")
+	}
+	if !s.sched.IsWritable() {
+		return nil, status.Error(codes.Unavailable, "scheduler degraded/recovery mode; control plane frozen")
+	}
+	view, access, err := s.sched.CreateBucket(scheduler.CreateBucketRequest{
+		Name:       in.GetName(),
+		Region:     in.GetRegion(),
+		Versioning: in.GetVersioning(),
+	})
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	return &controlv1.CreateBucketResponse{
+		Bucket: bucketViewToProto(view),
+		Access: bucketAccessToProto(access),
+	}, nil
+}
+
+func (s *Service) ListBuckets(ctx context.Context, in *controlv1.ListBucketsRequest) (*controlv1.ListBucketsResponse, error) {
+	list, err := s.sched.ListBuckets()
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	out := make([]*controlv1.BucketView, 0, len(list))
+	for i := range list {
+		out = append(out, bucketViewToProto(&list[i]))
+	}
+	return &controlv1.ListBucketsResponse{Buckets: out}, nil
+}
+
+func (s *Service) GetBucket(ctx context.Context, in *controlv1.GetBucketRequest) (*controlv1.GetBucketResponse, error) {
+	if in == nil || strings.TrimSpace(in.GetBucketId()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "bucket_id is required")
+	}
+	view, err := s.sched.GetBucket(in.GetBucketId())
+	if err != nil {
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+	return &controlv1.GetBucketResponse{Bucket: bucketViewToProto(view)}, nil
+}
+
+func (s *Service) DeleteBucket(ctx context.Context, in *controlv1.DeleteBucketRequest) (*controlv1.DeleteBucketResponse, error) {
+	if in == nil || strings.TrimSpace(in.GetBucketId()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "bucket_id is required")
+	}
+	if !s.sched.IsWritable() {
+		return &controlv1.DeleteBucketResponse{Success: false, ErrorMessage: "scheduler degraded/recovery mode; control plane frozen"}, nil
+	}
+	if err := s.sched.DeleteBucket(in.GetBucketId(), in.GetForce()); err != nil {
+		return &controlv1.DeleteBucketResponse{Success: false, ErrorMessage: err.Error()}, nil
+	}
+	return &controlv1.DeleteBucketResponse{Success: true}, nil
+}
+
+func (s *Service) GetBucketAccess(ctx context.Context, in *controlv1.GetBucketAccessRequest) (*controlv1.GetBucketAccessResponse, error) {
+	if in == nil || strings.TrimSpace(in.GetBucketId()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "bucket_id is required")
+	}
+	access, err := s.sched.GetBucketAccess(in.GetBucketId())
+	if err != nil {
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+	return &controlv1.GetBucketAccessResponse{Access: bucketAccessToProto(access)}, nil
+}
+
+func (s *Service) ListBucketObjects(ctx context.Context, in *controlv1.ListBucketObjectsRequest) (*controlv1.ListBucketObjectsResponse, error) {
+	if in == nil || strings.TrimSpace(in.GetBucketId()) == "" {
+		return nil, status.Error(codes.InvalidArgument, "bucket_id is required")
+	}
+	objs, next, truncated, err := s.sched.ListBucketObjects(
+		in.GetBucketId(),
+		in.GetPrefix(),
+		in.GetContinuationToken(),
+		in.GetMaxKeys(),
+	)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	out := make([]*controlv1.ObjectInfo, 0, len(objs))
+	for _, o := range objs {
+		out = append(out, &controlv1.ObjectInfo{
+			Key:          o.Key,
+			SizeBytes:    o.SizeBytes,
+			Etag:         o.ETag,
+			LastModified: o.LastModified,
+			StorageClass: o.StorageClass,
+		})
+	}
+	return &controlv1.ListBucketObjectsResponse{
+		Objects:               out,
+		NextContinuationToken: next,
+		IsTruncated:           truncated,
+		Prefix:                in.GetPrefix(),
+	}, nil
+}
+
+func bucketViewToProto(v *scheduler.BucketView) *controlv1.BucketView {
+	if v == nil {
+		return nil
+	}
+	out := &controlv1.BucketView{
+		Id:          v.ID,
+		Name:        v.Name,
+		Region:      v.Region,
+		Owner:       v.Owner,
+		Endpoint:    v.Endpoint,
+		Versioning:  v.Versioning,
+		ObjectCount: v.ObjectCount,
+		SizeBytes:   v.SizeBytes,
+		Phase:       v.Phase,
+		LastError:   v.LastError,
+	}
+	if !v.CreatedAt.IsZero() {
+		out.CreatedAt = timestamppb.New(v.CreatedAt)
+	}
+	if !v.UpdatedAt.IsZero() {
+		out.UpdatedAt = timestamppb.New(v.UpdatedAt)
+	}
+	return out
+}
+
+func bucketAccessToProto(a *scheduler.BucketAccess) *controlv1.BucketAccess {
+	if a == nil {
+		return nil
+	}
+	return &controlv1.BucketAccess{
+		Endpoint:  a.Endpoint,
+		Region:    a.Region,
+		Bucket:    a.Bucket,
+		AccessKey: a.AccessKey,
+		SecretKey: a.SecretKey,
+		VaultPath: a.VaultPath,
+		S3Url:     a.S3URL,
+	}
 }
