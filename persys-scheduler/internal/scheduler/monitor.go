@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/logging"
+	"github.com/persys-dev/persys-cloud/persys-scheduler/internal/models"
 	"github.com/sirupsen/logrus"
 )
 
@@ -90,16 +91,23 @@ func (m *Monitor) MonitorWorkloads(ctx context.Context, interval time.Duration) 
 				monitorLogger.WithError(err).Error("failed to get workloads for monitoring")
 				continue
 			}
+			owned := make([]models.Workload, 0, len(workloads))
 			for _, workload := range workloads {
 				if workload.Status == "Deleted" {
 					continue
 				}
+				if !m.scheduler.ownsNode(workload.NodeID) {
+					continue
+				}
+				owned = append(owned, workload)
+			}
+			runBounded(owned, m.scheduler.backgroundLoopConcurrency(), func(workload models.Workload) {
 				if err := m.syncWorkloadStatus(workload.ID); err != nil {
 					monitorLogger.WithError(err).WithFields(logrus.Fields{
 						"workload_id": workload.ID,
 					}).Warn("failed to sync workload")
 				}
-			}
+			})
 			if err := m.scheduler.RefreshStateMetrics(); err != nil {
 				monitorLogger.WithError(err).Warn("failed to refresh scheduler state metrics")
 			}
