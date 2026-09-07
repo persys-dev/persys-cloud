@@ -1,264 +1,192 @@
-### Persys Cloud – Master Development Plan
+# Persys Cloud – Production Readiness and Delivery Roadmap
 
-**Status**: Final Consolidated Plan **Date**: 2026-06-25 **Goal**: Evolve Persys into a production-grade, developer-friendly, scalable lightweight compute platform.
+Status: Current repo reality as of 2026-08-04
 
-#### 1\. Strategic Foundations
+This roadmap reflects the code that is already present in the repo today, not the original design backlog. The project has moved well past the initial extension spec and is now an active platform with hardening work, not greenfield feature invention.
 
-**1.1 Go SDK First (Mandatory Phase 0)**
+## 1. What is already delivered
 
-- Create a clean sdk/ module at repository root.
-- Move all business logic (client, ingestion, gitops, types) into the SDK.
-- Make persysctl a **thin Cobra wrapper** only (fix the current "dirty quick & dirty" state).
-- All future features (GitOps, Stack, Metrics, etc.) must go through the SDK.
+The repo now contains a substantial production baseline across the control plane, runtime, security, and gateway layers.
 
-**Key Packages**:
+### 1.1 Scheduler and control plane
 
-- sdk/client/ — HTTP + gRPC transport, mTLS, retry, tracing
-- sdk/types/ — Shared models
+- 3-way scheduler HA behind HAProxy is already in the repo and documented in the scheduler changelog and README.
+- etcd leader election is implemented with failover and active-active sharding modes.
+- connection pooling for agent gRPC traffic is in place.
+- node placement logic was rewritten to use weighted scoring with in-flight resource reservations and spread-aware balancing.
+- node drain, taint, untaint, and placement exclusion paths are implemented.
+- scheduler write paths use etcd CAS and are hardened against concurrent mutation.
 
-#### 2\. Major Features to Implement
+### 1.2 Runtime matrix
 
-**2.1 Developer Experience & GitOps**
+- Docker and VM runtime paths are in place.
+- Firecracker is now a valid runtime in compute-agent and scheduler capability logic.
+- cloud-init and VM seed generation remain active and are supported by the runtime code.
+- managed volume provider lifecycle is implemented, including storage capability detection and attach/detach behavior.
 
-- Full YAML support with rich validation.
-- Docker Compose support (-f docker-compose.yml + base64 encoded compose).
-- persysctl init, interactive wizard, templates.
-- PersysStack declarative format (workloads + volumes + automation + basic infra).
-- persysctl gitops watch \<local-path | git-url> (polling + fsnotify, support persys-\*.yml and compose files).
-- Smart persysctl apply that auto-detects format (stack, compose, single workload, git).
+### 1.3 Observability and metrics
 
-**2.2 Operational Controls**
+- persys-meter exists and is already consuming usage data from the scheduler.
+- the scheduler publishes per-workload usage into Redis streams and the meter stores them for history and live queries.
+- Prometheus metrics and live workload metrics are available through the meter service.
 
-- Node Drain & Taint (full RPCs, scheduler logic, placement exclusion, eviction, persysctl commands).
-- Heartbeat fix to respect Draining status.
+### 1.4 Security and trust plane
 
-**2.3 Observability**
+- vault-manager has become a zero-touch certificate lifecycle manager for mTLS.
+- the project can bootstrap Vault, provision CA and AppRole infrastructure, and serve a runtime credential API.
+- certificate issuance and rotation are no longer hand-managed at the service level.
 
-- Per-workload utilization telemetry (CPU, memory, disk I/O, network).
-- Implement persys-meter service.
-- Metrics path: Agent → Scheduler → persys-meter.
-- persysctl workload metrics command.
-- Enhance Prometheus labels in compute-agent.
+### 1.5 Gateway and service routing
 
-**2.4 Gateway Enhancements**
+- persys-gateway was substantially reworked with a gRPC bridge and gRPC reflection.
+- dynamic backend RPC discovery works without per-endpoint hard-coding.
+- service catalog and route resolution are in place.
+- gateway service routing is now structured around a cleaner control-plane and catalog model.
 
-- Smart /apply endpoint using SDK ingestion.
-- Deep integration with existing GitHub login + OAuth.
-- Enhanced GitHub webhooks (POST /webhooks/github) to trigger GitOps apply on push/PR.
-- New routes for stacks and gitops operations.
+### 1.6 CLI and operator tooling
 
-**2.5 Scaling (1000+ nodes)**
+- persysctl has received new gateway routes and metrics commands.
+- the work to fully move persysctl to a clean SDK wrapper is postponed for stability reasons, which is a reasonable engineering tradeoff given current platform maturity.
 
-- Scheduler: etcd-based leader election + read replicas.
-- Workload & node sharding (consistent hashing).
-- Event-driven reconciliation (etcd watches + Redis streams instead of full scans).
-- Hot state caching + indexing.
-- Performance testing harness.
+## 2. Current conclusion
 
-**2.6 Runtime & Storage**
+The platform is no longer in the “big feature design phase.” It is in the “stabilize and harden the shipped control plane” phase.
 
-- Full managed volume integration in agent runtime (NFS + Ceph-RBD).
-- Dynamic cloud-init for VMs (full user-data, meta-data, network-config, vendor-data).
-- Runtime abstraction (storage & network providers).
-- VM / Firecracker symmetric UX inside PersysStack (lower priority).
+The right posture is:
 
-**2.7 Ecosystem**
+- keep shipping the features already in the repo
+- close the remaining architecture gaps without rewriting the whole platform
+- avoid a premature SDK rewrite while the system is still stabilizing
 
-- Terraform / OpenTofu Provider.
-- Better documentation and examples.
+## 3. Remaining gaps
 
-#### 3\. Prioritized Roadmap
+These are the real work items left, in order of priority.
 
-**Phase 0: Foundation (2–3 weeks)**
+### 3.1 Network abstraction completion
 
-- Go SDK creation + persysctl refactor (highest priority).
+This remains the clearest architectural gap.
 
-**Phase 1: Operational Excellence (3–4 weeks)**
+- storage abstraction is implemented
+- network abstraction is scaffolded but not fully wired into runtime dependency injection
+- concrete provider implementations and runtime integration are still required
 
-- Node Drain & Taint.
-- persys-meter + per-workload metrics.
-- Smart ingestion + basic UX (YAML, Compose, base64, wizard, init).
+### 3.2 Feature gating and rollout controls
 
-**Phase 2: GitOps & PersysStack (3–4 weeks)**
+The project needs explicit runtime gates for:
 
-- PersysStack kind + reconciliation.
-- gitops watch (local + remote Git).
-- Gateway GitHub webhook & smart apply enhancements.
+- managed volumes
+- dynamic cloud-init
+- workload telemetry
+- network abstraction
+- Firecracker runtime availability
 
-**Phase 3: Production Scaling (3–5 weeks)**
+This is necessary for safe staged rollout and for operator clarity when drivers or runtimes are unsupported.
 
-- Leader election, sharding, event-driven reconciler.
-- Load testing for 1000+ nodes.
+### 3.3 Operational validation and documentation
 
-**Phase 4: Runtime & Advanced Features (3–5 weeks)**
+The repo has strong code coverage around the new subsystems, but the project still needs:
 
-- Full managed volumes in agent + dynamic cloud-init.
-- Firecracker runtime (lower priority).
-- Terraform provider.
+- end-to-end validation for NFS and Ceph flows
+- real failure-mode tests for cloud-init and telemetry pipelines
+- deployment docs for operator-managed trust, routing, and scaling patterns
 
-**Phase 5: Polish & Future**
+### 3.4 Production polish
 
-- Standalone volumes, quotas, RBAC, etc.
+The system is mature enough to benefit from:
 
-#### 4\. Cross-Cutting Requirements
+- canonical config validation
+- stricter health/readiness expectations
+- better upgrade and rollback guidance
+- documenting HA deployment topology behind HAProxy and etcd
 
-- **Proto-first** for all new APIs.
-- **Backward compatibility** everywhere.
-- **Feature flags** for gradual rollout.
-- **Observability** — every component must expose Prometheus metrics.
-- **Testing** — Unit + Integration + GitHub Actions (minimal local resource usage).
+## 4. Revised roadmap
 
-#### 5\. Key Architectural Decisions
+### Phase A — Stabilize the shipped platform
 
-- persysctl = thin wrapper around SDK.
-- Gateway = smart ingestion + GitHub integration layer.
-- Scheduler = leader + sharded + event-driven.
-- GitOps = first-class citizen (gitops watch + webhooks).
-- UX = PersysStack + Git-first workflows.
+Goal: turn the current working control plane into a predictable production baseline.
 
+Scope:
 
-### Strategic Decision (Agreed)
+- complete network abstraction and runtime dependency injection
+- add feature flags and safe defaults for rollout
+- validate scheduler HA with real failover drills
+- validate Redis and ClickHouse telemetry lifecycle under load
+- confirm node drain and taint behavior under active placement churn
 
-1. First, build a clean **Go Client SDK** (persys-go-sdk).
-2. Refactor persysctl to be a thin, high-quality wrapper around the SDK.
-3. Then implement all new features (GitOps, PersysStack, etc.) on top of the clean SDK.
+Expected result:
 
----
+- production-grade control-plane behavior with known safe flags and rollout boundaries
 
-### Phase 0: Foundation – Clean SDK + persysctl Refactor (2–3 weeks)
+### Phase B — Runtime hardening and compatibility
 
-**Goal**: Eliminate the current "dirty quick & dirty" persysctl.
+Goal: make runtime support predictable across Docker, VM, and Firecracker.
 
-**Tasks**:
+Scope:
 
-1. **Create persys-go-sdk**
-	- New directory / module at root: sdk/
-		- Package structure:
-		- sdk/client/ – Core client with HTTP + gRPC transport
-				- sdk/types/ – All models & request/response structs (generated from proto where possible)
-				- sdk/ingestion/ – Format converters (YAML, JSON, Compose, base64, Git)
-				- sdk/gitops/ – GitOps primitives
-				- sdk/options/ – Configuration, auth, retry, tracing
-		- Full support for mTLS, dual transport, context, pagination, dry-run, etc.
-2. **Refactor persysctl**
-	- Make persysctl **thin wrapper** only (Cobra commands + output formatting).
-		- Move all business logic into the SDK.
-		- Update persysctl/internal/client/ → delegate to SDK.
-		- Clean up command structure (workload, stack, gitops, vm, node, etc.).
+- formalize runtime capability negotiation
+- finish Firecracker integration and validation
+- harden dynamic cloud-init, mount generation, and cleanup semantics
+- validate managed volume retention and failure cleanup paths
 
-**Key Files**:
+Expected result:
 
-- sdk/client/client.go
-- persysctl/cmd/\*.go (major cleanup)
-- persysctl/internal/config/
+- stable runtime matrix with explicit compatibility contracts
 
----
+### Phase C — Platform UX and GitOps
 
-### Phase 1: Operational Excellence & UX (3–5 weeks)
+Goal: improve developer experience without destabilizing the current system.
 
-**1.1 Node Drain & Taint**
+Scope:
 
-- Extend control.proto (DrainNode, TaintNode, etc.)
-- Scheduler: node\_control.go + placement + heartbeat fix
-- Gateway: New routes + handlers
-- SDK + persysctl: node drain, node taint, node untaint
+- clean up persysctl command ergonomics
+- continue gateway-driven smart apply flows
+- improve stack and YAML ingestion patterns
+- formalize deployment templates and automation approval flows
 
-**1.2 Metrics & persys-meter**
+Expected result:
 
-- Implement persys-meter service (use previous design doc)
-- Add GetWorkloadMetrics RPC
-- Agent → Scheduler → persys-meter push
-- SDK + persysctl: workload metrics command
+- easier self-service deployments while preserving the current stable backend
 
-**1.3 Smart Workload Ingestion & UX**
+### Phase D — Scale-out and operations excellence
 
-- Full YAML support + validation
-- Docker Compose support (-f docker-compose.yml)
-- Base64 encoded compose support
-- Interactive wizard (--interactive)
-- persysctl init command
-- Templates system
+Goal: keep the platform stable as cluster size and service count increase.
 
----
+Scope:
 
-### Phase 2: GitOps & PersysStack (3–4 weeks)
+- expand benchmark and load validation for 1000+ node scenarios
+- optimize scheduler event and telemetry retention behavior
+- tighten emergency and rollback procedures
+- extend dashboards and alerting around node health, placement churn, and telemetry lag
 
-**2.1 PersysStack Kind**
+Expected result:
 
-- Add PersysStack to control.proto
-- Scheduler support for stack-level reconciliation, dependencies, automation rules
-- etcd paths: /stacks/{name}/
+- a predictable large-cluster operating model and stronger production observability
 
-**2.2 GitOps Capabilities**
+### Phase E — SDK modernization, deferred but planned
 
-- persysctl gitops watch <local-path|git-url>
-- Support for persys-\*.yml, docker-compose.yml, VM specs
-- Polling + fsnotify + git pull logic (in SDK)
-- Dry-run, rollback, commit tracking
+Goal: eventually make the SDK the foundation for future client and control-plane tooling.
 
-**2.3 VM / Firecracker UX**
+This is intentionally not the immediate next move. The current recommendation is:
 
-- Symmetric YAML experience inside PersysStack
-- persysctl vm create, templates, cloud-init support
+- keep the stable project shape intact
+- do not force a broad SDK refactor while the active system is still stabilizing
+- introduce SDK formalization only after rollout gates and runtime hardening are complete
 
----
+## 5. Strategic decisions for the current moment
 
-### Phase 3: Runtime & Scaling (4–6 weeks)
+1. Treat the platform as already partially shipped rather than speculative.
+2. Keep HA scheduler, Firecracker, vault-based mTLS, gateway gRPC discovery, and meter telemetry as real platform capabilities.
+3. Fix the remaining gaps through stabilization and operational validation instead of a broad rewrite.
+4. Defer full SDK migration until the system reaches a stable operating baseline.
+5. Build future developer experience on the current runtime contracts rather than replacing them while they are still being validated.
 
-**3.1 Firecracker VM Runtime**
+## 6. Recommended project posture
 
-- VM runtime abstraction in compute-agent
-- Firecracker backend implementation
-- Scheduler capability matching
-- Integration with managed volumes + metrics
+The right message to the team is:
 
-**3.2 Horizontal Scaling**
+- The project is no longer at the “design-only” stage.
+- The repo already contains strong control-plane and runtime functionality.
+- The next phase is platform maturity, not speculative invention.
 
-- Scheduler: etcd leader election + leases + write forwarding
-- Gateway: Enhance CoreDNS usage for leader-aware routing
-- Multi-replica support in docker-compose + CI
+This is a strong position to continue from and should be reflected in all future planning, release notes, and architecture discussions.
 
----
-
-### Phase 4: Ecosystem (3–5 weeks)
-
-- **Terraform / OpenTofu Provider**
-	- terraform-provider-persys
-		- Resources for Stack, Workload, Node, Volume
-- Documentation & Examples
-	- Full persys-stack.yaml reference
-		- GitOps guides
-
----
-
-### Phase 5: Advanced (Ongoing)
-
-- Standalone volumes
-- Quota / auto-scaling (via persys-meter)
-- RBAC / multi-tenancy
-- Advanced Firecracker features
-- persys-operator improvements
-- Marketplace / template registry
-
----
-
-### Priority Order (Recommended Execution)
-
-| Priority | Phase / Feature | Estimated Effort | Blocking |
-| --- | --- | --- | --- |
-| 1 | Phase 0: Go SDK + persysctl refactor | 2–3 weeks | All future work |
-| 2 | Phase 1.1: Node Drain/Taint | 1–2 weeks | Operational |
-| 3 | Phase 1.2: persys-meter + metrics | 2 weeks | Observability |
-| 4 | Phase 1.3: Smart Ingestion + UX | 2 weeks | User experience |
-| 5 | Phase 2: GitOps + PersysStack | 3–4 weeks | Major UX win |
-| 6 | Phase 3.1: Firecracker | 3–4 weeks | Runtime strength |
-| 7 | Phase 3.2: Scheduler Scaling | 4 weeks | Production readiness |
-| 8 | Phase 4: Terraform Provider | 3 weeks | Enterprise |
-
----
-
-### Immediate Next Steps (This Week)
-
-1. Initialize the sdk/ module and move core client logic from persysctl.
-2. Define clean interfaces in the SDK.
-3. Start with YAML + Compose support in the SDK.

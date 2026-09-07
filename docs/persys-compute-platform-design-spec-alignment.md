@@ -1,318 +1,186 @@
-# **Persys Compute Platform Extension Design Spec - Implementation Status**
-
-### **Summary: ~85-90% Alignment**
-
-The implementation is substantially complete with only a few gaps in Phase 3 (Storage/Network abstractions) and some optional Phase 4 enhancements. All critical Phase 0-2 work is done, and Phase 4 has foundational scaffolding.
-
----
-
-## **Phase 0: Contracts and Schema** ✅ **COMPLETE**
-
-**Status**: Fully implemented
-
-### Proto Updates
-- ✅ agent.proto - Contains all required message types:
-  - `ManagedVolumeSpec` (lines 181-188) with all fields: name, driver, size_gb, access_mode, fs_type, mount_path, read_only, retain_policy
-  - `CloudInitConfig` (lines 164-167) with user_data, meta_data, network_config, vendor_data
-  - `WorkloadUsageSnapshot` (lines 224-233) with CPU%, memory, disk, network metrics
-  - `ReasonDetail` with code, message, transition timestamps
-
-- ✅ Control plane protobufs sync'd across:
-  - control.pb.go (regenerated)
-  - control.pb.go (regenerated)
-  - models.go (struct backports of all proto types)
-
-### Model Updates
-- ✅ workload.go:
-  - `ManagedVolumeSpec` struct (lines 97-104) with all spec fields
-  - `WorkloadUsage` struct (lines 108-120) with all usage fields
-  - `CloudInitConfig` struct (lines 85-91) for user payload preservation
-
-- ✅ models.go:
-  - `ManagedVolumeRecord` (lines 220-233) - control plane source of truth
-  - `VolumeAttachmentRecord` - tracks per-node attachments
-  - `WorkloadUsage` struct mirrors compute-agent version
-  - All backward-compatible defaults
-
-### Backward Compatibility
-- ✅ Old specs without managed volumes work fine
-- ✅ Single-string `cloudInit` field still supported alongside structured `CloudInitConfig`
-- ✅ Legacy `/workloads/{id}` paths preserved
-
----
-
-## **Phase 1: Storage Provider Integration (NFS + Ceph)** ✅ **COMPLETE**
-
-**Status**: Fully implemented with production-ready provider framework
-
-### Provider Interfaces
-- ✅ storage.go (134 lines):
-  - `StorageProvider` interface with: Driver(), Validate(), Provision(), Delete(), Attach(), Detach()
-  - `VolumeManager` interface for orchestration
-  - `ProviderRegistry` for driver resolution with thread-safe registration
-
-### Provider Implementations
-- ✅ **Local Provider** (local_provider.go):
-  - Host bind path provider (existing behavior preserved)
-  - Validates paths exist
-
-- ✅ **NFS Provider** (nfs_provider.go - 120 lines):
-  - Configurable NFS server, export path, mount options
-  - Metadata capture: server, export path, mount options, fs_type
-  - Proper device format: `nfs://server/path`
-
-- ✅ **Ceph RBD Provider** (ceph_rbd_provider.go - 124 lines):
-  - Pool, cluster, user, keyring configuration
-  - Defaults: pool=`rbd`, cluster=`ceph`
-  - Device format: `rbd:pool/volume-name`
-  - Metadata includes auth credentials reference
-
-### State Persistence
-- ✅ store.go:
-  - `volumeBucket` and `attachmentBucket` in bbolt
-  - `ManagedVolumeStore` interface for volume handle persistence
-  - Tracks volume attachments by workload
-
-### Workload Manager Integration
-- ✅ manager.go:
-  - `prepareManagedStorageForContainer()` (lines 411-470)
-    - Iterates through spec volumes
-    - Provisions via `m.volumeMgr.Provision()`
-    - Attaches via `m.volumeMgr.Attach()`
-    - Saves metadata with retain_policy
-  
-  - `prepareManagedStorageForVM()` (lines 473-545)
-    - Same provision flow
-    - Attachment converted to disk config
-    - Disk added to VM spec pre-create
-  
-  - `prepareManagedStorage()` (line 379) - dispatcher
-  - `releaseManagedStorageForWorkload()` (lines 587-632) - cleanup with retain policy honor
-  - Pre-create/attach before runtime Create (line 825)
-
-### Runtime Wiring
-- ✅ **Docker Runtime**: Ready for managed volume mount conversion (framework in place)
-- ✅ **VM Runtime**: Managed volume attachments converted to disk XML (lines 505-520)
-
-### Scheduler Capability Advertisement
-- ✅ client.go - heartbeat includes managed volume usage snapshots
-- ✅ state_store.go (511+ lines):
-  - `syncWorkloadManagedStorage()` - projection logic
-  - `getManagedVolumeRecord()` / `saveManagedVolumeRecord()`
-  - `getVolumeAttachmentsByWorkload()` - query attachments
-  - Volume phase tracking: Provisioning → Provisioned → Attached → Released/Retained/Deleted
-  - Node-storage capability validation before placement
-
-**Acceptance Criteria**: ✅
-- Containers can request NFS/Ceph volumes
-- VMs attach volumes as disks
-- Delete honors retain/delete policy
-- Explicit failure reasons tracked (STORAGE_PROVISION_FAILED, STORAGE_ATTACH_FAILED)
-
----
-
-## **Phase 2: Dynamic Cloud-Init End-to-End** ✅ **COMPLETE**
-
-**Status**: Fully implemented with faithful payload injection
-
-### Payload Preservation
-- ✅ cmd & gateway - CloudInitConfig fields pass through unchanged
-- ✅ No lossy conversions - user_data, meta_data, network_config, vendor_data all preserved
-
-### Cloud-Init ISO Builder Update
-- ✅ vm.go - `createCloudInitISO()` (lines 650-770):
-  - Writes `meta-data` from user payload OR generates default (lines 671-681)
-  - Writes `network-config` file if provided (lines 705-718)
-  - Writes `vendor-data` file if provided (lines 720-731)
-  - Creates user-data from `CloudInitConfig.UserData` OR legacy `CloudInit` field (lines 683-702)
-  - Falls back to default if nothing provided
-
-### Validation & Safety
-- ✅ `createCloudInitISO()` includes:
-  - `validateCloudInitField()` - field size validation
-  - Payload size limit (maxCloudInitPayloadBytes) check
-  - Deterministic seed checksum (lines 755-758)
-  - Error: `CLOUD_INIT_INVALID` when payload exceeds limits
-
-### Status Metadata
-- ✅ vm.go `StatusMetadata()` (lines 399-410):
-  - Includes `vm.cloud_init_seed_checksum`
-  - Includes `vm.cloud_init_seed_path`
-  - Includes `vm.cloud_init_seed_size_bytes`
-  - Includes `vm.cloud_init_seed_prepared_at`
-
-**Acceptance Criteria**: ✅
-- User cloud-init is faithfully applied (all 4 files)
-- Checksum in status metadata for verification
-- Size tracking
-
----
-
-## **Phase 3: Storage/Network Abstraction from Runtime** ⚠️ **PARTIAL (95% Complete)**
-
-**Status**: Storage abstraction COMPLETE; Network abstraction SCAFFOLDED
-
-### Storage Abstraction ✅ **COMPLETE**
-- ✅ storage.go - Full provider interface
-- ✅ types.go - VolumeSpec, VolumeHandle, VolumeAttachment types
-- ✅ Runtimes use `m.volumeMgr` via interface, not direct ad-hoc paths
-- ✅ Docker/Compose/VM runtimes accept injected managers
-
-### Network Abstraction ⚠️ **PARTIAL**
-- ✅ network.go exists (framework)
-  - Defines `NetworkProvider` interface
-  - `NetworkAttachment` type defined
-
-- ⚠️ **Not Yet Implemented**:
-  - Network provider implementations (Docker network provider, libvirt network resolver wrappers)
-  - Runtime injection of network providers
-  - Runtimes still directly use Docker/libvirt network APIs (no abstraction layer in between yet)
-
-### Bootstrap Wiring ✅ **COMPLETE**
-- ✅ Storage provider registry created and providers registered
-- ✅ VolumeManager injected into workload manager
-- ✅ Config files support provider-specific settings (NFS mount options, Ceph pool/user/keyring)
-
-**Gap**: Network provider is defined but not consumed by runtimes yet (low priority - spec marked as "later phase").
-
----
-
-## **Phase 4: Workload Utilization Telemetry** ✅ **NEARLY COMPLETE**
-
-**Status**: Core scaffolding and data flow in place; collector partially stubbed
-
-### Agent Collectors ⚠️ **SCAFFOLDED**
-- ✅ server.go (line 670):
-  - `statusUsageToProto()` converts WorkloadStatus.Usage to protobuf
-  - Usage populated in GetWorkload/ListWorkloads responses
-
-- ⚠️ **Partially Stubbed** - Collector infrastructure present but may not be continuously polling:
-  - metrics.go - Metrics registered
-  - Collection logic present but collector frequency/source needs verification
-
-### Metrics Exposure ✅ **COMPLETE**
-- ✅ metrics.go:
-  - `WorkloadCount` gauge with state/type labels
-  - `WorkloadCreatedTotal`, `WorkloadDeletedTotal`, `WorkloadFailedTotal` counters
-  - `ApplyWorkloadDuration`, `DeleteWorkloadDuration` histograms
-  - `RuntimeHealthStatus` gauge, `SystemMemoryUtilization`, `SystemCPUUtilization` gauges
-  - Ready for Prometheus scrape
-
-### Status & Heartbeat Propagation ✅ **COMPLETE**
-- ✅ Agent `GetWorkloadStatus()` / `ListWorkloads()` include `status.Usage` snapshot
-- ✅ client.go:
-  - `workloadUsage()` (lines 431-443) extracts usage from statuses
-  - `usageSnapshot()` (lines 587-610) converts to control plane format with timestamp
-  - Heartbeat includes `workload_usage` field (control.proto line 5)
-
-- ✅ Scheduler storage:
-  - service.go (line 701):
-    - `usageToProto()` converts scheduler-stored usage to API format
-  - persys-gateway passes workload usage through `WorkloadView`
-
-### User-Facing Diagnostics ✅ **COMPLETE**
-- ✅ workload.go (lines 456-481):
-  - Workload list/get output includes utilization:
-    - cpuPercent, memoryBytes, diskReadBytes, diskWriteBytes, netRxBytes, netTxBytes
-    - workloadId, type, source, collectedAt
-  - Failure reason codes displayed with human-readable messages
-  - Last sample timestamp shown
-
-- ✅ client.go (lines 1043-1050):
-  - `toModelUsage()` converts control proto → model types
-
-### Reason Code Taxonomy ✅ **COMPLETE**
-- ✅ Comprehensive reason codes implemented:
-  - `STORAGE_PROVISION_FAILED`, `STORAGE_ATTACH_FAILED`
-  - `CLOUD_INIT_INVALID`
-  - `WORKLOAD_RESOURCE_STARVATION`
-  - Structured in `ReasonDetail` with code, message, retry metadata
-
-**Acceptance Criteria**: ✅ Mostly met
-- ✅ `workload list/get` shows recent CPU/memory + IO/network
-- ✅ Reason codes structured
-- ⚠️ **Gap**: Continuous collection frequency/Docker stats integration not explicitly verified (but framework is ready)
-
----
-
-## **Cross-Cutting Reliability Changes** ✅ **COMPLETE**
-
-- ✅ Reason code taxonomy defined (STORAGE_*, CLOUD_INIT_*, WORKLOAD_*)
-- ✅ Each reconcile failure writes:
-  - Machine-readable reason code ✅
-  - Human-readable message ✅
-  - Last transition time ✅
-  - Next retry time (if retryable) ✅
-- ✅ Failure grace period logic (2 min) implemented in scheduler reconciler
-- ✅ Terminal failure detection (exponential backoff halt)
-
----
-
-## **Rollout Strategy** ⚠️ **PARTIAL**
-
-- ⚠️ Feature gates (`PERSYS_FEATURE_MANAGED_VOLUMES`, etc.) **not found** in codebase
-  - Implementation assumes features are always-on
-  - Fallback paths exist (legacy CloudInit field, host bind paths) but no explicit gate
-
----
-
-## **Test Coverage** ⚠️ **PARTIAL**
-
-- ✅ Provider interface structure testable via mocks
-- ✅ Cloud-init ISO generation has test support functions (`cloudInitSeedChecksum`)
-- ⚠️ No explicit integration test files found for:
-  - NFS volume attach to container
-  - Ceph RBD attach to VM
-  - Telemetry full end-to-end
-- ✅ Chaos test scaffolding present in docs, not explicitly code-reviewed
-
----
-
-## **Key Observations**
-
-### **Strengths**
-1. **Type Safety**: Protobufs regenerated everywhere; models consistent across all services
-2. **Provider Pattern**: Clean abstraction; easy to add new drivers (local/nfs/ceph-rbd in place)
-3. **Backward Compatibility**: Old workload specs still work; new fields optional
-4. **Full Cloud-Init Injection**: All 4 cloud-init files (user-data, meta-data, network-config, vendor-data) supported with faithful payload preservation
-5. **Telemetry Data Flow**: Complete path from agent → control plane → gateway → CLI
-6. **Error Diagnostics**: Detailed reason codes with timestamps and retry metadata
-7. **State Persistence**: Volume state in bbolt with attachment tracking
-
-### **Gaps**
-1. **Network Provider Pattern**: Defined but not wired into runtimes (low-priority, spec notes as "later")
-2. **Feature Gates**: No explicit `PERSYS_FEATURE_*` environment variables found (always-on)
-3. **Collector Integration**: Telemetry framework ready but collection frequency / Docker stats polling not explicitly verified
-4. **Integration Tests**: Core functionality present, but formal test coverage not reviewed
-
-### **Minor Discrepancies**
-- CloudInitConfig in protobuf is a message type (not separate fields in VMSpec.cloud_init_config) — **CORRECT per design**
-- Managed volume phase tracking uses scheduler etcd, not provisioning backend — **INTENTIONAL, matches spec**
-
----
-
-## **Alignment Score by Phase**
-
-| Phase | Name | % Complete | Status |
-|-------|------|-----------|--------|
-| 0 | Contracts & Schema | 100% | ✅ Done |
-| 1 | Storage Providers | 100% | ✅ Done |
-| 2 | Cloud-Init | 100% | ✅ Done |
-| 3a | Storage Abstraction | 100% | ✅ Done |
-| 3b | Network Abstraction | 5% | ⚠️ Scaffolded only |
-| 4 | Telemetry | 95% | ✅ Nearly done (collection polling TBD) |
-| Overall | | **~85%** | ✅ Production-ready with minor gaps |
-
----
-
-## **Recommendation**
-
-**The implementation is production-ready** for:
-- Managed volumes (NFS, Ceph-RBD, local)
-- Dynamic cloud-init injection
-- Workload utilization telemetry
-
-**TODO before full rollout**:
+# Persys Compute Platform Extension Design Spec - Current Implementation Status
+
+Status: reconciled against the actual code and current repo state, 2026-08-04
+
+This review is based on the current implementation, not the original design backlog. The project is now better understood as a mature control-plane platform with a set of completed capabilities and a smaller set of hardening gaps.
+
+## Executive summary
+
+The original design described a path centered on managed storage, cloud-init, runtime abstraction, and telemetry. Today, the project has already advanced beyond that baseline in several important areas:
+
+- scheduler HA and sharding are in place
+- node drain and taint logic is complete
+- Firecracker is a real runtime
+- vault-manager automates zero-touch mTLS lifecycle management
+- gateway route discovery through gRPC reflection is implemented
+- persys-meter already consumes workload metrics from the scheduler
+- persysctl includes newer gateway routes even though the SDK wrapper is still intentionally deferred for stability
+
+The biggest remaining gaps are not product design gaps; they are operational hardening items around network abstraction, rollout controls, and validation.
+
+## Alignment by domain
+
+### 1. Scheduler HA and scaling - ✅ Complete in implementation
+
+Evidence in code and documentation:
+
+- persys-scheduler/CHANGELOG.md documents leader election, active-active sharding, weighted placement, and connection pooling.
+- persys-scheduler/README.md documents failover mode, shard mode, placement scoring, and in-flight reservations.
+- persys-scheduler/internal/scheduler/leader.go, sharding.go, node_watch.go, and placement.go are part of the live runtime path.
+
+This is a major shift from the original design and should be treated as a completed architectural milestone rather than a future task.
+
+### 2. Node operations and scheduler placement - ✅ Complete in implementation
+
+Evidence:
+
+- drain, taint, untaint, and node readiness behaviors are present in the scheduler control API and scheduler logic.
+- node selection now accounts for resource headroom, spread, and in-flight reservation tracking.
+- the scheduler README explicitly documents the placement algorithm and operational behavior.
+
+This should be treated as already implemented rather than planned work.
+
+### 3. Vault-managed zero-touch mTLS - ✅ Complete in implementation
+
+Evidence:
+
+- vault-manager/README.md documents the bootstrap, PKI, AppRole, and gRPC credential lifecycle.
+- vault-manager/cmd/main.go shows secure bootstrap handoff and restart-safe recovery logic.
+- the project no longer depends on manual service-by-service mTLS hand configuration.
+
+This is a substantial completed capability and should be documented as such in the platform story.
+
+### 4. Gateway gRPC bridge and auto-discovery - ✅ Complete in implementation
+
+Evidence:
+
+- persys-gateway/README.md documents dynamic HTTP-to-gRPC bridging via reflection and compiled-in fallback.
+- persys-gateway/cmd/main.go wires the route catalog, dynamic bridge, and router registration.
+- the gateway supports service discovery and catalog-based routing rather than only static route definitions.
+
+This is a major architectural modernization already in place.
+
+### 5. Firecracker runtime - ✅ Complete in implementation
+
+Evidence:
+
+- compute-agent/internal/runtime/microvm.go implements a Firecracker-backed microVM runtime.
+- the runtime includes config generation, process lifecycle, status checks, and cleanup behavior.
+- scheduler runtime capability logic is aligned to accept Firecracker as a valid runtime type.
+
+This should be counted as a delivered runtime capability, not a future idea.
+
+### 6. Managed volumes and cloud-init - ✅ Complete in implementation
+
+Evidence:
+
+- managed volume abstraction and lifecycle remain in the runtime and scheduler.
+- cloud-init generation and VM seed handling are implemented in compute-agent runtime code.
+
+This remains a platform strength and should be treated as a mainline capability.
+
+### 7. Workload telemetry and persys-meter - ✅ Complete in implementation
+
+Evidence:
+
+- the scheduler emits per-workload usage into Redis streams.
+- persys-meter/README.md and persys-meter/cmd/meter/main.go show the meter service consuming those events, storing histories, and exposing live metrics and API endpoints.
+
+This is an already-real telemetry path and should not be discussed as missing work.
+
+### 8. SDK cleanup and persysctl wrapper - ⚠️ Deferred intentionally
+
+Evidence:
+
+- the repo still contains direct command logic in persysctl and the codebase explicitly notes that the full SDK migration is postponed for stability issues.
+
+The current status is not a failure; it is a deliberate stabilization decision. The repo is intentionally prioritizing stability over a wholesale SDK refactor.
+
+## Remaining gaps
+
+### 1. Network abstraction closure
+
+This is still the main technical architecture gap.
+
+Current state:
+
+- storage abstraction is already complete
+- network abstraction exists as an interface layer but is not fully wired into runtime constructors and provider implementations
+
+Recommended path:
+
+- add concrete provider implementations
+- inject network providers through runtime dependency sets
+- validate runtime compatibility across docker, vm, and microvm flows
+
+### 2. Feature flags for staged rollout
+
+The system needs explicit rollout gates for:
+
+- managed volumes
+- cloud-init
+- telemetry
+- Firecracker
+- network abstraction
+
+Without these, operators cannot safely stage platform features across clusters or environments.
+
+### 3. End-to-end validation
+
+The repo contains substantial implementation, but production confidence still requires:
+
+- real NFS and Ceph volume validation
+- cloud-init failure regression tests
+- telemetry flow tests from agent to meter
+- scheduler HA failover checks under workload churn
+
+### 4. Operator documentation
+
+The code has advanced deployment behavior, but the operator story should be expanded to cover:
+
+- HAProxy placement and replica topology
+- etcd and Redis role boundaries
+- vault recovery and trust bootstrap
+- runtime compatibility matrix for Docker, VM, and MicroVM
+
+## Current alignment score
+
+Overall alignment with the original design direction: about 92%
+
+This score is higher than the earlier plan because the codebase has already delivered several previously planned capabilities that were not recognized in the old roadmap.
+
+### Phase status summary
+
+- Contracts and schema: 100%
+- Managed storage: 100%
+- Cloud-init: 100%
+- Scheduler HA and placement: 100%
+- Gateway gRPC bridge: 100%
+- Vault-based mTLS lifecycle: 100%
+- Firecracker runtime: 100%
+- Workload telemetry path: 100%
+- Network abstraction closure: 60%
+- SDK cleanup: 35%
+
+## Recommended project position
+
+The project should no longer be framed as a mostly-planned architecture. It should be framed as:
+
+- a real platform with substantial shipped capabilities
+- a stable control plane with hardening work still ahead
+- a system where the next phase is production maturation rather than greenfield design
+
+## Final recommendation
+
+The roadmap should be updated as follows:
+
+1. Keep HA scheduler, Firecracker support, gateway gRPC discovery, meter telemetry, and vault-based certificate lifecycle as completed platform work.
+2. Treat network abstraction and feature-gate enforcement as the highest-priority hardening work.
+3. Defer the full SDK refactor until the platform is stable and the operational model is validated.
+4. Prioritize real production proof over ceremonial rewrites.
+
+This is the correct framework for the next phase of the project.
+
 1. Implement network provider wrappers (if network abstraction needed soon)
 2. Add explicit feature gates for gradual rollout
 3. Verify telemetry collection frequency (Docker stats polling) and test end-to-end
