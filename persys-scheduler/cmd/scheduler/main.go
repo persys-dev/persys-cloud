@@ -17,7 +17,6 @@ import (
 	"syscall"
 	"time"
 
-	// "github.com/persys-dev/persys-cloud/persys-scheduler/internal/auth"
 	"github.com/persys-dev/persys-cloud/pkg/certmanager"
 	cfgpkg "github.com/persys-dev/persys-cloud/persys-scheduler/internal/config"
 	controlv1 "github.com/persys-dev/persys-cloud/persys-scheduler/internal/controlv1"
@@ -53,6 +52,7 @@ func main() {
 
 	var tlsConfig *tls.Config
 	var certCancel context.CancelFunc
+	var certMgr *certmanager.Manager
 	if !cfg.Insecure {
 		certCfg := certmanager.Config{
 			TLSEnabled:  cfg.TLSEnabled,
@@ -77,7 +77,7 @@ func main() {
 
 			BindHost: cfg.GRPCAddr,
 		}
-		certMgr := certmanager.NewManager(certCfg, logger.Logger)
+		certMgr = certmanager.NewManager(certCfg, logger.Logger)
 		certCtx, cancel := context.WithCancel(context.Background())
 		certCancel = cancel
 		if err := certMgr.Start(certCtx); err != nil {
@@ -107,6 +107,8 @@ func main() {
 		logger.WithError(err).Fatal("failed to initialize scheduler")
 	}
 	defer sched.Close()
+	// Wire certmanager so outbound agent dials/RPCs can ForceRotate + retry on TLS errors.
+	sched.SetCertManager(certMgr)
 	if err := sched.RefreshStateMetrics(); err != nil {
 		logger.WithError(err).Warn("failed to initialize scheduler state metrics")
 	}
@@ -115,7 +117,7 @@ func main() {
 	defer cancel()
 
 	sched.StartMonitoring(ctx)
-	sched.StartReconciliation(ctx)
+	sched.StartLeaderElectedBackgroundLoops(ctx)
 
 	grpcPort := strconv.Itoa(cfg.GRPCPort)
 	if err := sched.RegisterSchedulerSelfInCoreDNS(cfg.GRPCPort); err != nil {
@@ -156,6 +158,20 @@ func main() {
 		_, _ = w.Write(payload)
 	}), "scheduler.health"))
 	metricsMux.Handle("/debug/pprof/", http.DefaultServeMux)
+	// if certMgr != nil {
+	// 	metricsMux.HandleFunc("/debug/force-rotate", func(w http.ResponseWriter, r *http.Request) {
+	// 		if r.Method != http.MethodPost {
+	// 			http.Error(w, "POST only", http.StatusMethodNotAllowed)
+	// 			return
+	// 		}
+	// 		if err := certMgr.ForceRotate(r.Context()); err != nil {
+	// 			http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 			return
+	// 		}
+	// 		w.Header().Set("Content-Type", "application/json")
+	// 		_, _ = w.Write([]byte(`{"status":"rotated"}`))
+	// 	})
+	// }
 	metricsServer := &http.Server{Addr: net.JoinHostPort(cfg.GRPCAddr, metricsPort), Handler: metricsMux}
 
 	serverErrCh := make(chan error, 2)
