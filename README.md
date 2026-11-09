@@ -670,6 +670,9 @@ Storage constraints influence whether relocation is possible.
 
 For example, workloads using node-local storage cannot silently migrate to another node unless their storage semantics permit it.
 
+## Link
+
+* [Persys Cloud](docs/persys-failure-modes.md)
 ---
 
 # Security
